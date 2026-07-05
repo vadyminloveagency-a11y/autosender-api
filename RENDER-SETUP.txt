@@ -1,60 +1,55 @@
-ИНСТРУКЦИЯ: КАК ЗАПУСТИТЬ API НА RENDER (5–10 минут)
-====================================================
-
-ШАГ 1 — GitHub
---------------
-1. Зайдите на github.com и создайте новый репозиторий (например autosender-api).
-2. Загрузите туда папку autosender-api с вашего компьютера.
-   (через GitHub Desktop, или git push — как вам удобнее)
-
-
-ШАГ 2 — Render
---------------
-1. Зайдите на dashboard.render.com
-2. Нажмите "New +" → "Blueprint"
-3. Подключите GitHub и выберите репозиторий autosender-api
-4. Render прочитает файл render.yaml и создаст:
-   - PostgreSQL базу (autosender-db)
-   - Web Service (autosender-api)
-5. Нажмите "Apply" и дождитесь зелёного статуса Live (5–10 мин)
-
-
-ШАГ 3 — Скопируйте URL и секрет
--------------------------------
-1. Откройте Web Service autosender-api → вверху будет URL, например:
-   https://autosender-api-xxxx.onrender.com
-2. Откройте Environment → найдите SETUP_SECRET → скопируйте значение
-3. Проверьте в браузере: https://ВАШ-URL.onrender.com/health
-   Должно показать: {"ok":true,"service":"autosender-api"}
-
-
-ШАГ 4 — Создайте первого пользователя (оператора)
--------------------------------------------------
-Откройте Postman, или в браузере через расширение — или в AutoSender
-вкладка Favorites → Register.
-
-POST https://ВАШ-URL.onrender.com/auth/register
-Body (JSON):
-{
-  "email": "ваш@email.com",
-  "password": "ваш-пароль-минимум-6",
-  "name": "Admin",
-  "setupSecret": "ВСТАВЬТЕ_SETUP_SECRET_ИЗ_RENDER"
-}
-
-
-ШАГ 5 — Пропишите URL в расширении AutoSender
------------------------------------------------
-1. Откройте расширение AutoSender
-2. Вкладка Favorites
-3. В поле "API URL" вставьте: https://ВАШ-URL.onrender.com
-4. Нажмите Save → Login с email и паролем из шага 4
-
-
-ГОТОВО
-------
-- Избранное хранится в вашей PostgreSQL на Render
-- Смена оператора / Chrome — данные не пропадают
-- DreamAuto не используется
-
-ВАЖНО: на Free-плане сервер засыпает после 15 мин — первый запрос может идти ~30 сек.
+AUTOSENDER — ADMIN SETUP (for agency owner)
+==========================================
+
+YOU = ADMIN (owner). You create accounts for operators.
+Operators only log in inside the Chrome extension.
+
+
+STEP 1 — Deploy API on Render (if not done yet)
+-----------------------------------------------
+1. Upload autosender-api folder to GitHub
+2. Render → New → Blueprint → connect repo
+3. Wait until status is Live
+4. Your API URL: https://autosender-api.onrender.com (or similar)
+
+
+STEP 2 — Create YOUR admin account (once)
+-----------------------------------------
+1. Render → autosender-api → Environment → copy SETUP_SECRET
+2. Open in browser: https://autosender-api.onrender.com/admin
+3. First-time setup:
+   - Setup key = SETUP_SECRET from Render
+   - Your mail + password
+   - Click "Create admin account"
+
+This page is for you only. Setup key never goes to operators.
+
+
+STEP 3 — Create operator accounts
+---------------------------------
+Still on /admin (logged in as admin):
+1. Fill operator Mail + Password + Name
+2. Click "Create operator"
+3. Send mail + password to your operator
+
+
+STEP 4 — Operator uses the extension
+------------------------------------
+1. Operator opens AutoSender in Chrome
+2. Login screen → Mail + Password (that you created)
+3. LetterBot / Actions / Favorites become available
+
+Operators cannot register themselves.
+
+
+IF "Admin already exists" on first setup
+----------------------------------------
+You already have users in the database from the old flow.
+Either log in with the admin account you created before,
+or ask for help to promote your user to admin role in the DB.
+
+
+CHECK API IS LIVE
+-----------------
+https://autosender-api.onrender.com/health
+Should return: {"ok":true,"service":"autosender-api"}
