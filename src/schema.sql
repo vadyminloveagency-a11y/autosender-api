@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS favorites (
   tags TEXT[] NOT NULL DEFAULT '{}',
   last_letter_at TIMESTAMPTZ,
   last_letter_preview TEXT NOT NULL DEFAULT '',
+  inbox_order INTEGER,
   source TEXT NOT NULL DEFAULT 'manual',
   added_by TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
