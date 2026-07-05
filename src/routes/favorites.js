@@ -14,6 +14,7 @@ function mapRow(row) {
     photoUrl: row.photo_url,
     notes: row.notes,
     tags: row.tags || [],
+    inboxOrder: row.inbox_order,
     lastLetterAt: row.last_letter_at,
     lastLetterPreview: row.last_letter_preview,
     source: row.source,
@@ -34,7 +35,7 @@ router.get("/", async (req, res) => {
     const result = await db.query(
       `SELECT * FROM favorites
        WHERE female_profile_id = $1
-       ORDER BY updated_at DESC`,
+       ORDER BY inbox_order ASC NULLS LAST, id ASC`,
       [femaleProfileId],
     );
 
@@ -57,6 +58,7 @@ router.post("/", async (req, res) => {
     const photoUrl = String(req.body?.photoUrl || "");
     const notes = String(req.body?.notes || "");
     const tags = Array.isArray(req.body?.tags) ? req.body.tags.map(String) : [];
+    const inboxOrder = Number.isFinite(Number(req.body?.inboxOrder)) ? Number(req.body.inboxOrder) : null;
     const lastLetterAt = req.body?.lastLetterAt ? new Date(req.body.lastLetterAt) : null;
     const lastLetterPreview = String(req.body?.lastLetterPreview || "");
     const source = String(req.body?.source || "manual");
@@ -65,17 +67,14 @@ router.post("/", async (req, res) => {
     const result = await db.query(
       `INSERT INTO favorites (
          female_profile_id, male_profile_id, display_name, photo_url, notes, tags,
-         last_letter_at, last_letter_preview, source, added_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         inbox_order, last_letter_at, last_letter_preview, source, added_by
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (female_profile_id, male_profile_id) DO UPDATE SET
-         display_name = EXCLUDED.display_name,
-         photo_url = EXCLUDED.photo_url,
+         display_name = CASE WHEN EXCLUDED.display_name <> '' THEN EXCLUDED.display_name ELSE favorites.display_name END,
+         photo_url = CASE WHEN EXCLUDED.photo_url <> '' THEN EXCLUDED.photo_url ELSE favorites.photo_url END,
          notes = CASE WHEN EXCLUDED.notes <> '' THEN EXCLUDED.notes ELSE favorites.notes END,
          tags = CASE WHEN cardinality(EXCLUDED.tags) > 0 THEN EXCLUDED.tags ELSE favorites.tags END,
-         last_letter_at = COALESCE(EXCLUDED.last_letter_at, favorites.last_letter_at),
-         last_letter_preview = CASE WHEN EXCLUDED.last_letter_preview <> '' THEN EXCLUDED.last_letter_preview ELSE favorites.last_letter_preview END,
-         source = EXCLUDED.source,
-         added_by = EXCLUDED.added_by,
+         inbox_order = COALESCE(favorites.inbox_order, EXCLUDED.inbox_order),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -85,6 +84,7 @@ router.post("/", async (req, res) => {
         photoUrl,
         notes,
         tags,
+        inboxOrder,
         lastLetterAt,
         lastLetterPreview,
         source,
@@ -145,6 +145,25 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+router.delete("/all", async (req, res) => {
+  try {
+    const femaleProfileId = Number(req.query.femaleProfileId);
+    if (!femaleProfileId) {
+      return res.status(400).json({ ok: false, error: "femaleProfileId is required" });
+    }
+
+    const db = getPool();
+    const result = await db.query(
+      "DELETE FROM favorites WHERE female_profile_id = $1 RETURNING id",
+      [femaleProfileId],
+    );
+    return res.json({ ok: true, deleted: result.rowCount });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Failed to clear favorites" });
+  }
+});
+
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -175,24 +194,24 @@ router.post("/import", async (req, res) => {
       const maleProfileId = Number(raw?.maleProfileId);
       if (!maleProfileId) continue;
 
+      const inboxOrder = Number.isFinite(Number(raw?.inboxOrder)) ? Number(raw.inboxOrder) : null;
+
       await db.query(
         `INSERT INTO favorites (
            female_profile_id, male_profile_id, display_name, photo_url, notes, tags,
-           last_letter_at, last_letter_preview, source, added_by
-         ) VALUES ($1,$2,$3,$4,'', '{}', $5, $6, 'inbox', $7)
+           inbox_order, last_letter_at, last_letter_preview, source, added_by
+         ) VALUES ($1,$2,$3,$4,'', '{}', $5, NULL, '', 'inbox', $6)
          ON CONFLICT (female_profile_id, male_profile_id) DO UPDATE SET
-           display_name = EXCLUDED.display_name,
-           photo_url = EXCLUDED.photo_url,
-           last_letter_at = COALESCE(EXCLUDED.last_letter_at, favorites.last_letter_at),
-           last_letter_preview = CASE WHEN EXCLUDED.last_letter_preview <> '' THEN EXCLUDED.last_letter_preview ELSE favorites.last_letter_preview END,
+           display_name = CASE WHEN EXCLUDED.display_name <> '' THEN EXCLUDED.display_name ELSE favorites.display_name END,
+           photo_url = CASE WHEN EXCLUDED.photo_url <> '' THEN EXCLUDED.photo_url ELSE favorites.photo_url END,
+           inbox_order = COALESCE(favorites.inbox_order, EXCLUDED.inbox_order),
            updated_at = NOW()`,
         [
           femaleProfileId,
           maleProfileId,
           String(raw.displayName || ""),
           String(raw.photoUrl || ""),
-          raw.lastLetterAt ? new Date(raw.lastLetterAt) : null,
-          String(raw.lastLetterPreview || ""),
+          inboxOrder,
           req.user.email,
         ],
       );
