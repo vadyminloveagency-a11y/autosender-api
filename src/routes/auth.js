@@ -1,16 +1,63 @@
 import express from "express";
 import { getPool } from "../db.js";
-import { hashPassword, signToken, verifyPassword } from "../auth.js";
+import {
+  adminMiddleware,
+  hashPassword,
+  signToken,
+  verifyPassword,
+} from "../auth.js";
 
 const router = express.Router();
 
-router.post("/register", async (req, res) => {
+function userPayload(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role || "operator",
+  };
+}
+
+router.post("/bootstrap", async (req, res) => {
   try {
     const setupSecret = process.env.SETUP_SECRET;
     if (!setupSecret || req.body?.setupSecret !== setupSecret) {
       return res.status(403).json({ ok: false, error: "Invalid setup secret" });
     }
 
+    const db = getPool();
+    const existing = await db.query("SELECT COUNT(*)::int AS count FROM users");
+    if (existing.rows[0].count > 0) {
+      return res.status(409).json({ ok: false, error: "Admin already exists" });
+    }
+
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const password = String(req.body?.password || "");
+    const name = String(req.body?.name || "").trim();
+
+    if (!email || !password || password.length < 6) {
+      return res.status(400).json({ ok: false, error: "Email and password (min 6 chars) required" });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const result = await db.query(
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, 'admin')
+       RETURNING id, email, name, role, created_at`,
+      [email, passwordHash, name || email],
+    );
+
+    const user = result.rows[0];
+    const token = signToken(user);
+    return res.json({ ok: true, token, user: userPayload(user) });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Bootstrap failed" });
+  }
+});
+
+router.post("/operators", adminMiddleware, async (req, res) => {
+  try {
     const email = String(req.body?.email || "").trim().toLowerCase();
     const password = String(req.body?.password || "");
     const name = String(req.body?.name || "").trim();
@@ -22,21 +69,19 @@ router.post("/register", async (req, res) => {
     const db = getPool();
     const passwordHash = await hashPassword(password);
     const result = await db.query(
-      `INSERT INTO users (email, password_hash, name)
-       VALUES ($1, $2, $3)
-       RETURNING id, email, name, created_at`,
+      `INSERT INTO users (email, password_hash, name, role)
+       VALUES ($1, $2, $3, 'operator')
+       RETURNING id, email, name, role, created_at`,
       [email, passwordHash, name || email],
     );
 
-    const user = result.rows[0];
-    const token = signToken(user);
-    return res.json({ ok: true, token, user: { id: user.id, email: user.email, name: user.name } });
+    return res.json({ ok: true, user: userPayload(result.rows[0]) });
   } catch (error) {
     if (error.code === "23505") {
       return res.status(409).json({ ok: false, error: "Email already registered" });
     }
     console.error(error);
-    return res.status(500).json({ ok: false, error: "Registration failed" });
+    return res.status(500).json({ ok: false, error: "Failed to create operator" });
   }
 });
 
@@ -50,7 +95,7 @@ router.post("/login", async (req, res) => {
 
     const db = getPool();
     const result = await db.query(
-      "SELECT id, email, name, password_hash FROM users WHERE email = $1",
+      "SELECT id, email, name, role, password_hash FROM users WHERE email = $1",
       [email],
     );
     const user = result.rows[0];
@@ -62,7 +107,7 @@ router.post("/login", async (req, res) => {
     return res.json({
       ok: true,
       token,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: userPayload(user),
     });
   } catch (error) {
     console.error(error);
