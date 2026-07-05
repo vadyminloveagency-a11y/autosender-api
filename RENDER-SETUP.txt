@@ -1,0 +1,60 @@
+ИНСТРУКЦИЯ: КАК ЗАПУСТИТЬ API НА RENDER (5–10 минут)
+====================================================
+
+ШАГ 1 — GitHub
+--------------
+1. Зайдите на github.com и создайте новый репозиторий (например autosender-api).
+2. Загрузите туда папку autosender-api с вашего компьютера.
+   (через GitHub Desktop, или git push — как вам удобнее)
+
+
+ШАГ 2 — Render
+--------------
+1. Зайдите на dashboard.render.com
+2. Нажмите "New +" → "Blueprint"
+3. Подключите GitHub и выберите репозиторий autosender-api
+4. Render прочитает файл render.yaml и создаст:
+   - PostgreSQL базу (autosender-db)
+   - Web Service (autosender-api)
+5. Нажмите "Apply" и дождитесь зелёного статуса Live (5–10 мин)
+
+
+ШАГ 3 — Скопируйте URL и секрет
+-------------------------------
+1. Откройте Web Service autosender-api → вверху будет URL, например:
+   https://autosender-api-xxxx.onrender.com
+2. Откройте Environment → найдите SETUP_SECRET → скопируйте значение
+3. Проверьте в браузере: https://ВАШ-URL.onrender.com/health
+   Должно показать: {"ok":true,"service":"autosender-api"}
+
+
+ШАГ 4 — Создайте первого пользователя (оператора)
+-------------------------------------------------
+Откройте Postman, или в браузере через расширение — или в AutoSender
+вкладка Favorites → Register.
+
+POST https://ВАШ-URL.onrender.com/auth/register
+Body (JSON):
+{
+  "email": "ваш@email.com",
+  "password": "ваш-пароль-минимум-6",
+  "name": "Admin",
+  "setupSecret": "ВСТАВЬТЕ_SETUP_SECRET_ИЗ_RENDER"
+}
+
+
+ШАГ 5 — Пропишите URL в расширении AutoSender
+-----------------------------------------------
+1. Откройте расширение AutoSender
+2. Вкладка Favorites
+3. В поле "API URL" вставьте: https://ВАШ-URL.onrender.com
+4. Нажмите Save → Login с email и паролем из шага 4
+
+
+ГОТОВО
+------
+- Избранное хранится в вашей PostgreSQL на Render
+- Смена оператора / Chrome — данные не пропадают
+- DreamAuto не используется
+
+ВАЖНО: на Free-плане сервер засыпает после 15 мин — первый запрос может идти ~30 сек.
