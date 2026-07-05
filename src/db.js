@@ -26,4 +26,5 @@ export async function initDb() {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
   await db.query(schema);
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator'`);
 }
