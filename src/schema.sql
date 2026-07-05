@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'operator',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
