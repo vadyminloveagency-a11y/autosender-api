@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoSender Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
+        linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
+      color: #eef4ff;
+      font-family: Arial, sans-serif;
+    }
+    .card {
+      width: 100%;
+      max-width: 400px;
+      padding: 28px 24px 22px;
+      border: 1px solid rgba(120, 170, 255, 0.22);
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(18, 32, 58, 0.96), rgba(12, 22, 42, 0.98));
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+      font-size: 22px;
+    }
+    .subtitle {
+      margin: 0 0 16px;
+      text-align: center;
+      color: #8ea8cc;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .steps {
+      margin: 0 0 18px;
+      padding: 12px 14px;
+      border: 1px solid rgba(120, 170, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(8, 16, 32, 0.55);
+      color: #b8c9e8;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .steps strong {
+      color: #eef4ff;
+    }
+    .steps ol {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+    .field {
+      position: relative;
+      margin-bottom: 14px;
+    }
+    .field input {
+      width: 100%;
+      min-height: 46px;
+      padding: 16px 14px 8px;
+      border: 1px solid rgba(120, 170, 255, 0.28);
+      border-radius: 8px;
+      background: rgba(8, 16, 32, 0.85);
+      color: #eef4ff;
+      font-size: 14px;
+      outline: none;
+    }
+    .field label {
+      position: absolute;
+      top: -8px;
+      left: 10px;
+      padding: 0 6px;
+      background: #142038;
+      color: #b8c9e8;
+      font-size: 12px;
+    }
+    button {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 6px;
+      border: 1px solid rgba(120, 170, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(16, 30, 54, 0.95);
+      color: #5ecfff;
+      font: 700 15px/1 Arial, sans-serif;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { color: #8de4ff; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .status {
+      margin: 10px 0 0;
+      min-height: 18px;
+      text-align: center;
+      color: #8ea8cc;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .status.error { color: #ff8a9a; }
+    .status.ok { color: #7dffb8; }
+    .hidden { display: none !important; }
+    .section-title {
+      margin: 18px 0 10px;
+      color: #b8c9e8;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .logout, .link-btn {
+      margin-top: 14px;
+      background: transparent;
+      color: #7eb8ff;
+      font-size: 13px;
+      font-weight: 400;
+    }
+    .link-row {
+      margin-top: 12px;
+      text-align: center;
+    }
+    .link-row a {
+      color: #7eb8ff;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .link-row a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>AutoSender Admin</h1>
+    <p class="subtitle">For the agency owner / administrator only</p>
+
+    <div id="bootstrap-view">
+      <div class="steps">
+        <strong>First-time setup (once)</strong>
+        <ol>
+          <li>Open Render → autosender-api → Environment</li>
+          <li>Copy <strong>SETUP_SECRET</strong></li>
+          <li>Paste it below and create your admin account</li>
+        </ol>
+      </div>
+      <div class="field">
+        <input id="bootstrap-secret" type="password" placeholder=" ">
+        <label for="bootstrap-secret">Setup key</label>
+      </div>
+      <div class="field">
+        <input id="bootstrap-email" type="email" placeholder=" ">
+        <label for="bootstrap-email">Your mail</label>
+      </div>
+      <div class="field">
+        <input id="bootstrap-password" type="password" placeholder=" ">
+        <label for="bootstrap-password">Your password</label>
+      </div>
+      <button type="button" id="bootstrap-btn">Create admin account</button>
+      <div class="link-row">
+        <a href="#" id="toggle-login">Already have an admin account</a>
+      </div>
+    </div>
+
+    <div id="login-view" class="hidden">
+      <div class="steps">
+        <strong>Admin login</strong>
+        <ol>
+          <li>Sign in with your admin mail and password</li>
+          <li>Then create accounts for operators</li>
+        </ol>
+      </div>
+      <div class="field">
+        <input id="login-email" type="email" placeholder=" ">
+        <label for="login-email">Mail</label>
+      </div>
+      <div class="field">
+        <input id="login-password" type="password" placeholder=" ">
+        <label for="login-password">Password</label>
+      </div>
+      <button type="button" id="login-btn">Login</button>
+      <div class="link-row">
+        <a href="#" id="toggle-bootstrap">First-time setup</a>
+      </div>
+    </div>
+
+    <div id="panel-view" class="hidden">
+      <p class="subtitle" id="admin-label"></p>
+      <div class="steps">
+        <strong>Create operator accounts</strong>
+        <ol>
+          <li>Fill mail + password below</li>
+          <li>Click <strong>Create operator</strong></li>
+          <li>Give those credentials to your operator</li>
+          <li>Operator logs in inside the Chrome extension (Login only)</li>
+        </ol>
+      </div>
+      <div class="section-title">New operator</div>
+      <div class="field">
+        <input id="operator-email" type="email" placeholder=" ">
+        <label for="operator-email">Mail</label>
+      </div>
+      <div class="field">
+        <input id="operator-password" type="password" placeholder=" ">
+        <label for="operator-password">Password</label>
+      </div>
+      <div class="field">
+        <input id="operator-name" type="text" placeholder=" ">
+        <label for="operator-name">Name</label>
+      </div>
+      <button type="button" id="create-operator-btn">Create operator</button>
+      <button type="button" id="logout-btn" class="logout">Logout</button>
+    </div>
+
+    <p id="status" class="status" aria-live="polite"></p>
+  </div>
+
+  <script>
+    const API = window.location.origin;
+    let token = localStorage.getItem("autosenderAdminToken") || "";
+
+    const views = {
+      bootstrap: document.getElementById("bootstrap-view"),
+      login: document.getElementById("login-view"),
+      panel: document.getElementById("panel-view"),
+    };
+    const statusEl = document.getElementById("status");
+
+    function setStatus(text, type = "") {
+      statusEl.textContent = text || "";
+      statusEl.className = "status" + (type ? ` ${type}` : "");
+    }
+
+    function showView(name) {
+      Object.entries(views).forEach(([key, el]) => el.classList.toggle("hidden", key !== name));
+    }
+
+    async function api(path, options = {}) {
+      const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(`${API}${path}`, { ...options, headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    function saveSession(nextToken, user) {
+      token = nextToken;
+      localStorage.setItem("autosenderAdminToken", nextToken);
+      if (user) localStorage.setItem("autosenderAdminUser", JSON.stringify(user));
+    }
+
+    function clearSession() {
+      token = "";
+      localStorage.removeItem("autosenderAdminToken");
+      localStorage.removeItem("autosenderAdminUser");
+    }
+
+    function openPanel(user) {
+      document.getElementById("admin-label").textContent = `Signed in as ${user.email}`;
+      showView("panel");
+      setStatus("");
+    }
+
+    async function init() {
+      if (token) {
+        try {
+          const user = JSON.parse(localStorage.getItem("autosenderAdminUser") || "{}");
+          if (user.role === "admin") {
+            openPanel(user);
+            return;
+          }
+        } catch {}
+        clearSession();
+      }
+      showView("bootstrap");
+    }
+
+    document.getElementById("bootstrap-btn").addEventListener("click", async () => {
+      setStatus("Creating admin account...");
+      try {
+        const data = await api("/auth/bootstrap", {
+          method: "POST",
+          body: JSON.stringify({
+            setupSecret: document.getElementById("bootstrap-secret").value,
+            email: document.getElementById("bootstrap-email").value,
+            password: document.getElementById("bootstrap-password").value,
+          }),
+        });
+        saveSession(data.token, data.user);
+        openPanel(data.user);
+        setStatus("Admin account created", "ok");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    });
+
+    document.getElementById("login-btn").addEventListener("click", async () => {
+      setStatus("Signing in...");
+      try {
+        const data = await api("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("login-email").value,
+            password: document.getElementById("login-password").value,
+          }),
+        });
+        if (data.user.role !== "admin") {
+          throw new Error("This account is an operator. Use the Chrome extension to log in.");
+        }
+        saveSession(data.token, data.user);
+        openPanel(data.user);
+        setStatus("");
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    });
+
+    document.getElementById("create-operator-btn").addEventListener("click", async () => {
+      setStatus("Creating operator...");
+      try {
+        const data = await api("/auth/operators", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("operator-email").value,
+            password: document.getElementById("operator-password").value,
+            name: document.getElementById("operator-name").value,
+          }),
+        });
+        setStatus(`Operator created: ${data.user.email}`, "ok");
+        document.getElementById("operator-email").value = "";
+        document.getElementById("operator-password").value = "";
+        document.getElementById("operator-name").value = "";
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    });
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      clearSession();
+      showView("login");
+      setStatus("");
+    });
+
+    document.getElementById("toggle-bootstrap").addEventListener("click", (event) => {
+      event.preventDefault();
+      showView("bootstrap");
+      setStatus("");
+    });
+
+    document.getElementById("toggle-login").addEventListener("click", (event) => {
+      event.preventDefault();
+      showView("login");
+      setStatus("");
+    });
+
+    init();
+  </script>
+</body>
+</html>
