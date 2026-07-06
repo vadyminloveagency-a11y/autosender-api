@@ -1,55 +1,110 @@
-AUTOSENDER — ADMIN SETUP (for agency owner)
-==========================================
-
-YOU = ADMIN (owner). You create accounts for operators.
-Operators only log in inside the Chrome extension.
-
-
-STEP 1 — Deploy API on Render (if not done yet)
------------------------------------------------
-1. Upload autosender-api folder to GitHub
-2. Render → New → Blueprint → connect repo
-3. Wait until status is Live
-4. Your API URL: https://autosender-api.onrender.com (or similar)
-
-
-STEP 2 — Create YOUR admin account (once)
------------------------------------------
-1. Render → autosender-api → Environment → copy SETUP_SECRET
-2. Open in browser: https://autosender-api.onrender.com/admin
-3. First-time setup:
-   - Setup key = SETUP_SECRET from Render
-   - Your mail + password
-   - Click "Create admin account"
-
-This page is for you only. Setup key never goes to operators.
-
-
-STEP 3 — Create operator accounts
----------------------------------
-Still on /admin (logged in as admin):
-1. Fill operator Mail + Password + Name
-2. Click "Create operator"
-3. Send mail + password to your operator
-
-
-STEP 4 — Operator uses the extension
-------------------------------------
-1. Operator opens AutoSender in Chrome
-2. Login screen → Mail + Password (that you created)
-3. LetterBot / Actions / Favorites become available
-
-Operators cannot register themselves.
-
-
-IF "Admin already exists" on first setup
-----------------------------------------
-You already have users in the database from the old flow.
-Either log in with the admin account you created before,
-or ask for help to promote your user to admin role in the DB.
-
-
-CHECK API IS LIVE
------------------
-https://autosender-api.onrender.com/health
-Should return: {"ok":true,"service":"autosender-api"}
+AUTOSENDER — ADMIN SETUP (for agency owner)
+
+==========================================
+
+
+
+YOU = ADMIN (owner). You create accounts for operators.
+
+Operators only log in inside the Chrome extension.
+
+
+
+
+
+STEP 1 — Deploy API on Render (if not done yet)
+
+-----------------------------------------------
+
+1. Upload autosender-api folder to GitHub
+
+2. Render → New → Blueprint → connect repo
+
+3. Wait until status is Live
+
+4. Your API URL: https://autosender-api.onrender.com (or similar)
+
+
+
+
+
+STEP 2 — Create YOUR admin account (once)
+
+-----------------------------------------
+
+1. Render → autosender-api → Environment → copy SETUP_SECRET
+
+2. Open in browser: https://autosender-api.onrender.com/admin
+
+3. First-time setup:
+
+   - Setup key = SETUP_SECRET from Render
+
+   - Your mail + password
+
+   - Click "Create admin account"
+
+
+
+This page is for you only. Setup key never goes to operators.
+
+
+
+
+
+STEP 3 — Create operator accounts
+
+---------------------------------
+
+Still on /admin (logged in as admin):
+
+1. Fill operator Mail + Password + Name
+
+2. Click "Create operator"
+
+3. Send mail + password to your operator
+
+
+
+
+
+STEP 4 — Operator uses the extension
+
+------------------------------------
+
+1. Operator opens AutoSender in Chrome
+
+2. Login screen → Mail + Password (that you created)
+
+3. LetterBot / Actions / Favorites become available
+
+
+
+Operators cannot register themselves.
+
+
+
+
+
+IF "Admin already exists" on first setup
+
+----------------------------------------
+
+You already have users in the database from the old flow.
+
+Either log in with the admin account you created before,
+
+or ask for help to promote your user to admin role in the DB.
+
+
+
+
+
+CHECK API IS LIVE
+
+-----------------
+
+https://autosender-api.onrender.com/health
+
+Should return: {"ok":true,"service":"autosender-api"}
+
