@@ -28,4 +28,12 @@ export async function initDb() {
   await db.query(schema);
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator'`);
   await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS inbox_order INTEGER`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS letter_count INTEGER NOT NULL DEFAULT 0`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS is_site_favorite BOOLEAN NOT NULL DEFAULT FALSE`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS is_site_ignored BOOLEAN NOT NULL DEFAULT FALSE`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS man_type TEXT NOT NULL DEFAULT ''`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS first_contact_at TIMESTAMPTZ`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS last_letter_at TIMESTAMPTZ`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE`);
+  await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS pin_order BIGINT`);
 }
