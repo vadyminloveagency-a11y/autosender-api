@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { initDb } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import favoritesRoutes from "./routes/favorites.js";
+import inboxRoutes from "./routes/inbox.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -34,6 +35,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 app.use("/auth", authRoutes);
 app.use("/favorites", favoritesRoutes);
+app.use("/inbox", inboxRoutes);
 
 async function start() {
   await initDb();
