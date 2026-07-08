@@ -69,3 +69,45 @@ CREATE INDEX IF NOT EXISTS favorites_female_idx ON favorites (female_profile_id)
 
 CREATE INDEX IF NOT EXISTS favorites_updated_idx ON favorites (updated_at DESC);
 
+
+
+CREATE TABLE IF NOT EXISTS inbox_men (
+
+  id SERIAL PRIMARY KEY,
+
+  female_profile_id BIGINT NOT NULL,
+
+  male_profile_id BIGINT NOT NULL,
+
+  display_name TEXT NOT NULL DEFAULT '',
+
+  photo_url TEXT NOT NULL DEFAULT '',
+
+  profile_url TEXT NOT NULL DEFAULT '',
+
+  inbox_order INTEGER,
+
+  letter_count INTEGER NOT NULL DEFAULT 0,
+
+  first_contact_at TIMESTAMPTZ,
+
+  last_letter_at TIMESTAMPTZ,
+
+  last_letter_preview TEXT NOT NULL DEFAULT '',
+
+  added_by TEXT NOT NULL DEFAULT '',
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (female_profile_id, male_profile_id)
+
+);
+
+
+
+CREATE INDEX IF NOT EXISTS inbox_men_female_idx ON inbox_men (female_profile_id);
+
+CREATE INDEX IF NOT EXISTS inbox_men_updated_idx ON inbox_men (updated_at DESC);
+
