@@ -7,6 +7,7 @@ import {
   deleteDreamCredentials,
   ensureLetterBotTables,
   getDreamCredentials,
+  getLetterBotJob,
   listRunningLetterBotJobs,
   markLetterBotJobStopped,
   upsertDreamCredentials,
@@ -248,12 +249,37 @@ router.post("/session", authMiddleware, async (req, res) => {
   return res.json({ ok: true, state: worker.getState() });
 });
 
-router.get("/status", authMiddleware, (req, res) => {
+router.get("/status", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const key = workerKey(req.user.id, profileId);
   const worker = workers.get(key);
-  const state = worker ? worker.getState() : lastStates.get(key) || idleState(profileId);
-  return res.json({ ok: true, state });
+  if (worker) {
+    return res.json({ ok: true, state: worker.getState() });
+  }
+  const cached = lastStates.get(key);
+  if (cached?.sessionActive) {
+    return res.json({ ok: true, state: cached });
+  }
+  try {
+    const row = await getLetterBotJob(req.user.id, profileId);
+    if (row?.is_running) {
+      const prev = row.state && typeof row.state === "object" ? row.state : {};
+      return res.json({
+        ok: true,
+        state: {
+          ...idleState(profileId),
+          ...prev,
+          sessionActive: true,
+          isPaused: Boolean(prev.isPaused),
+          buttonLabel: prev.isPaused ? "Start" : "Stop",
+          statusMessage: prev.statusMessage || (prev.isPaused ? "Paused" : "Running in cloud"),
+          profileId,
+          updatedAt: Date.now(),
+        },
+      });
+    }
+  } catch (_) {}
+  return res.json({ ok: true, state: cached || idleState(profileId) });
 });
 
 router.post("/start", authMiddleware, async (req, res) => {
