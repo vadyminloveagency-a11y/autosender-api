@@ -1,0 +1,758 @@
+﻿import WebSocket from "ws";
+
+const ORIGIN = "https://www.dream-singles.com";
+const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
+const WS_URL = "wss://ws.dream-singles.com/ws";
+const STALL_MS = 5 * 60_000;
+
+const CATEGORY_KEYS = [
+  "onlineOnly",
+  "admirers",
+  "contacts",
+  "newGuys",
+  "lastActive",
+  "profileViewers",
+  "whiteListed",
+  "interestedMen",
+];
+const FIRST_START_KEYS = [
+  "onlineOnly",
+  "admirers",
+  "contacts",
+  "profileViewers",
+  "whiteListed",
+  "interestedMen",
+];
+const MAILING_247_KEYS = ["onlineOnly", "newGuys", "lastActive"];
+
+const WS_FILTER_VALUE = {
+  onlineOnly: "onlineOnly",
+  admirers: "admirers",
+  contacts: "contacts",
+  newGuys: "newGuys",
+  lastActive: "lastActivity",
+  profileViewers: "profileViewers",
+  whiteListed: "whiteListed",
+  interestedMen: "interestedMen",
+};
+
+const DEFAULT_CRITERIA = {
+  age_from: "0",
+  age_to: "0",
+  block: "on",
+  country_id: "0",
+  education: "0",
+  eyes: "0",
+  hair: "0",
+  height_from: "0",
+  height_to: "0",
+  ignore: "on",
+  kids: "-1",
+  last_activity: "0",
+  marital_status: "0",
+  religion: "0",
+  smoking: "0",
+  weight_from: "0",
+  weight_to: "0",
+};
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function decodeJwtExpMs(token) {
+  try {
+    const part = String(token || "").split(".")[1];
+    if (!part) return 0;
+    const json = Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+    const payload = JSON.parse(json);
+    return Number(payload.exp) > 0 ? Number(payload.exp) * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+class LetterBotWorker {
+  constructor(profileId, { onStateChange } = {}) {
+    this.profileId = String(profileId || "default");
+    this.onStateChange = onStateChange || null;
+    this.cookieHeader = "";
+    this.socket = null;
+    this.connectPromise = null;
+    this.jwtCache = { token: "", expMs: 0 };
+    this.heartbeatTimer = null;
+    this.cycleTimer = null;
+    this.reconnectTimer = null;
+    this.closingIntentionally = false;
+    this.senderRunning = false;
+    this.senderPaused = false;
+    this.categoryIndex = 0;
+    this.firstStartIndex = 0;
+    this.mailing247Index = 0;
+    this.onlineStage = "online";
+    this.userSelection = {};
+    this.lastProgressAt = 0;
+    this.lastSendStartedAt = 0;
+    this.recoveringStall = false;
+    this.initWaiters = [];
+    this.state = {
+      connected: false,
+      authenticating: false,
+      sending: false,
+      buttonLabel: "Start",
+      filter: "onlineOnly",
+      progress: null,
+      previewHtml: "",
+      previewText: "",
+      previewPhoto: "",
+      previewVideo: "",
+      previewVideoPoster: "",
+      error: "",
+      statusMessage: "LetterBot closed",
+      sessionActive: false,
+      isPaused: false,
+      updatedAt: 0,
+      profileId: this.profileId,
+    };
+  }
+
+  getState() {
+    return { ...this.state };
+  }
+
+  setCookieHeader(cookieHeader) {
+    this.cookieHeader = String(cookieHeader || "").trim();
+    this.jwtCache = { token: "", expMs: 0 };
+  }
+
+  emitState() {
+    this.state.updatedAt = Date.now();
+    this.state.profileId = this.profileId;
+    if (typeof this.onStateChange === "function") {
+      this.onStateChange(this.getState());
+    }
+  }
+
+  setError(message) {
+    this.state.error = String(message || "");
+    this.emitState();
+  }
+
+  buildCriteria(categoryKey) {
+    const group = WS_FILTER_VALUE[categoryKey] || categoryKey || "onlineOnly";
+    return {
+      ...DEFAULT_CRITERIA,
+      gentlemenGroup: group,
+      last_activity: group === "lastActivity" ? "Within the last week" : "0",
+    };
+  }
+
+  applyPreviewFromInit(preview) {
+    if (!preview || typeof preview !== "object") return;
+    if (preview.message) {
+      this.state.previewHtml = String(preview.message || "");
+      this.state.previewText = this.state.previewHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
+    this.state.previewPhoto = String(preview.attachment || "");
+    this.state.previewVideo = String(preview.video_attachment || "");
+    this.state.previewVideoPoster = String(preview.video_attachment_preview || "");
+  }
+
+  async fetchLetterBotJwt(force = false) {
+    const now = Date.now();
+    if (!force && this.jwtCache.token && this.jwtCache.expMs - 45_000 > now) {
+      return this.jwtCache.token;
+    }
+    if (!this.cookieHeader) {
+      throw new Error("Dream session missing вЂ” open dream-singles.com while logged in, then Start again");
+    }
+
+    const response = await fetch(BOT_SEND_URL, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        Accept: "text/html",
+        Cookie: this.cookieHeader,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("Dream session expired вЂ” log in on dream-singles.com and Start again");
+    }
+    if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
+    const html = await response.text();
+    const match = html.match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/);
+    if (!match?.[1]) {
+      throw new Error("Letter Bot JWT not found вЂ” Dream session may be invalid");
+    }
+    const token = match[1];
+    this.jwtCache = { token, expMs: decodeJwtExpMs(token) || now + 8 * 60 * 1000 };
+    return token;
+  }
+
+  clearHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  startHeartbeat() {
+    this.clearHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        try {
+          this.socket.send(JSON.stringify({ type: "botHeartbeat" }));
+        } catch (_) {}
+      } else if (this.senderRunning || this.state.sessionActive) {
+        this.scheduleReconnect("heartbeat: socket down");
+      }
+      if (this.jwtCache.token && this.jwtCache.expMs - 60_000 < Date.now()) {
+        void this.fetchLetterBotJwt(true).catch(() => {});
+      }
+    }, 60_000);
+  }
+
+  handleSocketMessage(raw) {
+    let msg;
+    try {
+      msg = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    switch (msg.type) {
+      case "auth-response":
+        this.state.authenticating = false;
+        if (msg.success) {
+          this.state.connected = true;
+          this.state.error = "";
+          if (!this.state.sessionActive) this.state.statusMessage = "Connected";
+          this.startHeartbeat();
+          try {
+            this.socket.send(JSON.stringify({ type: "bot-start-init" }));
+          } catch (_) {}
+        } else {
+          this.state.connected = false;
+          this.state.error = msg.error || msg.message || "WebSocket auth failed";
+          this.state.statusMessage = "Auth failed";
+        }
+        this.emitState();
+        break;
+
+      case "bot-start-init-response": {
+        this.applyPreviewFromInit(msg.preview);
+        this.state.sending = msg.isSending === 1 || msg.isSending === true || Boolean(msg.isSending);
+        this.state.buttonLabel = this.state.sending ? "Stop" : "Start";
+        if (msg.error === 1) {
+          this.state.error = msg.message || "Letter Bot init error";
+          if (!this.state.sessionActive) this.state.statusMessage = msg.message || "Init error";
+        } else {
+          this.state.error = "";
+          if (!this.state.sessionActive) this.state.statusMessage = msg.message || "Ready";
+        }
+        const waiters = this.initWaiters.splice(0, this.initWaiters.length);
+        waiters.forEach((resolve) => resolve(msg));
+        this.emitState();
+        break;
+      }
+
+      case "bot-send-response": {
+        if (msg.error === 1) {
+          this.state.sending = false;
+          this.state.buttonLabel = "Start";
+          this.state.progress = null;
+          this.state.error = msg.message || "Send failed";
+          this.state.statusMessage = msg.message || "Send failed";
+          this.lastProgressAt = Date.now();
+          this.emitState();
+          break;
+        }
+        this.state.error = "";
+        this.state.sending = msg.isSending === 1 || msg.isSending === true || Boolean(msg.isSending);
+        const prev = this.state.progress || {};
+        const percentRaw = msg.percent ?? msg.completePercent ?? msg.progress;
+        const percentNum = Number(percentRaw);
+        this.state.progress = {
+          to: msg.to ?? prev.to ?? null,
+          total: msg.total ?? prev.total ?? null,
+          filter: msg.filter ?? prev.filter ?? null,
+          percent: Number.isFinite(percentNum) ? percentNum : Number(prev.percent) || 0,
+          sent: msg.sent ?? prev.sent ?? null,
+          complete: Boolean(msg.complete),
+          recipients: Array.isArray(msg.recipients) ? msg.recipients : prev.recipients || [],
+        };
+        this.lastProgressAt = Date.now();
+        this.state.buttonLabel = this.state.progress.complete
+          ? "Start"
+          : this.state.sending
+            ? "Stop"
+            : "Start";
+        if (msg.filter) this.state.filter = String(msg.filter);
+        if (this.state.sessionActive && !this.state.isPaused) {
+          this.state.statusMessage = "";
+        }
+        if (this.state.progress.complete) this.state.sending = false;
+        this.emitState();
+        break;
+      }
+
+      case "bot-restarted":
+        try {
+          this.socket.send(JSON.stringify({ type: "bot-start-init" }));
+        } catch (_) {}
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  closeSocket() {
+    this.clearHeartbeat();
+    const ws = this.socket;
+    this.socket = null;
+    this.connectPromise = null;
+    this.state.connected = false;
+    this.state.authenticating = false;
+    if (!ws) {
+      this.closingIntentionally = false;
+      return;
+    }
+    this.closingIntentionally = true;
+    try {
+      ws.close();
+    } catch (_) {}
+    setTimeout(() => {
+      this.closingIntentionally = false;
+    }, 50);
+  }
+
+  scheduleReconnect(reason = "socket closed") {
+    if (this.reconnectTimer) return;
+    if (!this.senderRunning && !this.state.sessionActive) return;
+    this.state.connected = false;
+    this.state.statusMessage = `ReconnectingвЂ¦ ${reason}`;
+    this.emitState();
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.ensureConnected(true)
+        .then(() => {
+          if (this.socket?.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify({ type: "bot-start-init" }));
+          }
+          this.ensureCycleTimer();
+        })
+        .catch((error) => this.scheduleReconnect(error?.message || "retry"));
+    }, 2000);
+  }
+
+  async ensureConnected(forceJwt = false) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.state.connected) return true;
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectPromise = (async () => {
+      this.closeSocket();
+      this.state.authenticating = true;
+      this.state.statusMessage = this.state.sessionActive ? this.state.statusMessage : "ConnectingвЂ¦";
+      this.state.error = "";
+      this.emitState();
+
+      const token = await this.fetchLetterBotJwt(forceJwt);
+
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const ws = new WebSocket(WS_URL, {
+          headers: {
+            Origin: ORIGIN,
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+        });
+        this.socket = ws;
+        const fail = (err) => {
+          if (settled) return;
+          settled = true;
+          this.closeSocket();
+          reject(err instanceof Error ? err : new Error(String(err || "WebSocket failed")));
+        };
+        const ok = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        const timer = setTimeout(() => fail(new Error("WebSocket timeout")), 15000);
+
+        ws.on("open", () => {
+          ws.send(
+            JSON.stringify({
+              type: "auth",
+              connection: "letterBot",
+              subscribe_to: [
+                "auth-response",
+                "bot-send-response",
+                "bot-start-init-response",
+                "bot-restarted",
+              ],
+              payload: token,
+            }),
+          );
+        });
+
+        ws.on("message", (data) => {
+          const text = Buffer.isBuffer(data) ? data.toString("utf8") : String(data);
+          this.handleSocketMessage(text);
+          try {
+            const msg = JSON.parse(text);
+            if (msg.type === "auth-response") {
+              clearTimeout(timer);
+              if (msg.success) ok();
+              else fail(new Error(msg.error || msg.message || "Auth failed"));
+            }
+          } catch (_) {}
+        });
+
+        ws.on("error", () => fail(new Error("WebSocket connection error")));
+        ws.on("close", () => {
+          this.state.connected = false;
+          if (!settled) {
+            fail(new Error("WebSocket closed"));
+            return;
+          }
+          this.emitState();
+          if (!this.closingIntentionally && (this.senderRunning || this.state.sessionActive)) {
+            this.scheduleReconnect("socket closed");
+          }
+        });
+      });
+
+      return true;
+    })();
+
+    try {
+      return await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
+    }
+  }
+
+  getSelectedCategories(selection) {
+    return CATEGORY_KEYS.filter((key) => Boolean(selection?.[key]));
+  }
+
+  clearCycleTimer() {
+    if (this.cycleTimer) {
+      clearInterval(this.cycleTimer);
+      this.cycleTimer = null;
+    }
+  }
+
+  ensureCycleTimer() {
+    if (!this.senderRunning || this.senderPaused) return;
+    if (!this.cycleTimer) {
+      this.cycleTimer = setInterval(() => {
+        void this.runWatchdog();
+      }, 10000);
+    }
+  }
+
+  requestBotInit(timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      if (this.socket?.readyState !== WebSocket.OPEN) {
+        reject(new Error("Not connected"));
+        return;
+      }
+      const timer = setTimeout(() => {
+        this.initWaiters = this.initWaiters.filter((item) => item !== onInit);
+        reject(new Error("bot-start-init timeout"));
+      }, timeoutMs);
+      const onInit = (msg) => {
+        clearTimeout(timer);
+        resolve(msg);
+      };
+      this.initWaiters.push(onInit);
+      try {
+        this.socket.send(JSON.stringify({ type: "bot-start-init" }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.initWaiters = this.initWaiters.filter((item) => item !== onInit);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  currentFilterKey() {
+    const selection = this.userSelection || {};
+    if (selection.firstStart) {
+      return FIRST_START_KEYS[this.firstStartIndex] || this.state.filter || "onlineOnly";
+    }
+    if (selection.totalOnline) {
+      return this.onlineStage === "lastActive" ? "lastActive" : "onlineOnly";
+    }
+    if (selection.mailing247) {
+      const idx = Math.max(0, this.mailing247Index - 1);
+      return MAILING_247_KEYS[idx % MAILING_247_KEYS.length] || this.state.filter || "onlineOnly";
+    }
+    const selected = this.getSelectedCategories(selection);
+    if (selected.length) {
+      const idx = Math.max(0, this.categoryIndex - 1);
+      return selected[idx % selected.length] || this.state.filter || "onlineOnly";
+    }
+    return this.state.filter || "onlineOnly";
+  }
+
+  async wsStartFilter(categoryKey) {
+    await this.ensureConnected(false);
+    if (this.socket?.readyState !== WebSocket.OPEN) throw new Error("Not connected");
+
+    if (this.state.sending) {
+      this.socket.send(JSON.stringify({ type: "bot-stop-send" }));
+      await delay(250);
+    }
+
+    this.state.filter = categoryKey;
+    this.state.buttonLabel = "Searching";
+    this.state.statusMessage = "";
+    this.state.error = "";
+    this.state.sending = true;
+    this.state.progress = null;
+    this.lastSendStartedAt = Date.now();
+    this.lastProgressAt = Date.now();
+    this.emitState();
+
+    this.socket.send(
+      JSON.stringify({
+        type: "bot-start-send",
+        criteria: this.buildCriteria(categoryKey),
+      }),
+    );
+  }
+
+  async wsStopSend() {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(JSON.stringify({ type: "bot-stop-send" }));
+      } catch (_) {}
+    }
+    this.state.sending = false;
+    this.state.buttonLabel = "Start";
+    this.emitState();
+  }
+
+  async recoverIfStalled(reason = "no progress") {
+    if (!this.senderRunning || this.senderPaused || this.recoveringStall) return false;
+    const anchor = Math.max(this.lastProgressAt || 0, this.lastSendStartedAt || 0);
+    if (!anchor || Date.now() - anchor < STALL_MS) return false;
+
+    this.recoveringStall = true;
+    this.state.statusMessage = `RecoveringвЂ¦ (${reason})`;
+    this.state.error = "";
+    this.emitState();
+
+    try {
+      await this.ensureConnected(true);
+      let initMsg = null;
+      try {
+        initMsg = await this.requestBotInit();
+      } catch {
+        initMsg = null;
+      }
+      const serverSending = Boolean(
+        initMsg
+          ? initMsg.isSending === 1 || initMsg.isSending === true || Boolean(initMsg.isSending)
+          : this.state.sending,
+      );
+      const filter = this.currentFilterKey();
+      if (serverSending || this.state.sending || (this.state.progress && !this.state.progress.complete)) {
+        this.state.sending = false;
+        this.state.statusMessage = `Restarting ${filter}вЂ¦`;
+        this.emitState();
+        await this.wsStartFilter(filter);
+        this.lastProgressAt = Date.now();
+        this.lastSendStartedAt = Date.now();
+        return true;
+      }
+      this.state.sending = false;
+      if (this.state.progress && !this.state.progress.complete) {
+        this.state.progress = { ...this.state.progress, complete: true };
+      }
+      this.lastProgressAt = Date.now();
+      this.emitState();
+      await this.runSenderCycle();
+      return true;
+    } catch (error) {
+      this.setError(error?.message || String(error));
+      this.scheduleReconnect(error?.message || "stall recovery failed");
+      return false;
+    } finally {
+      this.recoveringStall = false;
+    }
+  }
+
+  async runSenderCycle() {
+    if (!this.senderRunning || this.senderPaused) return;
+    const selection = this.userSelection || {};
+    try {
+      if (selection.firstStart) {
+        if (this.firstStartIndex >= FIRST_START_KEYS.length) {
+          await this.stop({ complete: true });
+          return;
+        }
+        if (this.state.sending) return;
+        if (this.state.progress?.complete) {
+          this.firstStartIndex += 1;
+          this.state.progress = null;
+          if (this.firstStartIndex >= FIRST_START_KEYS.length) {
+            await this.stop({ complete: true });
+            return;
+          }
+          await this.wsStartFilter(FIRST_START_KEYS[this.firstStartIndex]);
+          return;
+        }
+        if (this.state.progress && !this.state.progress.complete) return;
+        await this.wsStartFilter(FIRST_START_KEYS[this.firstStartIndex]);
+        return;
+      }
+
+      if (selection.totalOnline) {
+        if (this.state.sending) return;
+        if (this.state.progress && !this.state.progress.complete) return;
+        if (this.onlineStage === "online") {
+          await this.wsStartFilter("onlineOnly");
+          this.onlineStage = "lastActive";
+        } else {
+          await this.wsStartFilter("lastActive");
+          this.onlineStage = "online";
+        }
+        return;
+      }
+
+      if (selection.mailing247) {
+        if (this.state.sending) return;
+        if (this.state.progress && !this.state.progress.complete) return;
+        const key = MAILING_247_KEYS[this.mailing247Index % MAILING_247_KEYS.length];
+        this.mailing247Index += 1;
+        await this.wsStartFilter(key);
+        return;
+      }
+
+      const selected = this.getSelectedCategories(selection);
+      if (!selected.length) return;
+      if (this.state.sending) return;
+      if (this.state.progress && !this.state.progress.complete) return;
+      const key = selected[this.categoryIndex % selected.length];
+      this.categoryIndex += 1;
+      await this.wsStartFilter(key);
+    } catch (error) {
+      this.setError(error?.message || String(error));
+    }
+  }
+
+  async runWatchdog() {
+    if (!this.senderRunning || this.senderPaused) return;
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      this.scheduleReconnect("watchdog: socket down");
+      return;
+    }
+    const recovered = await this.recoverIfStalled("progress stalled");
+    if (!recovered) await this.runSenderCycle();
+  }
+
+  async start(selection) {
+    this.userSelection = selection || {};
+    const hasMode =
+      Boolean(this.userSelection.firstStart) ||
+      Boolean(this.userSelection.totalOnline) ||
+      Boolean(this.userSelection.mailing247) ||
+      this.getSelectedCategories(this.userSelection).length > 0;
+    if (!hasMode) {
+      throw new Error("Select First Start, Online+Last Active, 24/7, or at least one filter");
+    }
+
+    this.senderRunning = true;
+    this.senderPaused = false;
+    this.categoryIndex = 0;
+    this.firstStartIndex = 0;
+    this.mailing247Index = 0;
+    this.onlineStage = "online";
+    this.state.sessionActive = true;
+    this.state.isPaused = false;
+    this.state.statusMessage = "StartingвЂ¦";
+    this.state.error = "";
+    this.lastProgressAt = Date.now();
+    this.lastSendStartedAt = Date.now();
+    this.emitState();
+    await this.ensureConnected(true);
+    await this.runSenderCycle();
+    this.clearCycleTimer();
+    this.ensureCycleTimer();
+    return this.getState();
+  }
+
+  async pause() {
+    if (!this.senderRunning || this.senderPaused) return this.getState();
+    this.senderPaused = true;
+    this.state.isPaused = true;
+    this.state.statusMessage = "Paused";
+    this.clearCycleTimer();
+    await this.wsStopSend();
+    this.emitState();
+    return this.getState();
+  }
+
+  async resume() {
+    if (!this.senderRunning || !this.senderPaused) return this.getState();
+    this.senderPaused = false;
+    this.state.isPaused = false;
+    this.state.statusMessage = "";
+    this.lastProgressAt = Date.now();
+    this.emitState();
+    this.clearCycleTimer();
+    this.ensureCycleTimer();
+    await this.runSenderCycle();
+    return this.getState();
+  }
+
+  async stop({ complete = false } = {}) {
+    this.senderRunning = false;
+    this.senderPaused = false;
+    this.clearCycleTimer();
+    await this.wsStopSend();
+    this.state.sessionActive = false;
+    this.state.isPaused = false;
+    this.state.statusMessage = complete ? "First Start complete" : "Stopped";
+    this.state.buttonLabel = "Start";
+    this.emitState();
+    return this.getState();
+  }
+
+  stopSync() {
+    this.senderRunning = false;
+    this.senderPaused = false;
+    this.clearCycleTimer();
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      try {
+        this.socket.send(JSON.stringify({ type: "bot-stop-send" }));
+      } catch (_) {}
+    }
+    this.state.sending = false;
+    this.state.sessionActive = false;
+    this.state.isPaused = false;
+    this.state.statusMessage = "Stopped";
+    this.emitState();
+  }
+
+  applyPreview(preview) {
+    this.applyPreviewFromInit(preview);
+    this.emitState();
+  }
+
+  async connect() {
+    await this.ensureConnected(true);
+    return this.getState();
+  }
+}
+
+export { LetterBotWorker };
+

@@ -7,12 +7,13 @@ import { initDb } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import favoritesRoutes from "./routes/favorites.js";
 import inboxRoutes from "./routes/inbox.js";
+import letterbotRoutes from "./routes/letterbot.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "2mb" }));
 app.use(
   cors({
     origin(origin, callback) {
@@ -36,6 +37,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 app.use("/auth", authRoutes);
 app.use("/favorites", favoritesRoutes);
 app.use("/inbox", inboxRoutes);
+app.use("/letterbot", letterbotRoutes);
 
 async function start() {
   await initDb();
