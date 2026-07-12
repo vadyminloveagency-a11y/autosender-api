@@ -10,7 +10,6 @@ import {
   getDreamCredentials,
   getLetterBotJob,
   listRunningLetterBotJobs,
-  listRunningLetterBotJobsForUser,
   markLetterBotJobStopped,
   upsertDreamCredentials,
   upsertLetterBotJob,
@@ -263,32 +262,6 @@ function stateFromJobRow(row, profileId) {
     profileId: String(profileId || row?.profile_id || "default"),
     updatedAt: Date.now(),
   };
-}
-
-function isWorkerActive(worker) {
-  return Boolean(worker?.senderRunning || worker?.state?.sessionActive || worker?.state?.sending);
-}
-
-function findActiveWorkerForUser(userId, preferredProfileId = "") {
-  const preferredKey = workerKey(userId, preferredProfileId || "default");
-  const preferred = workers.get(preferredKey);
-  if (isWorkerActive(preferred)) {
-    return {
-      worker: preferred,
-      profileId: String(preferredProfileId || "default"),
-      key: preferredKey,
-    };
-  }
-  for (const [key, worker] of workers.entries()) {
-    if (!String(key).startsWith(`${userId}:`)) continue;
-    if (!isWorkerActive(worker)) continue;
-    return {
-      worker,
-      profileId: String(key).slice(String(userId).length + 1),
-      key,
-    };
-  }
-  return null;
 }
 
 async function resolveLiveState(userId, profileId) {
