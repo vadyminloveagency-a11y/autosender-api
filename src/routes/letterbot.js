@@ -1,6 +1,7 @@
 import express from "express";
 import { authMiddleware } from "../auth.js";
 import { decryptSecret, encryptSecret, maskUsername } from "../cryptoUtil.js";
+import { withDreamGate } from "../dreamGate.js";
 import { dreamLogin } from "../dreamLogin.js";
 import { LetterBotWorker } from "../letterBotWorker.js";
 import {
@@ -508,5 +509,34 @@ export async function restoreRunningLetterBotJobs() {
     }
   }
 }
+
+/**
+ * Run Inbox/Dream HTTP work without fighting an active LetterBot send.
+ * Soft-pauses mailing for this profile, shares live cookies, then resumes.
+ */
+export async function withLetterBotDreamQuiet(userId, profileId, fn) {
+  const pid = String(profileId || "default");
+  const key = workerKey(userId, pid);
+  const worker = getWorkerForUser(userId, pid);
+  const shouldPause = Boolean(worker?.senderRunning && !worker?.senderPaused);
+  if (shouldPause) {
+    try {
+      await worker.pause();
+      worker.state.statusMessage = "Paused for Inbox sync";
+      worker.emitState();
+    } catch (_) {}
+  }
+  try {
+    return await withDreamGate(key, async () => fn(worker));
+  } finally {
+    if (shouldPause) {
+      try {
+        await worker.resume();
+      } catch (_) {}
+    }
+  }
+}
+
+export { getWorkerForUser, workerKey };
 
 export default router;

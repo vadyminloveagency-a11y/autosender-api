@@ -1,7 +1,17 @@
 import express from "express";
 
 import { authMiddleware } from "../auth.js";
+import { decryptSecret } from "../cryptoUtil.js";
 import { getPool } from "../db.js";
+import { scrapeDreamInboxCloud } from "../inboxCloudScraper.js";
+import {
+  getDreamCredentials,
+  getLetterBotJob,
+} from "../letterbotStore.js";
+import {
+  getWorkerForUser,
+  withLetterBotDreamQuiet,
+} from "./letterbot.js";
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -160,6 +170,157 @@ router.delete("/all", async (req, res) => {
     console.error(error);
     return res.status(500).json({ ok: false, error: "Failed to clear inbox men" });
   }
+});
+
+/** @type {Map<string, object>} */
+const cloudScrapeJobs = new Map();
+let cloudScrapeSeq = 0;
+
+function profileIdFrom(req) {
+  return String(
+    req.body?.profileId ||
+      req.body?.femaleProfileId ||
+      req.query?.profileId ||
+      req.query?.femaleProfileId ||
+      req.headers["x-profile-id"] ||
+      "default",
+  );
+}
+
+function pruneCloudScrapeJobs() {
+  const cutoff = Date.now() - 30 * 60_000;
+  for (const [id, job] of cloudScrapeJobs.entries()) {
+    if (Number(job.updatedAt || 0) < cutoff) cloudScrapeJobs.delete(id);
+  }
+}
+
+/**
+ * Start cloud Dream Inbox scrape (uses LetterBot Dream credentials / live worker cookies).
+ * Soft-pauses LetterBot while scraping so Dream is not hit by send + inbox at once.
+ */
+router.post("/cloud-scrape", async (req, res) => {
+  pruneCloudScrapeJobs();
+  const profileId = profileIdFrom(req);
+  const maxPages =
+    req.body?.maxPages === 0 || req.body?.maxPages === "0"
+      ? 0
+      : Number(req.body?.maxPages ?? 3);
+  const userId = Number(req.user.id);
+  const jobId = `inbox-${userId}-${profileId}-${Date.now()}-${++cloudScrapeSeq}`;
+
+  const job = {
+    id: jobId,
+    userId,
+    profileId,
+    status: "running",
+    message: "Cloud Inbox: starting…",
+    page: 0,
+    men: 0,
+    error: "",
+    result: null,
+    updatedAt: Date.now(),
+  };
+  cloudScrapeJobs.set(jobId, job);
+
+  // Respond immediately; scrape continues in background.
+  res.json({ ok: true, jobId, status: "running", profileId });
+
+  void (async () => {
+    try {
+      const credRow = await getDreamCredentials(userId, profileId);
+      const password = credRow?.password_enc ? decryptSecret(credRow.password_enc) : "";
+      const username = credRow?.username || "";
+
+      const scrapeResult = await withLetterBotDreamQuiet(userId, profileId, async (worker) => {
+        let cookieHeader = String(worker?.cookieHeader || "").trim();
+        if (!cookieHeader) {
+          try {
+            const row = await getLetterBotJob(userId, profileId);
+            cookieHeader = String(row?.cookie_header || "").trim();
+            if (cookieHeader && worker) worker.setCookieHeader(cookieHeader);
+          } catch (_) {}
+        }
+
+        if (!cookieHeader && !(username && password)) {
+          throw new Error(
+            "Save Dream login in LetterBot (Cloud login) to Update Inbox from the cloud",
+          );
+        }
+
+        // Prefer existing session; fall back to fresh login with stored credentials.
+        try {
+          return await scrapeDreamInboxCloud({
+            cookieHeader,
+            username: cookieHeader ? "" : username,
+            password: cookieHeader ? "" : password,
+            maxPages,
+            onProgress(progress) {
+              job.message = progress?.message || job.message;
+              job.page = Number(progress?.page) || job.page;
+              job.men = Number(progress?.men) || job.men;
+              job.updatedAt = Date.now();
+            },
+          });
+        } catch (firstError) {
+          if (!(username && password)) throw firstError;
+          return await scrapeDreamInboxCloud({
+            cookieHeader: "",
+            username,
+            password,
+            maxPages,
+            onProgress(progress) {
+              job.message = progress?.message || job.message;
+              job.page = Number(progress?.page) || job.page;
+              job.men = Number(progress?.men) || job.men;
+              job.updatedAt = Date.now();
+            },
+          });
+        }
+      });
+
+      if (scrapeResult?.cookieHeader) {
+        try {
+          const worker = getWorkerForUser(userId, profileId);
+          worker.setCookieHeader(scrapeResult.cookieHeader);
+        } catch (_) {}
+      }
+
+      job.status = "done";
+      job.message = `Cloud Inbox: ${scrapeResult.items?.length || 0} men`;
+      job.men = scrapeResult.items?.length || 0;
+      job.result = {
+        ok: true,
+        source: "cloud",
+        femaleProfileId: scrapeResult.femaleProfileId,
+        pagesScraped: scrapeResult.pagesScraped,
+        letterCounts: scrapeResult.letterCounts || {},
+        items: scrapeResult.items || [],
+      };
+      job.updatedAt = Date.now();
+    } catch (error) {
+      job.status = "error";
+      job.error = error?.message || String(error);
+      job.message = job.error;
+      job.updatedAt = Date.now();
+    }
+  })();
+});
+
+router.get("/cloud-scrape/:jobId", async (req, res) => {
+  const job = cloudScrapeJobs.get(String(req.params.jobId || ""));
+  if (!job || Number(job.userId) !== Number(req.user.id)) {
+    return res.status(404).json({ ok: false, error: "Job not found" });
+  }
+  return res.json({
+    ok: true,
+    jobId: job.id,
+    status: job.status,
+    message: job.message,
+    page: job.page,
+    men: job.men,
+    error: job.error || "",
+    result: job.status === "done" ? job.result : null,
+  });
 });
 
 export default router;

@@ -1,4 +1,5 @@
 ﻿import WebSocket from "ws";
+import { withDreamGate } from "./dreamGate.js";
 import { dreamLogin } from "./dreamLogin.js";
 
 const ORIGIN = "https://www.dream-singles.com";
@@ -263,6 +264,26 @@ class LetterBotWorker {
       );
     }
 
+    const gateKey = `${this.ownerUserId || "anon"}:${this.profileId || "default"}`;
+    return withDreamGate(gateKey, () => this.fetchLetterBotJwtUngated(force, { allowRelogin }));
+  }
+
+  async fetchLetterBotJwtUngated(force = false, { allowRelogin = true } = {}) {
+    const now = Date.now();
+    if (!force && this.jwtCache.token && this.jwtCache.expMs - 45_000 > now) {
+      return this.jwtCache.token;
+    }
+    if (!this.cookieHeader) {
+      if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
+      if (allowRelogin && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+        return this.fetchLetterBotJwtUngated(true, { allowRelogin: false });
+      }
+      throw new Error(
+        "Dream session missing — save Dream login in AutoSender, or open dream-singles.com logged in",
+      );
+    }
+
     const response = await fetch(BOT_SEND_URL, {
       method: "GET",
       redirect: "follow",
@@ -278,7 +299,7 @@ class LetterBotWorker {
     if (response.status === 401 || response.status === 403) {
       if (allowRelogin && this.credentialsProvider) {
         await this.reloginFromCredentials();
-        return this.fetchLetterBotJwt(true, { allowRelogin: false });
+        return this.fetchLetterBotJwtUngated(true, { allowRelogin: false });
       }
       throw new Error(
         "Dream session expired — update Dream password in AutoSender LetterBot",
@@ -294,7 +315,7 @@ class LetterBotWorker {
       if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
       if (allowRelogin && this.credentialsProvider) {
         await this.reloginFromCredentials();
-        return this.fetchLetterBotJwt(true, { allowRelogin: false });
+        return this.fetchLetterBotJwtUngated(true, { allowRelogin: false });
       }
       throw new Error(
         "Letter Bot JWT not found — update Dream password in AutoSender LetterBot",
