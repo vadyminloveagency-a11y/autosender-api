@@ -3,7 +3,7 @@
 const ORIGIN = "https://www.dream-singles.com";
 const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
 const WS_URL = "wss://ws.dream-singles.com/ws";
-const STALL_MS = 5 * 60_000;
+const STALL_MS = 2 * 60_000;
 
 const CATEGORY_KEYS = [
   "onlineOnly",
@@ -347,7 +347,7 @@ class LetterBotWorker {
     if (this.reconnectTimer) return;
     if (!this.senderRunning && !this.state.sessionActive) return;
     this.state.connected = false;
-    this.state.statusMessage = `ReconnectingвЂ¦ ${reason}`;
+    this.state.statusMessage = `Reconnecting... ${reason}`;
     this.emitState();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -369,7 +369,7 @@ class LetterBotWorker {
     this.connectPromise = (async () => {
       this.closeSocket();
       this.state.authenticating = true;
-      this.state.statusMessage = this.state.sessionActive ? this.state.statusMessage : "ConnectingвЂ¦";
+      this.state.statusMessage = this.state.sessionActive ? this.state.statusMessage : "Connecting...";
       this.state.error = "";
       this.emitState();
 
@@ -560,7 +560,7 @@ class LetterBotWorker {
     if (!anchor || Date.now() - anchor < STALL_MS) return false;
 
     this.recoveringStall = true;
-    this.state.statusMessage = `RecoveringвЂ¦ (${reason})`;
+    this.state.statusMessage = `Recovering... (${reason})`;
     this.state.error = "";
     this.emitState();
 
@@ -580,7 +580,7 @@ class LetterBotWorker {
       const filter = this.currentFilterKey();
       if (serverSending || this.state.sending || (this.state.progress && !this.state.progress.complete)) {
         this.state.sending = false;
-        this.state.statusMessage = `Restarting ${filter}вЂ¦`;
+        this.state.statusMessage = `Restarting ${filter}...`;
         this.emitState();
         await this.wsStartFilter(filter);
         this.lastProgressAt = Date.now();
@@ -692,7 +692,7 @@ class LetterBotWorker {
     this.onlineStage = "online";
     this.state.sessionActive = true;
     this.state.isPaused = false;
-    this.state.statusMessage = "StartingвЂ¦";
+    this.state.statusMessage = "Starting...";
     this.state.error = "";
     this.lastProgressAt = Date.now();
     this.lastSendStartedAt = Date.now();
@@ -769,5 +769,7 @@ class LetterBotWorker {
 }
 
 export { LetterBotWorker };
+
+
 
 
