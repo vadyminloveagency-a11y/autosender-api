@@ -607,57 +607,67 @@ class LetterBotWorker {
   async runSenderCycle() {
     if (!this.senderRunning || this.senderPaused) return;
     const selection = this.userSelection || {};
+
+    const resumeOrStart = async (startNext) => {
+      if (this.state.sending) return;
+      // Dream often stops mid-filter without complete=true — that used to deadlock the cycle.
+      if (this.state.progress && !this.state.progress.complete) {
+        const filter = this.state.filter || this.currentFilterKey();
+        await this.wsStartFilter(filter);
+        return;
+      }
+      await startNext();
+    };
+
     try {
       if (selection.firstStart) {
         if (this.firstStartIndex >= FIRST_START_KEYS.length) {
           await this.stop({ complete: true });
           return;
         }
-        if (this.state.sending) return;
-        if (this.state.progress?.complete) {
-          this.firstStartIndex += 1;
-          this.state.progress = null;
-          if (this.firstStartIndex >= FIRST_START_KEYS.length) {
-            await this.stop({ complete: true });
-            return;
+        await resumeOrStart(async () => {
+          if (this.state.progress?.complete) {
+            this.firstStartIndex += 1;
+            this.state.progress = null;
+            if (this.firstStartIndex >= FIRST_START_KEYS.length) {
+              await this.stop({ complete: true });
+              return;
+            }
           }
           await this.wsStartFilter(FIRST_START_KEYS[this.firstStartIndex]);
-          return;
-        }
-        if (this.state.progress && !this.state.progress.complete) return;
-        await this.wsStartFilter(FIRST_START_KEYS[this.firstStartIndex]);
+        });
         return;
       }
 
       if (selection.totalOnline) {
-        if (this.state.sending) return;
-        if (this.state.progress && !this.state.progress.complete) return;
-        if (this.onlineStage === "online") {
-          await this.wsStartFilter("onlineOnly");
-          this.onlineStage = "lastActive";
-        } else {
-          await this.wsStartFilter("lastActive");
-          this.onlineStage = "online";
-        }
+        await resumeOrStart(async () => {
+          if (this.onlineStage === "online") {
+            await this.wsStartFilter("onlineOnly");
+            this.onlineStage = "lastActive";
+          } else {
+            await this.wsStartFilter("lastActive");
+            this.onlineStage = "online";
+          }
+        });
         return;
       }
 
       if (selection.mailing247) {
-        if (this.state.sending) return;
-        if (this.state.progress && !this.state.progress.complete) return;
-        const key = MAILING_247_KEYS[this.mailing247Index % MAILING_247_KEYS.length];
-        this.mailing247Index += 1;
-        await this.wsStartFilter(key);
+        await resumeOrStart(async () => {
+          const key = MAILING_247_KEYS[this.mailing247Index % MAILING_247_KEYS.length];
+          this.mailing247Index += 1;
+          await this.wsStartFilter(key);
+        });
         return;
       }
 
       const selected = this.getSelectedCategories(selection);
       if (!selected.length) return;
-      if (this.state.sending) return;
-      if (this.state.progress && !this.state.progress.complete) return;
-      const key = selected[this.categoryIndex % selected.length];
-      this.categoryIndex += 1;
-      await this.wsStartFilter(key);
+      await resumeOrStart(async () => {
+        const key = selected[this.categoryIndex % selected.length];
+        this.categoryIndex += 1;
+        await this.wsStartFilter(key);
+      });
     } catch (error) {
       this.setError(error?.message || String(error));
     }
@@ -692,6 +702,10 @@ class LetterBotWorker {
     this.onlineStage = "online";
     this.state.sessionActive = true;
     this.state.isPaused = false;
+    this.state.sending = false;
+    this.state.progress = null;
+    this.state.filter = "onlineOnly";
+    this.state.buttonLabel = "Start";
     this.state.statusMessage = "Starting...";
     this.state.error = "";
     this.lastProgressAt = Date.now();
@@ -735,6 +749,8 @@ class LetterBotWorker {
     await this.wsStopSend();
     this.state.sessionActive = false;
     this.state.isPaused = false;
+    this.state.sending = false;
+    this.state.progress = null;
     this.state.statusMessage = complete ? "First Start complete" : "Stopped";
     this.state.buttonLabel = "Start";
     this.emitState();
