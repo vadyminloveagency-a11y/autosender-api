@@ -76,7 +76,8 @@ function getWorker(req, profileId) {
 router.post("/session", authMiddleware, (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
-  if (!header) {
+  const dreamJwt = String(req.body?.dreamJwt || "").trim();
+  if (!header && !dreamJwt) {
     return res.status(400).json({
       ok: false,
       error: "No Dream cookies — open dream-singles.com while logged in",
@@ -84,7 +85,8 @@ router.post("/session", authMiddleware, (req, res) => {
     });
   }
   const worker = getWorker(req, profileId);
-  worker.setCookieHeader(header);
+  if (header) worker.setCookieHeader(header);
+  if (dreamJwt) worker.setDreamJwt(dreamJwt);
   lastStates.set(workerKey(req, profileId), worker.getState());
   return res.json({ ok: true, state: worker.getState() });
 });
@@ -100,9 +102,11 @@ router.get("/status", authMiddleware, (req, res) => {
 router.post("/start", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
+  const dreamJwt = String(req.body?.dreamJwt || "").trim();
   const worker = getWorker(req, profileId);
   if (header) worker.setCookieHeader(header);
-  if (!worker.cookieHeader) {
+  if (dreamJwt) worker.setDreamJwt(dreamJwt);
+  if (!worker.cookieHeader && !worker.jwtCache?.token) {
     return res.status(400).json({
       ok: false,
       error: "Dream session missing — open dream-singles.com while logged in",
@@ -166,8 +170,10 @@ router.post("/stop", authMiddleware, async (req, res) => {
 router.post("/connect", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
+  const dreamJwt = String(req.body?.dreamJwt || "").trim();
   const worker = getWorker(req, profileId);
   if (header) worker.setCookieHeader(header);
+  if (dreamJwt) worker.setDreamJwt(dreamJwt);
   try {
     return res.json({ ok: true, state: await worker.connect() });
   } catch (error) {

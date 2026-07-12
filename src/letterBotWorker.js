@@ -122,7 +122,16 @@ class LetterBotWorker {
 
   setCookieHeader(cookieHeader) {
     this.cookieHeader = String(cookieHeader || "").trim();
-    this.jwtCache = { token: "", expMs: 0 };
+    // Keep existing JWT if cookies refresh without wiping a good token.
+  }
+
+  setDreamJwt(token) {
+    const value = String(token || "").trim();
+    if (!value) return;
+    this.jwtCache = {
+      token: value,
+      expMs: decodeJwtExpMs(value) || Date.now() + 8 * 60 * 1000,
+    };
   }
 
   emitState() {
@@ -164,7 +173,8 @@ class LetterBotWorker {
       return this.jwtCache.token;
     }
     if (!this.cookieHeader) {
-      throw new Error("Dream session missing вЂ” open dream-singles.com while logged in, then Start again");
+      if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
+      throw new Error("Dream session missing - open dream-singles.com while logged in, then Start again");
     }
 
     const response = await fetch(BOT_SEND_URL, {
@@ -178,13 +188,17 @@ class LetterBotWorker {
       },
     });
     if (response.status === 401 || response.status === 403) {
-      throw new Error("Dream session expired вЂ” log in on dream-singles.com and Start again");
+      throw new Error("Dream session expired - log in on dream-singles.com and Start again");
     }
     if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
     const html = await response.text();
-    const match = html.match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/);
+    const match =
+      html.match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
+      html.match(/jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
+      html.match(/"jwt"\s*:\s*"([^"]+)"/);
     if (!match?.[1]) {
-      throw new Error("Letter Bot JWT not found вЂ” Dream session may be invalid");
+      if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
+      throw new Error("Letter Bot JWT not found - Dream session may be invalid");
     }
     const token = match[1];
     this.jwtCache = { token, expMs: decodeJwtExpMs(token) || now + 8 * 60 * 1000 };
@@ -755,4 +769,5 @@ class LetterBotWorker {
 }
 
 export { LetterBotWorker };
+
 
