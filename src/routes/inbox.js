@@ -60,7 +60,10 @@ const UPSERT_SQL = `
     END,
     photo_url = CASE WHEN EXCLUDED.photo_url <> '' THEN EXCLUDED.photo_url ELSE inbox_men.photo_url END,
     profile_url = CASE WHEN EXCLUDED.profile_url <> '' THEN EXCLUDED.profile_url ELSE inbox_men.profile_url END,
-    inbox_order = COALESCE(inbox_men.inbox_order, EXCLUDED.inbox_order),
+    inbox_order = CASE
+      WHEN EXCLUDED.inbox_order IS NOT NULL THEN EXCLUDED.inbox_order
+      ELSE inbox_men.inbox_order
+    END,
     letter_count = GREATEST(inbox_men.letter_count, EXCLUDED.letter_count),
     first_contact_at = CASE
       WHEN inbox_men.first_contact_at IS NULL THEN EXCLUDED.first_contact_at

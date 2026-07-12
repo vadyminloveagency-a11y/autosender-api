@@ -167,7 +167,10 @@ function upsertFavoriteSql({ preserveNotes = false, preserveManType = false, pre
 
       tags = CASE WHEN cardinality(EXCLUDED.tags) > 0 THEN EXCLUDED.tags ELSE favorites.tags END,
 
-      inbox_order = COALESCE(favorites.inbox_order, EXCLUDED.inbox_order),
+      inbox_order = CASE
+        WHEN EXCLUDED.inbox_order IS NOT NULL THEN EXCLUDED.inbox_order
+        ELSE favorites.inbox_order
+      END,
 
       letter_count = EXCLUDED.letter_count,
 
