@@ -71,6 +71,18 @@ export async function listRunningLetterBotJobs() {
   return result.rows;
 }
 
+export async function listRunningLetterBotJobsForUser(userId) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT user_id, profile_id, cookie_header, selection, state, is_running, updated_at
+     FROM letterbot_jobs
+     WHERE user_id = $1 AND is_running = TRUE
+     ORDER BY updated_at DESC`,
+    [Number(userId)],
+  );
+  return result.rows;
+}
+
 export async function getLetterBotJob(userId, profileId) {
   const db = getPool();
   const result = await db.query(

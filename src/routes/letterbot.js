@@ -9,6 +9,7 @@ import {
   getDreamCredentials,
   getLetterBotJob,
   listRunningLetterBotJobs,
+  listRunningLetterBotJobsForUser,
   markLetterBotJobStopped,
   upsertDreamCredentials,
   upsertLetterBotJob,
@@ -249,6 +250,20 @@ router.post("/session", authMiddleware, async (req, res) => {
   return res.json({ ok: true, state: worker.getState() });
 });
 
+function stateFromJobRow(row, profileId) {
+  const prev = row?.state && typeof row.state === "object" ? row.state : {};
+  return {
+    ...idleState(profileId || row?.profile_id || "default"),
+    ...prev,
+    sessionActive: true,
+    isPaused: Boolean(prev.isPaused),
+    buttonLabel: prev.isPaused ? "Start" : "Stop",
+    statusMessage: prev.statusMessage || (prev.isPaused ? "Paused" : "Running in cloud"),
+    profileId: String(profileId || row?.profile_id || "default"),
+    updatedAt: Date.now(),
+  };
+}
+
 router.get("/status", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const key = workerKey(req.user.id, profileId);
@@ -260,22 +275,26 @@ router.get("/status", authMiddleware, async (req, res) => {
   if (cached?.sessionActive) {
     return res.json({ ok: true, state: cached });
   }
+
+  // Any in-memory worker for this user (profileId mismatch / "default").
+  for (const [mapKey, mapWorker] of workers.entries()) {
+    if (!String(mapKey).startsWith(`${req.user.id}:`)) continue;
+    const state = mapWorker.getState();
+    if (state?.sessionActive) {
+      return res.json({ ok: true, state });
+    }
+  }
+
   try {
     const row = await getLetterBotJob(req.user.id, profileId);
     if (row?.is_running) {
-      const prev = row.state && typeof row.state === "object" ? row.state : {};
+      return res.json({ ok: true, state: stateFromJobRow(row, profileId) });
+    }
+    const anyRunning = await listRunningLetterBotJobsForUser(req.user.id);
+    if (anyRunning[0]) {
       return res.json({
         ok: true,
-        state: {
-          ...idleState(profileId),
-          ...prev,
-          sessionActive: true,
-          isPaused: Boolean(prev.isPaused),
-          buttonLabel: prev.isPaused ? "Start" : "Stop",
-          statusMessage: prev.statusMessage || (prev.isPaused ? "Paused" : "Running in cloud"),
-          profileId,
-          updatedAt: Date.now(),
-        },
+        state: stateFromJobRow(anyRunning[0], anyRunning[0].profile_id),
       });
     }
   } catch (_) {}
