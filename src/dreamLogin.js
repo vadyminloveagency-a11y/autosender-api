@@ -67,6 +67,7 @@ export async function dreamLogin(username, password) {
   const loginPage = await fetch(LOGIN_URL, {
     method: "GET",
     redirect: "follow",
+    signal: AbortSignal.timeout(20000),
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "User-Agent": UA,
@@ -89,6 +90,7 @@ export async function dreamLogin(username, password) {
   let response = await fetch(LOGIN_CHECK_URL, {
     method: "POST",
     redirect: "manual",
+    signal: AbortSignal.timeout(20000),
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -114,6 +116,7 @@ export async function dreamLogin(username, password) {
     response = await fetch(nextUrl, {
       method: "GET",
       redirect: "manual",
+      signal: AbortSignal.timeout(20000),
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Cookie: jarToHeader(jar),
@@ -130,6 +133,7 @@ export async function dreamLogin(username, password) {
     response = await fetch(location, {
       method: "GET",
       redirect: "follow",
+      signal: AbortSignal.timeout(20000),
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Cookie: jarToHeader(jar),

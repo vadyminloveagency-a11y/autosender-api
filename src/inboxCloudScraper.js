@@ -216,21 +216,34 @@ function extractEmbeddedInboxJson(html) {
   }
 }
 
-async function dreamFetch(cookieHeaderRef, pathOrUrl, { acceptJson = false } = {}) {
+async function dreamFetch(cookieHeaderRef, pathOrUrl, { acceptJson = false, timeoutMs = 20000 } = {}) {
   const url = String(pathOrUrl).startsWith("http") ? pathOrUrl : `${ORIGIN}${pathOrUrl}`;
-  const response = await fetch(url, {
-    method: "GET",
-    redirect: "follow",
-    headers: {
-      Accept: acceptJson
-        ? "application/json, text/javascript, */*;q=0.1"
-        : "text/html,application/xhtml+xml,application/json,*/*",
-      Cookie: cookieHeaderRef.value,
-      "X-Requested-With": "XMLHttpRequest",
-      Referer: INBOX_URL,
-      "User-Agent": UA,
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(3000, Number(timeoutMs) || 20000));
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        Accept: acceptJson
+          ? "application/json, text/javascript, */*;q=0.1"
+          : "text/html,application/xhtml+xml,application/json,*/*",
+        Cookie: cookieHeaderRef.value,
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: INBOX_URL,
+        "User-Agent": UA,
+      },
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Dream Inbox request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
   cookieHeaderRef.value = mergeCookieJar(cookieHeaderRef.value, parseSetCookieHeader(response));
   const text = await response.text();
   return { response, text, url: response.url || url };

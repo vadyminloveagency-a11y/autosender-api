@@ -287,6 +287,7 @@ class LetterBotWorker {
     const response = await fetch(BOT_SEND_URL, {
       method: "GET",
       redirect: "follow",
+      signal: AbortSignal.timeout(20000),
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Cookie: this.cookieHeader,
