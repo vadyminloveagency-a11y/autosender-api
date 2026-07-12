@@ -1,6 +1,12 @@
 import express from "express";
 import { authMiddleware } from "../auth.js";
 import { LetterBotWorker } from "../letterBotWorker.js";
+import {
+  ensureLetterBotTables,
+  listRunningLetterBotJobs,
+  markLetterBotJobStopped,
+  upsertLetterBotJob,
+} from "../letterbotStore.js";
 
 const router = express.Router();
 
@@ -50,30 +56,42 @@ function profileIdFrom(req) {
     req.body?.profileId ||
       req.query?.profileId ||
       req.headers["x-profile-id"] ||
-      req.user?.id ||
       "default",
   );
 }
 
-function workerKey(req, profileId) {
-  return `${req.user?.id || "anon"}:${profileId}`;
+function workerKey(userId, profileId) {
+  return `${userId || "anon"}:${profileId}`;
 }
 
-function getWorker(req, profileId) {
-  const key = workerKey(req, profileId);
+async function persistJob(payload) {
+  if (!payload?.userId) return;
+  await upsertLetterBotJob(payload);
+}
+
+function getWorkerForUser(userId, profileId) {
+  const key = workerKey(userId, profileId);
   let worker = workers.get(key);
   if (!worker) {
     worker = new LetterBotWorker(profileId, {
+      ownerUserId: userId,
       onStateChange(state) {
         lastStates.set(key, state);
       },
+      onPersist: persistJob,
     });
     workers.set(key, worker);
+  } else if (worker.ownerUserId == null) {
+    worker.ownerUserId = userId;
   }
   return worker;
 }
 
-router.post("/session", authMiddleware, (req, res) => {
+function getWorker(req, profileId) {
+  return getWorkerForUser(req.user?.id, profileId);
+}
+
+router.post("/session", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
   const dreamJwt = String(req.body?.dreamJwt || "").trim();
@@ -87,13 +105,21 @@ router.post("/session", authMiddleware, (req, res) => {
   const worker = getWorker(req, profileId);
   if (header) worker.setCookieHeader(header);
   if (dreamJwt) worker.setDreamJwt(dreamJwt);
-  lastStates.set(workerKey(req, profileId), worker.getState());
+  lastStates.set(workerKey(req.user.id, profileId), worker.getState());
+  await persistJob({
+    userId: req.user.id,
+    profileId,
+    cookieHeader: worker.cookieHeader,
+    selection: worker.userSelection,
+    state: worker.getState(),
+    isRunning: Boolean(worker.senderRunning && worker.state.sessionActive),
+  });
   return res.json({ ok: true, state: worker.getState() });
 });
 
 router.get("/status", authMiddleware, (req, res) => {
   const profileId = profileIdFrom(req);
-  const key = workerKey(req, profileId);
+  const key = workerKey(req.user.id, profileId);
   const worker = workers.get(key);
   const state = worker ? worker.getState() : lastStates.get(key) || idleState(profileId);
   return res.json({ ok: true, state });
@@ -114,7 +140,20 @@ router.post("/start", authMiddleware, async (req, res) => {
     });
   }
   try {
+    // Prove cookies can refresh JWT on the server before operator closes Chrome.
+    if (worker.cookieHeader) {
+      await worker.fetchLetterBotJwt(true);
+    }
     const state = await worker.start(req.body?.selection || {});
+    worker.startKeepAlive();
+    await persistJob({
+      userId: req.user.id,
+      profileId,
+      cookieHeader: worker.cookieHeader,
+      selection: worker.userSelection,
+      state,
+      isRunning: true,
+    });
     return res.json({ ok: true, state });
   } catch (error) {
     return res.status(400).json({
@@ -152,12 +191,12 @@ router.post("/resume", authMiddleware, async (req, res) => {
 });
 
 router.post("/stop", authMiddleware, async (req, res) => {
-  const worker = getWorker(req, profileIdFrom(req));
+  const profileId = profileIdFrom(req);
+  const worker = getWorker(req, profileId);
   try {
-    return res.json({
-      ok: true,
-      state: await worker.stop({ complete: Boolean(req.body?.complete) }),
-    });
+    const state = await worker.stop({ complete: Boolean(req.body?.complete) });
+    await markLetterBotJobStopped(req.user.id, profileId);
+    return res.json({ ok: true, state });
   } catch (error) {
     return res.status(400).json({
       ok: false,
@@ -184,5 +223,38 @@ router.post("/connect", authMiddleware, async (req, res) => {
     });
   }
 });
+
+export async function restoreRunningLetterBotJobs() {
+  await ensureLetterBotTables();
+  const rows = await listRunningLetterBotJobs();
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const profileId = String(row.profile_id || "default");
+    const worker = getWorkerForUser(userId, profileId);
+    if (row.cookie_header) worker.setCookieHeader(row.cookie_header);
+    const selection = row.selection || {};
+    const prev = row.state || {};
+    try {
+      if (prev.isPaused) {
+        worker.userSelection = selection;
+        worker.senderRunning = true;
+        worker.senderPaused = true;
+        worker.state.sessionActive = true;
+        worker.state.isPaused = true;
+        worker.state.progress = prev.progress || null;
+        worker.state.filter = prev.filter || worker.state.filter;
+        worker.state.statusMessage = "Paused";
+        worker.emitState();
+        continue;
+      }
+      await worker.start(selection);
+      worker.startKeepAlive();
+      console.log(`Restored LetterBot job user=${userId} profile=${profileId}`);
+    } catch (error) {
+      console.error(`Failed to restore LetterBot job user=${userId}:`, error?.message || error);
+      await markLetterBotJobStopped(userId, profileId);
+    }
+  }
+}
 
 export default router;

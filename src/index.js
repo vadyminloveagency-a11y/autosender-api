@@ -7,7 +7,8 @@ import { initDb } from "./db.js";
 import authRoutes from "./routes/auth.js";
 import favoritesRoutes from "./routes/favorites.js";
 import inboxRoutes from "./routes/inbox.js";
-import letterbotRoutes from "./routes/letterbot.js";
+import letterbotRoutes, { restoreRunningLetterBotJobs } from "./routes/letterbot.js";
+import { ensureLetterBotTables } from "./letterbotStore.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -41,8 +42,13 @@ app.use("/letterbot", letterbotRoutes);
 
 async function start() {
   await initDb();
+  await ensureLetterBotTables();
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port}`);
+  });
+  // Resume cloud mailings after deploy/restart — no Chrome required.
+  restoreRunningLetterBotJobs().catch((error) => {
+    console.error("LetterBot restore failed:", error?.message || error);
   });
 }
 

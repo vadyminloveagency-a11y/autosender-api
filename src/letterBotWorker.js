@@ -73,14 +73,17 @@ function decodeJwtExpMs(token) {
 }
 
 class LetterBotWorker {
-  constructor(profileId, { onStateChange } = {}) {
+  constructor(profileId, { onStateChange, onPersist, ownerUserId } = {}) {
     this.profileId = String(profileId || "default");
+    this.ownerUserId = ownerUserId != null ? Number(ownerUserId) : null;
     this.onStateChange = onStateChange || null;
+    this.onPersist = onPersist || null;
     this.cookieHeader = "";
     this.socket = null;
     this.connectPromise = null;
     this.jwtCache = { token: "", expMs: 0 };
     this.heartbeatTimer = null;
+    this.keepAliveTimer = null;
     this.cycleTimer = null;
     this.reconnectTimer = null;
     this.closingIntentionally = false;
@@ -140,6 +143,16 @@ class LetterBotWorker {
     if (typeof this.onStateChange === "function") {
       this.onStateChange(this.getState());
     }
+    if (typeof this.onPersist === "function") {
+      void this.onPersist({
+        userId: this.ownerUserId,
+        profileId: this.profileId,
+        cookieHeader: this.cookieHeader,
+        selection: this.userSelection,
+        state: this.getState(),
+        isRunning: Boolean(this.senderRunning && this.state.sessionActive),
+      }).catch(() => {});
+    }
   }
 
   setError(message) {
@@ -167,6 +180,33 @@ class LetterBotWorker {
     this.state.previewVideoPoster = String(preview.video_attachment_preview || "");
   }
 
+  mergeSetCookies(response) {
+    try {
+      const list =
+        typeof response.headers.getSetCookie === "function"
+          ? response.headers.getSetCookie()
+          : [];
+      if (!list?.length) return;
+      const map = new Map();
+      for (const part of String(this.cookieHeader || "").split(";")) {
+        const idx = part.indexOf("=");
+        if (idx <= 0) continue;
+        const name = part.slice(0, idx).trim();
+        const value = part.slice(idx + 1).trim();
+        if (name) map.set(name, value);
+      }
+      for (const raw of list) {
+        const first = String(raw || "").split(";")[0] || "";
+        const idx = first.indexOf("=");
+        if (idx <= 0) continue;
+        const name = first.slice(0, idx).trim();
+        const value = first.slice(idx + 1).trim();
+        if (name) map.set(name, value);
+      }
+      this.cookieHeader = [...map.entries()].map(([n, v]) => `${n}=${v}`).join("; ");
+    } catch (_) {}
+  }
+
   async fetchLetterBotJwt(force = false) {
     const now = Date.now();
     if (!force && this.jwtCache.token && this.jwtCache.expMs - 45_000 > now) {
@@ -181,12 +221,14 @@ class LetterBotWorker {
       method: "GET",
       redirect: "follow",
       headers: {
-        Accept: "text/html",
+        Accept: "text/html,application/xhtml+xml",
         Cookie: this.cookieHeader,
+        Referer: `${ORIGIN}/members/messaging/bot/send`,
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
+    this.mergeSetCookies(response);
     if (response.status === 401 || response.status === 403) {
       throw new Error("Dream session expired - log in on dream-singles.com and Start again");
     }
@@ -205,6 +247,33 @@ class LetterBotWorker {
     return token;
   }
 
+  clearKeepAlive() {
+    if (this.keepAliveTimer) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
+    }
+  }
+
+  startKeepAlive() {
+    this.clearKeepAlive();
+    // Refresh Dream JWT from stored cookies on the server — Chrome can be closed.
+    this.keepAliveTimer = setInterval(() => {
+      if (!this.senderRunning && !this.state.sessionActive) return;
+      void this.fetchLetterBotJwt(true)
+        .then(() => {
+          if (this.state.error && /session|jwt/i.test(this.state.error)) {
+            this.state.error = "";
+            this.emitState();
+          }
+        })
+        .catch((error) => {
+          this.state.error = error?.message || String(error);
+          this.state.statusMessage = "Dream session refresh failed";
+          this.emitState();
+        });
+    }, 2 * 60_000);
+  }
+
   clearHeartbeat() {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -214,6 +283,7 @@ class LetterBotWorker {
 
   startHeartbeat() {
     this.clearHeartbeat();
+    this.startKeepAlive();
     this.heartbeatTimer = setInterval(() => {
       if (this.socket?.readyState === WebSocket.OPEN) {
         try {
@@ -746,6 +816,7 @@ class LetterBotWorker {
     this.senderRunning = false;
     this.senderPaused = false;
     this.clearCycleTimer();
+    this.clearKeepAlive();
     await this.wsStopSend();
     this.state.sessionActive = false;
     this.state.isPaused = false;
