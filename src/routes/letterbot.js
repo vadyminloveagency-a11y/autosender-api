@@ -320,47 +320,41 @@ async function resolveLiveState(userId, profileId) {
   return idleState(pid);
 }
 
-async function stopAllRunningForUser(userId, { complete = false } = {}) {
-  let lastState = idleState("default");
-  const stoppedProfiles = new Set();
-
-  for (const [key, worker] of [...workers.entries()]) {
-    if (!String(key).startsWith(`${userId}:`)) continue;
-    const profileId = String(key).slice(String(userId).length + 1);
-    stoppedProfiles.add(profileId);
+async function stopWorkerForProfile(userId, profileId, { complete = false } = {}) {
+  const pid = String(profileId || "default");
+  const key = workerKey(userId, pid);
+  let worker = workers.get(key);
+  if (!worker) {
     try {
-      if (isWorkerActive(worker) || worker?.state?.sending) {
-        lastState = await worker.stop({ complete });
-      } else {
-        lastState = worker.getState();
+      const row = await getLetterBotJob(userId, pid);
+      if (row?.is_running) {
+        worker = getWorkerForUser(userId, pid);
+        if (row.cookie_header) worker.setCookieHeader(row.cookie_header);
+        worker.senderRunning = true;
+        worker.state.sessionActive = true;
       }
-    } catch (_) {
-      lastState = idleState(profileId);
-    }
-    await markLetterBotJobStopped(userId, profileId);
-    lastStates.set(key, lastState);
+    } catch (_) {}
   }
-
-  try {
-    const rows = await listRunningLetterBotJobsForUser(userId);
-    for (const row of rows) {
-      const profileId = String(row.profile_id || "default");
-      if (stoppedProfiles.has(profileId)) continue;
-      const worker = getWorkerForUser(userId, profileId);
-      if (row.cookie_header) worker.setCookieHeader(row.cookie_header);
-      worker.senderRunning = true;
-      worker.state.sessionActive = true;
-      try {
-        lastState = await worker.stop({ complete });
-      } catch (_) {
-        lastState = idleState(profileId);
-      }
-      await markLetterBotJobStopped(userId, profileId);
-      stoppedProfiles.add(profileId);
+  let state = idleState(pid);
+  if (worker) {
+    try {
+      state = await worker.stop({ complete });
+    } catch (_) {
+      state = idleState(pid);
     }
-  } catch (_) {}
-
-  return lastState?.sessionActive ? { ...lastState, sessionActive: false, buttonLabel: "Start" } : lastState;
+  }
+  await markLetterBotJobStopped(userId, pid);
+  lastStates.set(key, state);
+  return {
+    ...state,
+    sessionActive: false,
+    isPaused: false,
+    sending: false,
+    buttonLabel: "Start",
+    statusMessage: complete ? "First Start complete" : "Stopped",
+    progress: null,
+    profileId: pid,
+  };
 }
 
 router.get("/status", authMiddleware, async (req, res) => {
@@ -373,8 +367,7 @@ router.post("/start", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
   const dreamJwt = String(req.body?.dreamJwt || "").trim();
-  // Stop any other active jobs for this user so one profile = one mailing.
-  await stopAllRunningForUser(req.user.id, { complete: false });
+  // Each anketa runs independently — do not stop other profiles' mailings.
   const worker = getWorker(req, profileId);
   const hasCreds = Boolean(await getDreamCredentials(req.user.id, profileId));
   if (!header && !dreamJwt && !hasCreds && !worker.cookieHeader && !worker.jwtCache?.token) {
@@ -409,8 +402,7 @@ router.post("/start", authMiddleware, async (req, res) => {
 
 router.post("/pause", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
-  const active = findActiveWorkerForUser(req.user.id, profileId);
-  const worker = active?.worker || getWorker(req, profileId);
+  const worker = getWorker(req, profileId);
   try {
     return res.json({ ok: true, state: await worker.pause() });
   } catch (error) {
@@ -424,8 +416,7 @@ router.post("/pause", authMiddleware, async (req, res) => {
 
 router.post("/resume", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
-  const active = findActiveWorkerForUser(req.user.id, profileId);
-  const worker = active?.worker || getWorker(req, profileId);
+  const worker = getWorker(req, profileId);
   try {
     return res.json({ ok: true, state: await worker.resume() });
   } catch (error) {
@@ -438,27 +429,17 @@ router.post("/resume", authMiddleware, async (req, res) => {
 });
 
 router.post("/stop", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
   try {
-    const state = await stopAllRunningForUser(req.user.id, {
+    const state = await stopWorkerForProfile(req.user.id, profileId, {
       complete: Boolean(req.body?.complete),
     });
-    return res.json({
-      ok: true,
-      state: {
-        ...state,
-        sessionActive: false,
-        isPaused: false,
-        sending: false,
-        buttonLabel: "Start",
-        statusMessage: Boolean(req.body?.complete) ? "First Start complete" : "Stopped",
-        progress: null,
-      },
-    });
+    return res.json({ ok: true, state });
   } catch (error) {
     return res.status(400).json({
       ok: false,
       error: error?.message || String(error),
-      state: idleState(profileIdFrom(req)),
+      state: idleState(profileId),
     });
   }
 });
