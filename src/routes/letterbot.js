@@ -292,28 +292,32 @@ function findActiveWorkerForUser(userId, preferredProfileId = "") {
 }
 
 async function resolveLiveState(userId, profileId) {
-  const active = findActiveWorkerForUser(userId, profileId);
-  if (active) return active.worker.getState();
+  // Strict per-anketa: never leak another profile's mailing into this status.
+  const pid = String(profileId || "default");
+  const preferredKey = workerKey(userId, pid);
+  const preferred = workers.get(preferredKey);
+  if (preferred) return preferred.getState();
 
-  const preferredKey = workerKey(userId, profileId);
   const cached = lastStates.get(preferredKey);
-  if (cached?.sessionActive) return cached;
-
-  for (const [key, state] of lastStates.entries()) {
-    if (!String(key).startsWith(`${userId}:`)) continue;
-    if (state?.sessionActive) return state;
-  }
+  if (cached) return cached;
 
   try {
-    const row = await getLetterBotJob(userId, profileId);
-    if (row?.is_running) return stateFromJobRow(row, profileId);
-    const anyRunning = await listRunningLetterBotJobsForUser(userId);
-    if (anyRunning[0]) {
-      return stateFromJobRow(anyRunning[0], anyRunning[0].profile_id);
+    const row = await getLetterBotJob(userId, pid);
+    if (row?.is_running) return stateFromJobRow(row, pid);
+    if (row?.state && typeof row.state === "object") {
+      return {
+        ...idleState(pid),
+        ...row.state,
+        sessionActive: false,
+        sending: false,
+        buttonLabel: "Start",
+        profileId: pid,
+        updatedAt: Date.now(),
+      };
     }
   } catch (_) {}
 
-  return idleState(profileId);
+  return idleState(pid);
 }
 
 async function stopAllRunningForUser(userId, { complete = false } = {}) {
