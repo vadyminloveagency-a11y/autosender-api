@@ -1,4 +1,5 @@
 ﻿import WebSocket from "ws";
+import { dreamLogin } from "./dreamLogin.js";
 
 const ORIGIN = "https://www.dream-singles.com";
 const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
@@ -73,11 +74,13 @@ function decodeJwtExpMs(token) {
 }
 
 class LetterBotWorker {
-  constructor(profileId, { onStateChange, onPersist, ownerUserId } = {}) {
+  constructor(profileId, { onStateChange, onPersist, ownerUserId, credentialsProvider } = {}) {
     this.profileId = String(profileId || "default");
     this.ownerUserId = ownerUserId != null ? Number(ownerUserId) : null;
     this.onStateChange = onStateChange || null;
     this.onPersist = onPersist || null;
+    this.credentialsProvider = credentialsProvider || null;
+    this.reloginInFlight = null;
     this.cookieHeader = "";
     this.socket = null;
     this.connectPromise = null;
@@ -135,6 +138,43 @@ class LetterBotWorker {
       token: value,
       expMs: decodeJwtExpMs(value) || Date.now() + 8 * 60 * 1000,
     };
+  }
+
+  setCredentialsProvider(fn) {
+    this.credentialsProvider = typeof fn === "function" ? fn : null;
+  }
+
+  async reloginFromCredentials() {
+    if (this.reloginInFlight) return this.reloginInFlight;
+    this.reloginInFlight = (async () => {
+      if (typeof this.credentialsProvider !== "function") {
+        throw new Error(
+          "Dream session expired — save Dream login/password in AutoSender LetterBot",
+        );
+      }
+      const creds = await this.credentialsProvider();
+      if (!creds?.username || !creds?.password) {
+        throw new Error(
+          "Dream session expired — save Dream login/password in AutoSender LetterBot",
+        );
+      }
+      this.state.statusMessage = "Re-login to Dream...";
+      this.emitState();
+      const { cookieHeader } = await dreamLogin(creds.username, creds.password);
+      this.setCookieHeader(cookieHeader);
+      this.jwtCache = { token: "", expMs: 0 };
+      this.state.error = "";
+      this.state.statusMessage = this.state.sessionActive
+        ? this.state.statusMessage || "Dream session restored"
+        : "Dream session restored";
+      this.emitState();
+      return cookieHeader;
+    })();
+    try {
+      return await this.reloginInFlight;
+    } finally {
+      this.reloginInFlight = null;
+    }
   }
 
   emitState() {
@@ -207,14 +247,20 @@ class LetterBotWorker {
     } catch (_) {}
   }
 
-  async fetchLetterBotJwt(force = false) {
+  async fetchLetterBotJwt(force = false, { allowRelogin = true } = {}) {
     const now = Date.now();
     if (!force && this.jwtCache.token && this.jwtCache.expMs - 45_000 > now) {
       return this.jwtCache.token;
     }
     if (!this.cookieHeader) {
       if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
-      throw new Error("Dream session missing - open dream-singles.com while logged in, then Start again");
+      if (allowRelogin && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+        return this.fetchLetterBotJwt(true, { allowRelogin: false });
+      }
+      throw new Error(
+        "Dream session missing — save Dream login in AutoSender, or open dream-singles.com logged in",
+      );
     }
 
     const response = await fetch(BOT_SEND_URL, {
@@ -230,7 +276,13 @@ class LetterBotWorker {
     });
     this.mergeSetCookies(response);
     if (response.status === 401 || response.status === 403) {
-      throw new Error("Dream session expired - log in on dream-singles.com and Start again");
+      if (allowRelogin && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+        return this.fetchLetterBotJwt(true, { allowRelogin: false });
+      }
+      throw new Error(
+        "Dream session expired — update Dream password in AutoSender LetterBot",
+      );
     }
     if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
     const html = await response.text();
@@ -240,7 +292,13 @@ class LetterBotWorker {
       html.match(/"jwt"\s*:\s*"([^"]+)"/);
     if (!match?.[1]) {
       if (this.jwtCache.token && this.jwtCache.expMs > now) return this.jwtCache.token;
-      throw new Error("Letter Bot JWT not found - Dream session may be invalid");
+      if (allowRelogin && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+        return this.fetchLetterBotJwt(true, { allowRelogin: false });
+      }
+      throw new Error(
+        "Letter Bot JWT not found — update Dream password in AutoSender LetterBot",
+      );
     }
     const token = match[1];
     this.jwtCache = { token, expMs: decodeJwtExpMs(token) || now + 8 * 60 * 1000 };
@@ -256,19 +314,19 @@ class LetterBotWorker {
 
   startKeepAlive() {
     this.clearKeepAlive();
-    // Refresh Dream JWT from stored cookies on the server — Chrome can be closed.
+    // Refresh JWT from cookies; on failure re-login with stored Dream credentials.
     this.keepAliveTimer = setInterval(() => {
       if (!this.senderRunning && !this.state.sessionActive) return;
-      void this.fetchLetterBotJwt(true)
+      void this.fetchLetterBotJwt(true, { allowRelogin: true })
         .then(() => {
-          if (this.state.error && /session|jwt/i.test(this.state.error)) {
+          if (this.state.error && /session|jwt|password|login/i.test(this.state.error)) {
             this.state.error = "";
             this.emitState();
           }
         })
         .catch((error) => {
           this.state.error = error?.message || String(error);
-          this.state.statusMessage = "Dream session refresh failed";
+          this.state.statusMessage = "Dream session refresh failed — update password in AutoSender";
           this.emitState();
         });
     }, 2 * 60_000);

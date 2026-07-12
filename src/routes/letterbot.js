@@ -1,10 +1,15 @@
 import express from "express";
 import { authMiddleware } from "../auth.js";
+import { decryptSecret, encryptSecret, maskUsername } from "../cryptoUtil.js";
+import { dreamLogin } from "../dreamLogin.js";
 import { LetterBotWorker } from "../letterBotWorker.js";
 import {
+  deleteDreamCredentials,
   ensureLetterBotTables,
+  getDreamCredentials,
   listRunningLetterBotJobs,
   markLetterBotJobStopped,
+  upsertDreamCredentials,
   upsertLetterBotJob,
 } from "../letterbotStore.js";
 
@@ -69,6 +74,17 @@ async function persistJob(payload) {
   await upsertLetterBotJob(payload);
 }
 
+function makeCredentialsProvider(userId, profileId) {
+  return async () => {
+    const row = await getDreamCredentials(userId, profileId);
+    if (!row?.username || !row?.password_enc) return null;
+    return {
+      username: row.username,
+      password: decryptSecret(row.password_enc),
+    };
+  };
+}
+
 function getWorkerForUser(userId, profileId) {
   const key = workerKey(userId, profileId);
   let worker = workers.get(key);
@@ -79,10 +95,12 @@ function getWorkerForUser(userId, profileId) {
         lastStates.set(key, state);
       },
       onPersist: persistJob,
+      credentialsProvider: makeCredentialsProvider(userId, profileId),
     });
     workers.set(key, worker);
-  } else if (worker.ownerUserId == null) {
-    worker.ownerUserId = userId;
+  } else {
+    if (worker.ownerUserId == null) worker.ownerUserId = userId;
+    worker.setCredentialsProvider(makeCredentialsProvider(userId, profileId));
   }
   return worker;
 }
@@ -91,20 +109,133 @@ function getWorker(req, profileId) {
   return getWorkerForUser(req.user?.id, profileId);
 }
 
+async function ensureWorkerSession(worker, { cookieHeader, dreamJwt } = {}) {
+  if (cookieHeader) worker.setCookieHeader(cookieHeader);
+  if (dreamJwt) worker.setDreamJwt(dreamJwt);
+
+  if (worker.cookieHeader || worker.jwtCache?.token) {
+    try {
+      await worker.fetchLetterBotJwt(true, { allowRelogin: true });
+      return;
+    } catch (error) {
+      // Fall through to explicit credential login.
+      if (!worker.credentialsProvider) throw error;
+    }
+  }
+
+  await worker.reloginFromCredentials();
+  await worker.fetchLetterBotJwt(true, { allowRelogin: false });
+}
+
+router.get("/credentials", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  try {
+    const row = await getDreamCredentials(req.user.id, profileId);
+    if (!row) {
+      return res.json({
+        ok: true,
+        configured: false,
+        username: "",
+        usernameMasked: "",
+        profileId,
+      });
+    }
+    return res.json({
+      ok: true,
+      configured: true,
+      username: row.username,
+      usernameMasked: maskUsername(row.username),
+      profileId,
+      updatedAt: row.updated_at,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
+router.post("/credentials", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  const username = String(req.body?.username || "").trim();
+  const password = String(req.body?.password || "");
+  if (!username || !password) {
+    return res.status(400).json({
+      ok: false,
+      error: "Dream username and password are required",
+    });
+  }
+  try {
+    // Prove credentials work before storing.
+    const { cookieHeader } = await dreamLogin(username, password);
+    await upsertDreamCredentials({
+      userId: req.user.id,
+      profileId,
+      username,
+      passwordEnc: encryptSecret(password),
+    });
+    const worker = getWorker(req, profileId);
+    worker.setCookieHeader(cookieHeader);
+    worker.jwtCache = { token: "", expMs: 0 };
+    try {
+      await worker.fetchLetterBotJwt(true, { allowRelogin: false });
+    } catch (_) {
+      // Cookies saved; JWT can be fetched on Start.
+    }
+    await persistJob({
+      userId: req.user.id,
+      profileId,
+      cookieHeader: worker.cookieHeader,
+      selection: worker.userSelection,
+      state: worker.getState(),
+      isRunning: Boolean(worker.senderRunning && worker.state.sessionActive),
+    });
+    return res.json({
+      ok: true,
+      configured: true,
+      username,
+      usernameMasked: maskUsername(username),
+      profileId,
+      message: "Dream credentials saved — cloud mailing can re-login without Chrome",
+    });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error?.message || String(error),
+    });
+  }
+});
+
+router.delete("/credentials", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  try {
+    await deleteDreamCredentials(req.user.id, profileId);
+    return res.json({ ok: true, configured: false, profileId });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
 router.post("/session", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
   const dreamJwt = String(req.body?.dreamJwt || "").trim();
-  if (!header && !dreamJwt) {
+  const worker = getWorker(req, profileId);
+  const hasCreds = Boolean(await getDreamCredentials(req.user.id, profileId));
+  if (!header && !dreamJwt && !hasCreds) {
     return res.status(400).json({
       ok: false,
-      error: "No Dream cookies — open dream-singles.com while logged in",
+      error: "Save Dream login in LetterBot, or open dream-singles.com while logged in",
       state: idleState(profileId),
     });
   }
-  const worker = getWorker(req, profileId);
-  if (header) worker.setCookieHeader(header);
-  if (dreamJwt) worker.setDreamJwt(dreamJwt);
+  try {
+    await ensureWorkerSession(worker, { cookieHeader: header, dreamJwt });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error?.message || String(error),
+      state: worker.getState(),
+    });
+  }
   lastStates.set(workerKey(req.user.id, profileId), worker.getState());
   await persistJob({
     userId: req.user.id,
@@ -130,20 +261,17 @@ router.post("/start", authMiddleware, async (req, res) => {
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
   const dreamJwt = String(req.body?.dreamJwt || "").trim();
   const worker = getWorker(req, profileId);
-  if (header) worker.setCookieHeader(header);
-  if (dreamJwt) worker.setDreamJwt(dreamJwt);
-  if (!worker.cookieHeader && !worker.jwtCache?.token) {
+  const hasCreds = Boolean(await getDreamCredentials(req.user.id, profileId));
+  if (!header && !dreamJwt && !hasCreds && !worker.cookieHeader && !worker.jwtCache?.token) {
     return res.status(400).json({
       ok: false,
-      error: "Dream session missing — open dream-singles.com while logged in",
+      error:
+        "Save Dream login/password in LetterBot (Cloud login), or open dream-singles.com while logged in",
       state: worker.getState(),
     });
   }
   try {
-    // Prove cookies can refresh JWT on the server before operator closes Chrome.
-    if (worker.cookieHeader) {
-      await worker.fetchLetterBotJwt(true);
-    }
+    await ensureWorkerSession(worker, { cookieHeader: header, dreamJwt });
     const state = await worker.start(req.body?.selection || {});
     worker.startKeepAlive();
     await persistJob({
@@ -211,9 +339,8 @@ router.post("/connect", authMiddleware, async (req, res) => {
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
   const dreamJwt = String(req.body?.dreamJwt || "").trim();
   const worker = getWorker(req, profileId);
-  if (header) worker.setCookieHeader(header);
-  if (dreamJwt) worker.setDreamJwt(dreamJwt);
   try {
+    await ensureWorkerSession(worker, { cookieHeader: header, dreamJwt });
     return res.json({ ok: true, state: await worker.connect() });
   } catch (error) {
     return res.status(400).json({
@@ -247,6 +374,7 @@ export async function restoreRunningLetterBotJobs() {
         worker.emitState();
         continue;
       }
+      await ensureWorkerSession(worker, { cookieHeader: row.cookie_header || "" });
       await worker.start(selection);
       worker.startKeepAlive();
       console.log(`Restored LetterBot job user=${userId} profile=${profileId}`);

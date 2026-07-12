@@ -15,6 +15,17 @@ export async function ensureLetterBotTables() {
       UNIQUE (user_id, profile_id)
     )
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS dream_credentials (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      profile_id TEXT NOT NULL DEFAULT 'default',
+      username TEXT NOT NULL,
+      password_enc TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, profile_id)
+    )
+  `);
 }
 
 export async function upsertLetterBotJob({
@@ -66,6 +77,44 @@ export async function markLetterBotJobStopped(userId, profileId) {
     `UPDATE letterbot_jobs
      SET is_running = FALSE, updated_at = NOW()
      WHERE user_id = $1 AND profile_id = $2`,
+    [Number(userId), String(profileId || "default")],
+  );
+}
+
+export async function upsertDreamCredentials({ userId, profileId, username, passwordEnc }) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO dream_credentials (user_id, profile_id, username, password_enc, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (user_id, profile_id) DO UPDATE SET
+       username = EXCLUDED.username,
+       password_enc = EXCLUDED.password_enc,
+       updated_at = NOW()`,
+    [
+      Number(userId),
+      String(profileId || "default"),
+      String(username || "").trim(),
+      String(passwordEnc || ""),
+    ],
+  );
+}
+
+export async function getDreamCredentials(userId, profileId) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT username, password_enc, updated_at
+     FROM dream_credentials
+     WHERE user_id = $1 AND profile_id = $2
+     LIMIT 1`,
+    [Number(userId), String(profileId || "default")],
+  );
+  return result.rows[0] || null;
+}
+
+export async function deleteDreamCredentials(userId, profileId) {
+  const db = getPool();
+  await db.query(
+    `DELETE FROM dream_credentials WHERE user_id = $1 AND profile_id = $2`,
     [Number(userId), String(profileId || "default")],
   );
 }
