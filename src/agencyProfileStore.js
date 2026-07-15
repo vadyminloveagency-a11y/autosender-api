@@ -135,7 +135,7 @@ export async function verifyAndResolveDreamProfile({ username, password, display
     throw new Error("Dream login and password are required");
   }
 
-  const { cookieHeader } = await dreamLogin(dreamUsername, dreamPassword);
+  const { cookieHeader, cookies } = await dreamLogin(dreamUsername, dreamPassword);
   let femaleProfileId = await resolveDreamFemaleProfileId(cookieHeader);
   if (!femaleProfileId) {
     throw new Error("Could not detect questionnaire ID from Dream — check login");
@@ -143,6 +143,7 @@ export async function verifyAndResolveDreamProfile({ username, password, display
 
   return {
     cookieHeader,
+    cookies: cookies || {},
     femaleProfileId,
     displayName: String(displayName || "").trim() || `Profile ${femaleProfileId}`,
     dreamUsername,

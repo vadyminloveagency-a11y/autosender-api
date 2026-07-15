@@ -263,10 +263,7 @@ router.post("/connect", authMiddleware, async (req, res) => {
       photoUrl,
       dreamUsername: verified.dreamUsername,
       cloudConnect: true,
-      browserLogin: {
-        username: verified.dreamUsername,
-        password: verified.dreamPassword,
-      },
+      dreamSessionCookies: verified.cookies || {},
     });
   } catch (error) {
     console.error(error);
