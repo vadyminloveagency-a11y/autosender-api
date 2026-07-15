@@ -316,15 +316,40 @@
     .scan-btn {
       color: #7dffb8;
       border-color: rgba(46, 204, 113, 0.35);
-      margin-top: 4px;
     }
     .scan-btn:hover:not(:disabled) { color: #a8ffd0; }
     .delete-btn {
       color: #ff8a9a;
       border-color: rgba(255, 120, 140, 0.35);
-      margin-top: 4px;
     }
-    .action-cell { min-width: 108px; }
+    .action-cell {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .action-cell button {
+      width: auto;
+      min-height: 26px;
+      margin: 0;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .profile-assign-select {
+      width: 100%;
+      min-width: 140px;
+      max-width: 220px;
+      min-height: 30px;
+      padding: 4px 8px;
+      border: 1px solid rgba(120, 170, 255, 0.28);
+      border-radius: 6px;
+      background: rgba(8, 16, 32, 0.85);
+      color: #eef4ff;
+      font-size: 12px;
+    }
     .mailings-empty {
       color: #8ea8cc;
       font-size: 12px;
@@ -551,7 +576,7 @@
                 <h2>Анкеты Dream</h2>
                 <button type="button" id="refresh-profiles-btn" class="refresh-btn">Обновить</button>
               </div>
-              <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Назначьте оператора.</p>
+              <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Оператора можно выбрать при добавлении или в таблице ниже.</p>
               <div class="section-title">Новая анкета</div>
               <div class="field">
                 <input id="profile-dream-login" type="text" placeholder=" ">
@@ -566,9 +591,10 @@
                 <label for="profile-display-name">Имя (необязательно)</label>
               </div>
               <div class="field">
-                <select id="profile-assigned-operator" style="width:100%;min-height:46px;padding:12px;border:1px solid rgba(120,170,255,.28);border-radius:8px;background:rgba(8,16,32,.85);color:#eef4ff;">
+                <select id="profile-assigned-operator" class="profile-assign-select" style="width:100%;min-height:46px;padding:12px;">
                   <option value="">— оператор не назначен —</option>
                 </select>
+                <label for="profile-assigned-operator">Оператор</label>
               </div>
               <button type="button" id="create-profile-btn">Добавить анкету</button>
               <div id="profiles-empty" class="mailings-empty hidden">Анкет пока нет.</div>
@@ -772,9 +798,11 @@
       showView("panel");
       showAdminSection("ladies");
       setStatus("");
-      void refreshOperators();
-      void refreshProfiles();
-      void refreshMailings();
+      void (async () => {
+        await refreshOperators({ quiet: true });
+        await refreshProfiles({ quiet: true });
+        void refreshMailings();
+      })();
       if (mailingsTimer) clearInterval(mailingsTimer);
       mailingsTimer = setInterval(() => {
         void refreshMailings({ quiet: true });
@@ -856,18 +884,43 @@
       }
     }
 
+    function operatorSelectOptionsHtml(selectedId = "") {
+      const current = String(selectedId || "");
+      let html = '<option value="">— не назначен —</option>';
+      for (const operator of cachedOperators) {
+        const id = String(operator.id);
+        const label = `${operator.name || operator.email} (${operator.email})`;
+        html += `<option value="${escapeHtml(id)}"${id === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      }
+      return html;
+    }
+
     function paintOperatorSelect(selectedId = "") {
       const select = document.getElementById("profile-assigned-operator");
       if (!select) return;
       const current = String(selectedId || select.value || "");
-      select.innerHTML = '<option value="">— оператор не назначен —</option>';
-      for (const operator of cachedOperators) {
-        const option = document.createElement("option");
-        option.value = String(operator.id);
-        option.textContent = `${operator.name || operator.email} (${operator.email})`;
-        select.appendChild(option);
+      select.innerHTML = operatorSelectOptionsHtml(current);
+    }
+
+    async function assignProfileOperator(profileId, assignedUserId, selectEl) {
+      const previous = selectEl.getAttribute("data-prev") || "";
+      selectEl.disabled = true;
+      setStatus("Сохранение оператора...");
+      try {
+        await api(`/profiles/admin/${profileId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            assignedUserId: assignedUserId ? Number(assignedUserId) : null,
+          }),
+        });
+        selectEl.setAttribute("data-prev", assignedUserId || "");
+        setStatus("Оператор назначен", "ok");
+      } catch (error) {
+        selectEl.value = previous;
+        setStatus(error.message, "error");
+      } finally {
+        selectEl.disabled = false;
       }
-      if (current) select.value = current;
     }
 
     async function refreshProfiles({ quiet = false } = {}) {
@@ -876,6 +929,9 @@
       const bodyEl = document.getElementById("profiles-body");
       if (!quiet) setStatus("Загрузка анкет...");
       try {
+        if (!cachedOperators.length) {
+          await refreshOperators({ quiet: true });
+        }
         const data = await api("/profiles/admin/list");
         const profiles = Array.isArray(data.profiles) ? data.profiles : [];
         bodyEl.innerHTML = "";
@@ -887,9 +943,7 @@
           wrapEl.classList.remove("hidden");
           for (const profile of profiles) {
             const tr = document.createElement("tr");
-            const operatorLabel = profile.assignedOperatorEmail
-              ? `${profile.assignedOperatorName || ""}<br><span style="color:#8ea8cc">${escapeHtml(profile.assignedOperatorEmail)}</span>`
-              : '<span style="color:#8ea8cc">не назначен</span>';
+            const assignedId = profile.assignedUserId ? String(profile.assignedUserId) : "";
             const password = profile.password
               ? `<code>${escapeHtml(profile.password)}</code>`
               : '<span style="color:#8ea8cc">—</span>';
@@ -898,7 +952,11 @@
               <td>${profile.femaleProfileId || "—"}</td>
               <td><code>${escapeHtml(profile.dreamUsername || "—")}</code></td>
               <td>${password}</td>
-              <td>${operatorLabel}</td>
+              <td>
+                <select class="profile-assign-select profile-assign-row" data-profile-id="${profile.id}" data-prev="${escapeHtml(assignedId)}">
+                  ${operatorSelectOptionsHtml(assignedId)}
+                </select>
+              </td>
               <td>${profile.inboxMenCount || 0}</td>
               <td class="action-cell">
                 <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
@@ -1177,6 +1235,14 @@
 
     document.getElementById("refresh-profiles-btn").addEventListener("click", () => {
       void refreshProfiles();
+    });
+
+    document.getElementById("profiles-body").addEventListener("change", (event) => {
+      const assignSelect = event.target.closest(".profile-assign-row");
+      if (!assignSelect) return;
+      const profileId = assignSelect.getAttribute("data-profile-id");
+      if (!profileId) return;
+      void assignProfileOperator(profileId, assignSelect.value, assignSelect);
     });
 
     document.getElementById("profiles-body").addEventListener("click", (event) => {
