@@ -237,20 +237,34 @@ router.post("/connect", authMiddleware, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Dream credentials are missing for this profile" });
     }
 
-    const verified = await verifyAndResolveDreamProfile({
-      username: secrets.dreamUsername,
-      password: secrets.password,
-      displayName: secrets.displayName,
-    });
+    const dreamUsername = String(secrets.dreamUsername || "").trim();
+    const dreamPassword = String(secrets.password || "");
+    let femaleProfileId = Number(row.female_profile_id) || 0;
+    let displayName = String(secrets.displayName || row.display_name || "").trim();
 
-    const femaleProfileId = Number(verified.femaleProfileId);
+    // Operator extension logs into Dream in Chrome — skip server login here (no 2captcha on Render).
+    if (!femaleProfileId) {
+      const verified = await verifyAndResolveDreamProfile({
+        username: dreamUsername,
+        password: dreamPassword,
+        displayName,
+      });
+      femaleProfileId = Number(verified.femaleProfileId);
+      displayName = verified.displayName || displayName;
+      const db = getPool();
+      await db.query(
+        `UPDATE agency_profiles SET female_profile_id = $2, display_name = COALESCE(NULLIF($3, ''), display_name), updated_at = NOW() WHERE id = $1`,
+        [row.id, femaleProfileId, displayName],
+      );
+    }
+
     const profileId = String(femaleProfileId);
 
     await upsertDreamCredentials({
       userId: req.user.id,
       profileId,
-      username: verified.dreamUsername,
-      passwordEnc: encryptSecret(verified.dreamPassword),
+      username: dreamUsername,
+      passwordEnc: encryptSecret(dreamPassword),
     });
 
     const photoUrl = `https://profile-photos-cdn.dream-singles.com/im${femaleProfileId}_small.jpg`;
@@ -259,13 +273,13 @@ router.post("/connect", authMiddleware, async (req, res) => {
       assigned: true,
       agencyProfileId: row.id,
       femaleProfileId,
-      displayName: verified.displayName,
+      displayName: displayName || `Profile ${femaleProfileId}`,
       photoUrl,
-      dreamUsername: verified.dreamUsername,
+      dreamUsername,
       cloudConnect: true,
       browserLogin: {
-        username: verified.dreamUsername,
-        password: verified.dreamPassword,
+        username: dreamUsername,
+        password: dreamPassword,
       },
     });
   } catch (error) {
