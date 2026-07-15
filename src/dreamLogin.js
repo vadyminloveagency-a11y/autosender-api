@@ -1,8 +1,9 @@
+import { dreamHttp } from "./dreamHttp.js";
+import { extractRecaptchaMeta, hasTwoCaptcha, solveRecaptcha } from "./twoCaptcha.js";
+
 const ORIGIN = "https://www.dream-singles.com";
 const LOGIN_URL = `${ORIGIN}/login`;
 const LOGIN_CHECK_URL = `${ORIGIN}/login_check`;
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 function parseSetCookieHeader(response) {
   try {
@@ -47,13 +48,13 @@ function looksLikeLoginPage(html, finalUrl) {
   const lower = String(html || "").toLowerCase();
   return (
     lower.includes('id="loginform2"') ||
-    (lower.includes("name=\"_password\"") && lower.includes("name=\"_username\""))
+    (lower.includes('name="_password"') && lower.includes('name="_username"'))
   );
 }
 
 /**
  * Log in to Dream Singles with username/password.
- * Returns a Cookie header string usable for members pages / Letter Bot JWT.
+ * On datacenter IPs Dream shows reCAPTCHA — solved via TWOCAPTCHA_API_KEY when set.
  */
 export async function dreamLogin(username, password) {
   const user = String(username || "").trim();
@@ -64,13 +65,12 @@ export async function dreamLogin(username, password) {
 
   const jar = new Map();
 
-  const loginPage = await fetch(LOGIN_URL, {
+  const loginPage = await dreamHttp(LOGIN_URL, {
     method: "GET",
     redirect: "follow",
-    signal: AbortSignal.timeout(20000),
+    timeoutMs: 20000,
     headers: {
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": UA,
     },
   });
   mergeCookieJar(jar, parseSetCookieHeader(loginPage));
@@ -87,23 +87,52 @@ export async function dreamLogin(username, password) {
     _token: token,
   });
 
-  let response = await fetch(LOGIN_CHECK_URL, {
+  const captchaMeta = extractRecaptchaMeta(loginHtml);
+  const needsCaptcha = Boolean(
+    captchaMeta.sitekey || /g-recaptcha|grecaptcha/i.test(loginHtml),
+  );
+  if (needsCaptcha) {
+    if (!hasTwoCaptcha()) {
+      throw new Error(
+        "Dream login requires captcha from this server IP — set TWOCAPTCHA_API_KEY on Hetzner",
+      );
+    }
+    let sitekey = captchaMeta.sitekey;
+    // v3 often uses ?render=SITEKEY on api.js
+    if (!sitekey) {
+      sitekey =
+        (loginHtml.match(/recaptcha\/api\.js\?render=([^\s"'&]+)/i) || [])[1] || "";
+    }
+    console.log(
+      `[dreamLogin] solving reCAPTCHA via 2captcha (v${captchaMeta.isV3 ? "3" : "2"}, action=${captchaMeta.action})`,
+    );
+    const captchaToken = await solveRecaptcha({
+      sitekey,
+      pageurl: LOGIN_URL,
+      isV3: captchaMeta.isV3 || Boolean(sitekey && captchaMeta.action),
+      action: captchaMeta.action || "loginMain",
+      minScore: 0.3,
+    });
+    body.set("g-recaptcha-response", captchaToken);
+    // Some Symfony/Dream builds also read this name:
+    body.set("g-recaptcha-response-v3", captchaToken);
+  }
+
+  let response = await dreamHttp(LOGIN_CHECK_URL, {
     method: "POST",
     redirect: "manual",
-    signal: AbortSignal.timeout(20000),
+    timeoutMs: 20000,
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Content-Type": "application/x-www-form-urlencoded",
       Cookie: jarToHeader(jar),
       Origin: ORIGIN,
       Referer: LOGIN_URL,
-      "User-Agent": UA,
     },
     body: body.toString(),
   });
   mergeCookieJar(jar, parseSetCookieHeader(response));
 
-  // Follow redirects manually so Set-Cookie jars accumulate.
   let hops = 0;
   while (
     hops < 8 &&
@@ -113,31 +142,28 @@ export async function dreamLogin(username, password) {
     hops += 1;
     const location = response.headers.get("location");
     const nextUrl = new URL(location, ORIGIN).toString();
-    response = await fetch(nextUrl, {
+    response = await dreamHttp(nextUrl, {
       method: "GET",
       redirect: "manual",
-      signal: AbortSignal.timeout(20000),
+      timeoutMs: 20000,
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Cookie: jarToHeader(jar),
         Referer: LOGIN_CHECK_URL,
-        "User-Agent": UA,
       },
     });
     mergeCookieJar(jar, parseSetCookieHeader(response));
   }
 
   if ([301, 302, 303, 307, 308].includes(response.status) && response.headers.get("location")) {
-    // Last hop: follow once with redirect:follow to land on members.
     const location = new URL(response.headers.get("location"), ORIGIN).toString();
-    response = await fetch(location, {
+    response = await dreamHttp(location, {
       method: "GET",
       redirect: "follow",
-      signal: AbortSignal.timeout(20000),
+      timeoutMs: 20000,
       headers: {
         Accept: "text/html,application/xhtml+xml",
         Cookie: jarToHeader(jar),
-        "User-Agent": UA,
       },
     });
     mergeCookieJar(jar, parseSetCookieHeader(response));
@@ -152,10 +178,12 @@ export async function dreamLogin(username, password) {
   }
 
   if (looksLikeLoginPage(html, finalUrl) || response.status === 401 || response.status === 403) {
-    throw new Error("Dream login failed — check username/password");
+    throw new Error(
+      "Dream login failed — check username/password" +
+        (needsCaptcha ? " (or 2captcha balance / sitekey)" : ""),
+    );
   }
 
-  // Soft check: members area usually has PHPSESSID + remember_me / auth cookies.
   const hasSession =
     jar.has("PHPSESSID") ||
     [...jar.keys()].some((name) => /remember|auth|sess/i.test(name));

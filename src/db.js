@@ -13,9 +13,15 @@ export function getPool() {
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set");
     }
+    // Render Postgres needs SSL; Docker-internal Postgres usually does not.
+    const sslFlag = String(process.env.DATABASE_SSL || "").toLowerCase();
+    const useSsl =
+      sslFlag === "1" ||
+      sslFlag === "true" ||
+      /[?&]sslmode=require\b/i.test(connectionString);
     pool = new Pool({
       connectionString,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      ssl: useSsl ? { rejectUnauthorized: false } : false,
     });
   }
   return pool;

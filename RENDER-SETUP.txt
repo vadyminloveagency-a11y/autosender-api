@@ -108,3 +108,18 @@ https://autosender-api.onrender.com/health
 
 Should return: {"ok":true,"service":"autosender-api"}
 
+
+CLOUD READ / ONLINE (SENDER)
+
+----------------------------
+
+1. Render → autosender-api → Environment → add:
+   TWOCAPTCHA_API_KEY = your 2captcha.com API key
+   (or DREAM_PROXY_URL = residential proxy URL)
+
+2. Operators must save Dream login in LetterBot → Cloud Dream login
+
+3. Extension checks GET /sender-reads/capabilities (needs Bearer token).
+   When hasCaptchaSolver or hasProxy is true, Read/Online run on Render
+   without an open Dream tab in Chrome.
+

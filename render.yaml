@@ -17,7 +17,12 @@ services:
         generateValue: true
       - key: SETUP_SECRET
         generateValue: true
+      - key: CREDENTIALS_SECRET
+        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
           name: autosender-db
           property: connectionString
+      # Set in Render dashboard (required for cloud Read/Online + Dream re-login):
+      # - key: TWOCAPTCHA_API_KEY
+      # - key: DREAM_PROXY_URL  (optional alternative)

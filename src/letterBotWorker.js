@@ -109,6 +109,7 @@ class LetterBotWorker {
       buttonLabel: "Start",
       filter: "onlineOnly",
       progress: null,
+      dailyTotal: "",
       previewHtml: "",
       previewText: "",
       previewPhoto: "",
@@ -121,6 +122,7 @@ class LetterBotWorker {
       updatedAt: 0,
       profileId: this.profileId,
     };
+    this.lastDailyTotalFetchAt = 0;
   }
 
   getState() {
@@ -143,6 +145,108 @@ class LetterBotWorker {
 
   setCredentialsProvider(fn) {
     this.credentialsProvider = typeof fn === "function" ? fn : null;
+  }
+
+  /** Dream letterbot page field "Daily Total" — never progress.total (filter size). */
+  extractDailyTotalFromHtml(html) {
+    const raw = String(html || "");
+    const patterns = [
+      /Daily\s*Total\s*<\/t[hd]>\s*<t[hd][^>]*>\s*([\d,\s]+)/i,
+      /Daily\s*Total\s*:?\s*(?:<[^>]+>\s*){0,6}([\d]{1,3}(?:,\d{3})+|\d{2,})/i,
+      /id=["']dailyTotal["'][^>]*>\s*([\d,\s]+)/i,
+      /["']dailyTotal["']\s*[:=]\s*["']?([\d,]+)/i,
+      /Daily\s*Total\s*:?\s*([\d,\s]+)/i,
+    ];
+    for (const pattern of patterns) {
+      const match = raw.match(pattern);
+      const value = String(match?.[1] || "")
+        .replace(/\s+/g, "")
+        .match(/([\d,]+)/);
+      if (value?.[1]) return value[1];
+    }
+    const plain = raw
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ");
+    const plainMatch = plain.match(/Daily\s*Total\s*:?\s*([\d,]{2,})/i);
+    const fromPlain = String(plainMatch?.[1] || "")
+      .replace(/\s+/g, "")
+      .match(/([\d,]+)/);
+    return fromPlain?.[1] || "";
+  }
+
+  looksLikeDreamLoginPage(html, finalUrl = "") {
+    const url = String(finalUrl || "");
+    const raw = String(html || "");
+    return (
+      /\/login(?:[/?#]|$)/i.test(url) ||
+      /id=["']loginform2["']/i.test(raw) ||
+      /name=["']loginform2["']/i.test(raw) ||
+      (/please\s+log\s+in/i.test(raw) && !/Daily\s*Total/i.test(raw))
+    );
+  }
+
+  async fetchBotSendHtml() {
+    if (!this.cookieHeader) return { ok: false, html: "", url: "" };
+    const response = await fetch(BOT_SEND_URL, {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(20000),
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        Cookie: this.cookieHeader,
+        Referer: `${ORIGIN}/members/messaging/bot/send`,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    this.mergeSetCookies?.(response);
+    const html = await response.text().catch(() => "");
+    return {
+      ok: response.ok,
+      status: response.status,
+      html,
+      url: String(response.url || ""),
+    };
+  }
+
+  /**
+   * Dream "Daily Total" for TOTAL DAY. Cookies often expire while JWT/WS still mail —
+   * re-login with saved Cloud Dream credentials when bot page redirects to /login.
+   */
+  async refreshDailyTotal({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && now - this.lastDailyTotalFetchAt < 20_000) return this.state.dailyTotal || "";
+
+    const tryOnce = async () => {
+      if (!this.cookieHeader && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+      }
+      if (!this.cookieHeader) return "";
+      const page = await this.fetchBotSendHtml();
+      if (!page.ok) return "";
+      if (this.looksLikeDreamLoginPage(page.html, page.url)) {
+        return { login: true, daily: "" };
+      }
+      return { login: false, daily: this.extractDailyTotalFromHtml(page.html) || "" };
+    };
+
+    try {
+      let result = await tryOnce();
+      if (result?.login && this.credentialsProvider) {
+        await this.reloginFromCredentials();
+        result = await tryOnce();
+      }
+      const daily = typeof result === "string" ? result : result?.daily || "";
+      if (daily) {
+        this.state.dailyTotal = daily;
+        this.lastDailyTotalFetchAt = now;
+        this.emitState();
+      }
+    } catch (_) {}
+    return this.state.dailyTotal || "";
   }
 
   async reloginFromCredentials() {
@@ -308,6 +412,13 @@ class LetterBotWorker {
     }
     if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
     const html = await response.text();
+    // Same HTML has Dream "Daily Total" — source of truth for TOTAL DAY (not progress.total).
+    const daily = this.extractDailyTotalFromHtml(html);
+    if (daily) {
+      this.state.dailyTotal = daily;
+      this.lastDailyTotalFetchAt = Date.now();
+      this.emitState();
+    }
     const match =
       html.match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
       html.match(/jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
@@ -378,12 +489,53 @@ class LetterBotWorker {
     }, 60_000);
   }
 
+  pickDailyTotalFromSocketMsg(msg = {}) {
+    const candidates = [
+      msg.dailyTotal,
+      msg.daily_total,
+      msg.dayTotal,
+      msg.totalDay,
+      msg.daily,
+      msg.sentToday,
+      msg.todayTotal,
+      msg.totalToday,
+      msg?.stats?.dailyTotal,
+      msg?.status?.dailyTotal,
+      msg?.preview?.dailyTotal,
+    ];
+    for (const value of candidates) {
+      const match = String(value ?? "")
+        .replace(/\s+/g, "")
+        .match(/([\d,]+)/);
+      if (match?.[1]) return match[1];
+    }
+    return "";
+  }
+
   handleSocketMessage(raw) {
     let msg;
     try {
       msg = JSON.parse(raw);
     } catch {
       return;
+    }
+
+    // TEMP: learn which WS field is Dream Daily Total (remove after confirmed).
+    if (
+      msg?.type === "bot-start-init-response" ||
+      msg?.type === "bot-send-response" ||
+      /daily|totalDay|sentToday/i.test(JSON.stringify(msg || {}))
+    ) {
+      try {
+        console.log(
+          `[letterbot-daily-probe] type=${msg.type} keys=${Object.keys(msg).join(",")} sample=${JSON.stringify(msg).slice(0, 500)}`,
+        );
+      } catch (_) {}
+    }
+    const dailyFromWs = this.pickDailyTotalFromSocketMsg(msg);
+    if (dailyFromWs) {
+      this.state.dailyTotal = dailyFromWs;
+      this.lastDailyTotalFetchAt = Date.now();
     }
 
     switch (msg.type) {
@@ -438,12 +590,39 @@ class LetterBotWorker {
         const prev = this.state.progress || {};
         const percentRaw = msg.percent ?? msg.completePercent ?? msg.progress;
         const percentNum = Number(percentRaw);
+        const nextFilter = msg.filter != null ? String(msg.filter) : prev.filter != null ? String(prev.filter) : null;
+        const prevFilter = prev.filter != null ? String(prev.filter) : null;
+        const filterChanged =
+          Boolean(nextFilter) && Boolean(prevFilter) && nextFilter !== prevFilter;
+        let percent = Number.isFinite(percentNum) ? percentNum : Number(prev.percent) || 0;
+        let sent = msg.sent != null ? Number(msg.sent) : prev.sent != null ? Number(prev.sent) : null;
+        let total = msg.total != null ? Number(msg.total) : prev.total != null ? Number(prev.total) : null;
+        // Dream mid-run jitter: hold high-water on same filter. Reset on filter change
+        // or a real new pass (percent≈0 with sent≈0).
+        const prevPct = Number(prev.percent) || 0;
+        const prevSent = Number(prev.sent);
+        const restart =
+          !filterChanged &&
+          prevPct >= 8 &&
+          percent <= 3 &&
+          ((Number.isFinite(sent) && sent <= 2) ||
+            (Number.isFinite(prevSent) && Number.isFinite(sent) && sent + 5 < prevSent * 0.25));
+        if (!filterChanged && !restart && !msg.complete) {
+          percent = Math.max(prevPct, percent);
+          if (Number.isFinite(prevSent) && Number.isFinite(sent)) {
+            sent = Math.max(prevSent, sent);
+          }
+          const prevTotal = Number(prev.total);
+          if (Number.isFinite(prevTotal) && Number.isFinite(total)) {
+            total = Math.max(prevTotal, total);
+          }
+        }
         this.state.progress = {
           to: msg.to ?? prev.to ?? null,
-          total: msg.total ?? prev.total ?? null,
-          filter: msg.filter ?? prev.filter ?? null,
-          percent: Number.isFinite(percentNum) ? percentNum : Number(prev.percent) || 0,
-          sent: msg.sent ?? prev.sent ?? null,
+          total: Number.isFinite(total) ? total : prev.total ?? null,
+          filter: nextFilter ?? prev.filter ?? null,
+          percent,
+          sent: Number.isFinite(sent) ? sent : prev.sent ?? null,
           complete: Boolean(msg.complete),
           recipients: Array.isArray(msg.recipients) ? msg.recipients : prev.recipients || [],
         };
@@ -862,6 +1041,8 @@ class LetterBotWorker {
     this.lastSendStartedAt = Date.now();
     this.emitState();
     await this.ensureConnected(true);
+    await this.refreshDailyTotal({ force: true });
+    this.emitState();
     await this.runSenderCycle();
     this.clearCycleTimer();
     this.ensureCycleTimer();

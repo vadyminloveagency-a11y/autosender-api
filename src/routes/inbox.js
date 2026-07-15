@@ -12,6 +12,7 @@ import {
   getWorkerForUser,
   withLetterBotDreamQuiet,
 } from "./letterbot.js";
+import { withSenderReadsDreamQuiet } from "./senderReads.js";
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -232,6 +233,7 @@ router.post("/cloud-scrape", async (req, res) => {
       const username = credRow?.username || "";
 
       const scrapeResult = await withLetterBotDreamQuiet(userId, profileId, async (worker) => {
+        return await withSenderReadsDreamQuiet(userId, profileId, async () => {
         let cookieHeader = String(worker?.cookieHeader || "").trim();
         if (!cookieHeader) {
           try {
@@ -276,6 +278,7 @@ router.post("/cloud-scrape", async (req, res) => {
             },
           });
         }
+        });
       });
 
       if (scrapeResult?.cookieHeader) {
