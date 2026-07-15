@@ -94,7 +94,7 @@ export async function dreamLogin(username, password) {
   if (needsCaptcha) {
     if (!hasTwoCaptcha()) {
       throw new Error(
-        "Dream login requires captcha from this server IP — set TWOCAPTCHA_API_KEY on Hetzner",
+        "Dream login requires captcha from this server IP — set TWOCAPTCHA_API_KEY on Render",
       );
     }
     let sitekey = captchaMeta.sitekey;
