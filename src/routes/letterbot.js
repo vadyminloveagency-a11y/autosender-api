@@ -30,7 +30,6 @@ function idleState(profileId) {
     buttonLabel: "Start",
     filter: "onlineOnly",
     progress: null,
-    dailyTotal: "",
     previewHtml: "",
     previewText: "",
     previewPhoto: "",
@@ -160,63 +159,15 @@ router.post("/credentials", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const username = String(req.body?.username || "").trim();
   const password = String(req.body?.password || "");
-  const cookieHeader = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
-  // Extension already verified Dream login in Chrome (VPS IP can't pass reCAPTCHA / foreign cookies).
-  const clientVerified = Boolean(req.body?.clientVerified);
   if (!username || !password) {
     return res.status(400).json({
       ok: false,
-      error: "Dream login and password are required",
+      error: "Dream username and password are required",
     });
   }
   try {
-    let sessionCookie = "";
-    let verifiedVia = "";
-
-    if (clientVerified) {
-      // Trust Chrome-side check; keep cookies if provided for immediate Start.
-      sessionCookie = cookieHeader || "";
-      verifiedVia = "chrome";
-    } else if (cookieHeader) {
-      const probe = await fetch("https://www.dream-singles.com/members/", {
-        method: "GET",
-        redirect: "follow",
-        signal: AbortSignal.timeout(20000),
-        headers: {
-          Accept: "text/html",
-          Cookie: cookieHeader,
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-      });
-      const html = await probe.text().catch(() => "");
-      const url = String(probe.url || "");
-      const looksLogin =
-        /\/login(?:[/?#]|$)/i.test(url) ||
-        /id=["']loginform2["']/i.test(html) ||
-        probe.status === 401 ||
-        probe.status === 403;
-      if (!looksLogin && probe.ok) {
-        sessionCookie = cookieHeader;
-        verifiedVia = "chrome";
-      }
-    }
-
-    if (!sessionCookie && !clientVerified) {
-      try {
-        const login = await dreamLogin(username, password);
-        sessionCookie = login.cookieHeader;
-        verifiedVia = "password";
-      } catch (error) {
-        return res.status(400).json({
-          ok: false,
-          error:
-            "Could not verify Dream login from the server (reCAPTCHA on VPS). " +
-            "Open dream-singles.com in this Chrome, log in, reload the extension, then Save again.",
-        });
-      }
-    }
-
+    // Prove credentials work before storing.
+    const { cookieHeader } = await dreamLogin(username, password);
     await upsertDreamCredentials({
       userId: req.user.id,
       profileId,
@@ -224,12 +175,12 @@ router.post("/credentials", authMiddleware, async (req, res) => {
       passwordEnc: encryptSecret(password),
     });
     const worker = getWorker(req, profileId);
-    if (sessionCookie) worker.setCookieHeader(sessionCookie);
+    worker.setCookieHeader(cookieHeader);
     worker.jwtCache = { token: "", expMs: 0 };
     try {
-      if (sessionCookie) await worker.fetchLetterBotJwt(true, { allowRelogin: false });
+      await worker.fetchLetterBotJwt(true, { allowRelogin: false });
     } catch (_) {
-      // Cookies/JWT optional at save time — Start will push a fresh Chrome session.
+      // Cookies saved; JWT can be fetched on Start.
     }
     await persistJob({
       userId: req.user.id,
@@ -245,8 +196,7 @@ router.post("/credentials", authMiddleware, async (req, res) => {
       username,
       usernameMasked: maskUsername(username),
       profileId,
-      verifiedVia: verifiedVia || "chrome",
-      message: "Saved. For Start, keep Dream logged in in Chrome (server IP often blocked by captcha).",
+      message: "Dream credentials saved — cloud mailing can re-login without Chrome",
     });
   } catch (error) {
     return res.status(400).json({
@@ -382,13 +332,6 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
 
 router.get("/status", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
-  const preferred = workers.get(workerKey(req.user.id, profileId));
-  // Keep TOTAL DAY fresh while mailing — scrapes Dream Daily Total (re-logins if cookies dead).
-  if (preferred && (preferred.senderRunning || preferred.state?.sessionActive)) {
-    try {
-      await preferred.refreshDailyTotal({ force: false });
-    } catch (_) {}
-  }
   const state = await resolveLiveState(req.user.id, profileId);
   return res.json({ ok: true, state });
 });
