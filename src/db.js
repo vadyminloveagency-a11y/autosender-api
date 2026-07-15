@@ -33,6 +33,7 @@ export async function initDb() {
   const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
   await db.query(schema);
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'operator'`);
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_enc TEXT`);
   await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS inbox_order INTEGER`);
   await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS letter_count INTEGER NOT NULL DEFAULT 0`);
   await db.query(`ALTER TABLE favorites ADD COLUMN IF NOT EXISTS is_site_favorite BOOLEAN NOT NULL DEFAULT FALSE`);

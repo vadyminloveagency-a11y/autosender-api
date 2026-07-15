@@ -200,6 +200,25 @@
     .badge-running { background: rgba(46, 204, 113, 0.18); color: #7dffb8; }
     .badge-paused { background: rgba(255, 193, 7, 0.16); color: #ffd56a; }
     .card.wide { max-width: 920px; }
+    .operators-card {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid rgba(120, 170, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(8, 16, 32, 0.55);
+    }
+    .operators-table code {
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      color: #eef4ff;
+      word-break: break-all;
+    }
+    .muted-note {
+      margin: 8px 0 0;
+      color: #8ea8cc;
+      font-size: 11px;
+      line-height: 1.45;
+    }
   </style>
 </head>
 <body>
@@ -282,6 +301,28 @@
       </div>
       <button type="button" id="create-operator-btn">Create operator</button>
 
+      <div class="operators-card">
+        <div class="mailings-head">
+          <h2>Ваши операторы</h2>
+          <button type="button" id="refresh-operators-btn" class="refresh-btn">Обновить</button>
+        </div>
+        <p class="muted-note">Логин и пароль видны для операторов, созданных после обновления. Старые аккаунты — пароль не сохранялся.</p>
+        <div id="operators-empty" class="mailings-empty hidden">Операторов пока нет.</div>
+        <div id="operators-wrap" class="hidden">
+          <table class="mailings-table operators-table">
+            <thead>
+              <tr>
+                <th>Имя</th>
+                <th>Логин</th>
+                <th>Пароль</th>
+                <th>Создан</th>
+              </tr>
+            </thead>
+            <tbody id="operators-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="mailings-card">
         <div class="mailings-head">
           <h2>Active LetterBot mailings</h2>
@@ -356,11 +397,62 @@
       document.getElementById("admin-label").textContent = `Signed in as ${user.email}`;
       showView("panel");
       setStatus("");
+      void refreshOperators();
       void refreshMailings();
       if (mailingsTimer) clearInterval(mailingsTimer);
       mailingsTimer = setInterval(() => {
         void refreshMailings({ quiet: true });
       }, 10000);
+    }
+
+    function formatCreatedAt(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "—";
+      return date.toLocaleString();
+    }
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function refreshOperators({ quiet = false } = {}) {
+      const emptyEl = document.getElementById("operators-empty");
+      const wrapEl = document.getElementById("operators-wrap");
+      const bodyEl = document.getElementById("operators-body");
+      if (!quiet) setStatus("Загрузка операторов...");
+      try {
+        const data = await api("/auth/operators");
+        const operators = Array.isArray(data.operators) ? data.operators : [];
+        bodyEl.innerHTML = "";
+        if (!operators.length) {
+          emptyEl.classList.remove("hidden");
+          wrapEl.classList.add("hidden");
+        } else {
+          emptyEl.classList.add("hidden");
+          wrapEl.classList.remove("hidden");
+          for (const operator of operators) {
+            const tr = document.createElement("tr");
+            const password = operator.password
+              ? `<code>${escapeHtml(operator.password)}</code>`
+              : '<span style="color:#8ea8cc">не сохранён</span>';
+            tr.innerHTML = `
+              <td>${escapeHtml(operator.name || "—")}</td>
+              <td><code>${escapeHtml(operator.email || "—")}</code></td>
+              <td>${password}</td>
+              <td>${formatCreatedAt(operator.createdAt)}</td>
+            `;
+            bodyEl.appendChild(tr);
+          }
+        }
+        if (!quiet) setStatus("");
+      } catch (error) {
+        if (!quiet) setStatus(error.message, "error");
+      }
     }
 
     function formatOperator(job) {
@@ -507,6 +599,7 @@
         document.getElementById("operator-email").value = "";
         document.getElementById("operator-password").value = "";
         document.getElementById("operator-name").value = "";
+        await refreshOperators({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       }
@@ -556,6 +649,10 @@
 
     document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
       void refreshMailings();
+    });
+
+    document.getElementById("refresh-operators-btn").addEventListener("click", () => {
+      void refreshOperators();
     });
 
     document.getElementById("mailings-body").addEventListener("click", (event) => {

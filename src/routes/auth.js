@@ -6,6 +6,7 @@ import {
   signToken,
   verifyPassword,
 } from "../auth.js";
+import { decryptSecret, encryptSecret } from "../cryptoUtil.js";
 
 const router = express.Router();
 
@@ -68,20 +69,58 @@ router.post("/operators", adminMiddleware, async (req, res) => {
 
     const db = getPool();
     const passwordHash = await hashPassword(password);
+    const passwordEnc = encryptSecret(password);
     const result = await db.query(
-      `INSERT INTO users (email, password_hash, name, role)
-       VALUES ($1, $2, $3, 'operator')
+      `INSERT INTO users (email, password_hash, password_enc, name, role)
+       VALUES ($1, $2, $3, $4, 'operator')
        RETURNING id, email, name, role, created_at`,
-      [email, passwordHash, name || email],
+      [email, passwordHash, passwordEnc, name || email],
     );
 
-    return res.json({ ok: true, user: userPayload(result.rows[0]) });
+    return res.json({
+      ok: true,
+      user: { ...userPayload(result.rows[0]), password },
+    });
   } catch (error) {
     if (error.code === "23505") {
       return res.status(409).json({ ok: false, error: "Email already registered" });
     }
     console.error(error);
     return res.status(500).json({ ok: false, error: "Failed to create operator" });
+  }
+});
+
+/** Director cabinet — list all operator accounts with recoverable passwords. */
+router.get("/operators", adminMiddleware, async (req, res) => {
+  try {
+    const db = getPool();
+    const result = await db.query(
+      `SELECT id, email, name, role, password_enc, created_at
+       FROM users
+       WHERE role = 'operator'
+       ORDER BY created_at DESC, id DESC`,
+    );
+    const operators = result.rows.map((row) => {
+      let password = "";
+      if (row.password_enc) {
+        try {
+          password = decryptSecret(row.password_enc);
+        } catch (error) {
+          password = "";
+        }
+      }
+      return {
+        id: row.id,
+        email: row.email,
+        name: row.name || "",
+        password: password || null,
+        createdAt: row.created_at,
+      };
+    });
+    return res.json({ ok: true, operators });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Failed to load operators", operators: [] });
   }
 });
 
