@@ -299,20 +299,30 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
   const pid = String(profileId || "default");
   const key = workerKey(userId, pid);
   let worker = workers.get(key);
+  let cookieHeader = "";
   if (!worker) {
     try {
       const row = await getLetterBotJob(userId, pid);
       if (row?.is_running) {
         worker = getWorkerForUser(userId, pid);
-        if (row.cookie_header) worker.setCookieHeader(row.cookie_header);
+        cookieHeader = row.cookie_header || "";
+        if (cookieHeader) worker.setCookieHeader(cookieHeader);
         worker.senderRunning = true;
         worker.state.sessionActive = true;
       }
     } catch (_) {}
+  } else {
+    cookieHeader = worker.cookieHeader || "";
   }
   let state = idleState(pid);
   if (worker) {
     try {
+      // Director force-stop: tell Dream WS to stop even if socket was down.
+      if (worker.socket?.readyState !== WebSocket.OPEN && cookieHeader) {
+        try {
+          await ensureWorkerSession(worker, { cookieHeader });
+        } catch (_) {}
+      }
       state = await worker.stop({ complete });
     } catch (_) {
       state = idleState(pid);
@@ -320,6 +330,14 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
   }
   await markLetterBotJobStopped(userId, pid);
   lastStates.set(key, state);
+  await persistJob({
+    userId,
+    profileId: pid,
+    cookieHeader: worker?.cookieHeader || cookieHeader || "",
+    selection: worker?.userSelection || {},
+    state,
+    isRunning: false,
+  });
   return {
     ...state,
     sessionActive: false,
