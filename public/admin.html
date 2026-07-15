@@ -3,25 +3,118 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AutoSender Admin</title>
+  <title>GlobalSync</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      color: #111827;
+      background: #121721;
+    }
+    body.auth-page {
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 24px 16px;
+    }
+    body.panel-page {
+      padding: 24px 16px;
+      color: #eef4ff;
       background:
         radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
         linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
-      color: #eef4ff;
-      font-family: Arial, sans-serif;
     }
+    .auth-card {
+      width: 100%;
+      max-width: 420px;
+      padding: 28px 32px 32px;
+      border-radius: 4px;
+      background: #ffffff;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    }
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 0 18px;
+    }
+    .auth-brand img {
+      display: block;
+      width: min(220px, 100%);
+      height: auto;
+    }
+    .auth-divider {
+      margin: 0 0 24px;
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+    }
+    .auth-title {
+      margin: 0 0 22px;
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: #111827;
+    }
+    .auth-field {
+      margin-bottom: 14px;
+    }
+    .auth-field input {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background: #fff;
+      color: #111827;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .auth-field input::placeholder { color: #9ca3af; }
+    .auth-field input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+    .auth-submit {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: 4px;
+      background: #121721;
+      color: #ffffff;
+      font: 600 16px/1 "Segoe UI", Roboto, Arial, sans-serif;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .auth-submit:hover:not(:disabled) { background: #1f2937; }
+    .auth-submit:disabled { opacity: 0.65; cursor: wait; }
+    .auth-status {
+      margin: 14px 0 0;
+      min-height: 18px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .auth-status.error { color: #dc2626; }
+    .auth-status.ok { color: #059669; }
+    .auth-setup-link {
+      display: block;
+      margin-top: 18px;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 12px;
+      text-decoration: none;
+    }
+    .auth-setup-link:hover { color: #6b7280; text-decoration: underline; }
+    .hidden { display: none !important; }
     .card {
       width: 100%;
-      max-width: 400px;
+      max-width: 920px;
+      margin: 0 auto;
       padding: 28px 24px 22px;
       border: 1px solid rgba(120, 170, 255, 0.22);
       border-radius: 14px;
@@ -50,18 +143,14 @@
       font-size: 12px;
       line-height: 1.55;
     }
-    .steps strong {
-      color: #eef4ff;
-    }
-    .steps ol {
-      margin: 8px 0 0;
-      padding-left: 18px;
-    }
+    .steps strong { color: #eef4ff; }
+    .steps ol { margin: 8px 0 0; padding-left: 18px; }
     .field {
       position: relative;
       margin-bottom: 14px;
     }
-    .field input {
+    .field input,
+    .field select {
       width: 100%;
       min-height: 46px;
       padding: 16px 14px 8px;
@@ -104,7 +193,6 @@
     }
     .status.error { color: #ff8a9a; }
     .status.ok { color: #7dffb8; }
-    .hidden { display: none !important; }
     .section-title {
       margin: 18px 0 10px;
       color: #b8c9e8;
@@ -210,7 +298,6 @@
     }
     .badge-running { background: rgba(46, 204, 113, 0.18); color: #7dffb8; }
     .badge-paused { background: rgba(255, 193, 7, 0.16); color: #ffd56a; }
-    .card.wide { max-width: 920px; }
     .operators-card {
       margin-top: 18px;
       padding: 14px;
@@ -232,62 +319,49 @@
     }
   </style>
 </head>
-<body>
-  <div class="card wide">
-    <h1>AutoSender Admin</h1>
-    <p class="subtitle">For the agency owner / administrator only</p>
+<body class="auth-page">
+  <div id="auth-shell" class="auth-card">
+    <div class="auth-brand">
+      <img src="/globalsync-logo.png" alt="GlobalSync" width="220" height="40">
+    </div>
+    <hr class="auth-divider">
 
-    <div id="bootstrap-view">
-      <div class="steps">
-        <strong>First-time setup (once)</strong>
-        <ol>
-          <li>Open Render → autosender-api → Environment</li>
-          <li>Copy <strong>SETUP_SECRET</strong></li>
-          <li>Paste it below and create your admin account</li>
-        </ol>
+    <div id="login-view">
+      <h2 class="auth-title">Log In</h2>
+      <div class="auth-field">
+        <input id="login-email" type="text" placeholder="Username" autocomplete="username">
       </div>
-      <div class="field">
-        <input id="bootstrap-secret" type="password" placeholder=" ">
-        <label for="bootstrap-secret">Setup key</label>
+      <div class="auth-field">
+        <input id="login-password" type="password" placeholder="Password" autocomplete="current-password">
       </div>
-      <div class="field">
-        <input id="bootstrap-email" type="text" placeholder=" ">
-        <label for="bootstrap-email">Your login</label>
-      </div>
-      <div class="field">
-        <input id="bootstrap-password" type="password" placeholder=" ">
-        <label for="bootstrap-password">Your password</label>
-      </div>
-      <button type="button" id="bootstrap-btn">Create admin account</button>
-      <div class="link-row">
-        <a href="#" id="toggle-login">Already have an admin account</a>
-      </div>
+      <button type="button" id="login-btn" class="auth-submit">Log in</button>
+      <p id="auth-status" class="auth-status" aria-live="polite"></p>
+      <a href="#" id="toggle-bootstrap" class="auth-setup-link">Initial setup</a>
     </div>
 
-    <div id="login-view" class="hidden">
-      <div class="steps">
-        <strong>Admin login</strong>
-        <ol>
-          <li>Sign in with your admin mail and password</li>
-          <li>Then create accounts for operators</li>
-        </ol>
+    <div id="bootstrap-view" class="hidden">
+      <h2 class="auth-title">Setup</h2>
+      <div class="auth-field">
+        <input id="bootstrap-secret" type="password" placeholder="Setup key" autocomplete="off">
       </div>
-      <div class="field">
-        <input id="login-email" type="text" placeholder=" ">
-        <label for="login-email">Login</label>
+      <div class="auth-field">
+        <input id="bootstrap-email" type="text" placeholder="Username" autocomplete="username">
       </div>
-      <div class="field">
-        <input id="login-password" type="password" placeholder=" ">
-        <label for="login-password">Password</label>
+      <div class="auth-field">
+        <input id="bootstrap-password" type="password" placeholder="Password" autocomplete="new-password">
       </div>
-      <button type="button" id="login-btn">Login</button>
-      <div class="link-row">
-        <a href="#" id="toggle-bootstrap">First-time setup</a>
-      </div>
+      <button type="button" id="bootstrap-btn" class="auth-submit">Create admin</button>
+      <p id="bootstrap-status" class="auth-status" aria-live="polite"></p>
+      <a href="#" id="toggle-login" class="auth-setup-link">Back to login</a>
     </div>
+  </div>
 
-    <div id="panel-view" class="hidden">
-      <p class="subtitle" id="admin-label"></p>
+  <div id="panel-shell" class="hidden">
+  <div class="card">
+    <h1>Director cabinet</h1>
+    <p class="subtitle" id="admin-label"></p>
+
+    <div id="panel-view">
       <div class="steps">
         <strong>Create operator accounts</strong>
         <ol>
@@ -405,6 +479,7 @@
 
     <p id="status" class="status" aria-live="polite"></p>
   </div>
+  </div>
 
   <script>
     const API = window.location.origin;
@@ -417,15 +492,28 @@
       login: document.getElementById("login-view"),
       panel: document.getElementById("panel-view"),
     };
+    const authShell = document.getElementById("auth-shell");
+    const panelShell = document.getElementById("panel-shell");
     const statusEl = document.getElementById("status");
+    const authStatusEl = document.getElementById("auth-status");
+    const bootstrapStatusEl = document.getElementById("bootstrap-status");
 
-    function setStatus(text, type = "") {
-      statusEl.textContent = text || "";
-      statusEl.className = "status" + (type ? ` ${type}` : "");
+    function setStatus(text, type = "", target = "panel") {
+      const el = target === "auth" ? authStatusEl : target === "bootstrap" ? bootstrapStatusEl : statusEl;
+      if (!el) return;
+      el.textContent = text || "";
+      el.className = (target === "auth" || target === "bootstrap" ? "auth-status" : "status") + (type ? ` ${type}` : "");
     }
 
     function showView(name) {
-      Object.entries(views).forEach(([key, el]) => el.classList.toggle("hidden", key !== name));
+      const isPanel = name === "panel";
+      document.body.classList.toggle("auth-page", !isPanel);
+      document.body.classList.toggle("panel-page", isPanel);
+      authShell.classList.toggle("hidden", isPanel);
+      panelShell.classList.toggle("hidden", !isPanel);
+      views.bootstrap.classList.toggle("hidden", name !== "bootstrap");
+      views.login.classList.toggle("hidden", name !== "login");
+      views.panel.classList.remove("hidden");
     }
 
     async function api(path, options = {}) {
@@ -703,11 +791,22 @@
         } catch {}
         clearSession();
       }
-      showView("bootstrap");
+      showView("login");
     }
 
+    function bindAuthEnterKey() {
+      const submitLogin = () => document.getElementById("login-btn")?.click();
+      document.getElementById("login-password")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") submitLogin();
+      });
+      document.getElementById("bootstrap-password")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") document.getElementById("bootstrap-btn")?.click();
+      });
+    }
+    bindAuthEnterKey();
+
     document.getElementById("bootstrap-btn").addEventListener("click", async () => {
-      setStatus("Creating admin account...");
+      setStatus("Creating admin account...", "", "bootstrap");
       try {
         const data = await api("/auth/bootstrap", {
           method: "POST",
@@ -719,14 +818,14 @@
         });
         saveSession(data.token, data.user);
         openPanel(data.user);
-        setStatus("Admin account created", "ok");
+        setStatus("Admin account created", "ok", "bootstrap");
       } catch (error) {
-        setStatus(error.message, "error");
+        setStatus(error.message, "error", "bootstrap");
       }
     });
 
     document.getElementById("login-btn").addEventListener("click", async () => {
-      setStatus("Signing in...");
+      setStatus("Signing in...", "", "auth");
       try {
         const data = await api("/auth/login", {
           method: "POST",
@@ -740,9 +839,9 @@
         }
         saveSession(data.token, data.user);
         openPanel(data.user);
-        setStatus("");
+        setStatus("", "", "auth");
       } catch (error) {
-        setStatus(error.message, "error");
+        setStatus(error.message, "error", "auth");
       }
     });
 
@@ -774,7 +873,8 @@
       }
       clearSession();
       showView("login");
-      setStatus("");
+      setStatus("", "", "auth");
+      setStatus("", "", "panel");
     });
 
     async function forceLogoutProfile(userId, profileId, button) {
@@ -800,13 +900,15 @@
     document.getElementById("toggle-bootstrap").addEventListener("click", (event) => {
       event.preventDefault();
       showView("bootstrap");
-      setStatus("");
+      setStatus("", "", "auth");
+      setStatus("", "", "bootstrap");
     });
 
     document.getElementById("toggle-login").addEventListener("click", (event) => {
       event.preventDefault();
       showView("login");
-      setStatus("");
+      setStatus("", "", "auth");
+      setStatus("", "", "bootstrap");
     });
 
     document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
