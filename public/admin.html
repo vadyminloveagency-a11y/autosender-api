@@ -376,6 +376,103 @@
       font-size: 11px;
       line-height: 1.45;
     }
+    .panel-layout {
+      display: flex;
+      min-height: 100vh;
+      width: 100%;
+      max-width: 1280px;
+      margin: 0 auto;
+      gap: 0;
+    }
+    .admin-sidebar {
+      width: 240px;
+      flex: 0 0 240px;
+      padding: 20px 14px;
+      border-right: 1px solid rgba(120, 170, 255, 0.16);
+      background: linear-gradient(180deg, rgba(10, 18, 36, 0.98), rgba(8, 14, 28, 0.98));
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sidebar-brand {
+      margin: 0;
+      padding: 4px 8px 10px;
+      color: #f4f8ff;
+      font: 700 18px/1.2 Arial, sans-serif;
+    }
+    .sidebar-user {
+      margin: 0;
+      padding: 0 8px 12px;
+      color: #8ea8cc;
+      font-size: 12px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .sidebar-section-title {
+      margin: 8px 0 4px;
+      padding: 0 8px;
+      color: #6d88ad;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sidebar-nav-btn {
+      width: 100%;
+      min-height: 40px;
+      margin: 0;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: #c8d8f0;
+      font: 600 13px/1.2 Arial, sans-serif;
+      text-align: left;
+      cursor: pointer;
+    }
+    .sidebar-nav-btn:hover {
+      background: rgba(120, 170, 255, 0.08);
+      color: #eef4ff;
+    }
+    .sidebar-nav-btn.is-active {
+      background: rgba(56, 120, 255, 0.16);
+      border-color: rgba(120, 170, 255, 0.28);
+      color: #8de4ff;
+    }
+    .sidebar-spacer { flex: 1 1 auto; }
+    .sidebar-logout {
+      width: 100%;
+      min-height: 38px;
+      margin: 0;
+      border: 1px solid rgba(120, 170, 255, 0.18);
+      border-radius: 8px;
+      background: transparent;
+      color: #8ea8cc;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sidebar-logout:hover { color: #ff8a9a; border-color: rgba(255, 120, 140, 0.35); }
+    .admin-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 22px 24px 28px;
+      overflow: auto;
+    }
+    .admin-main-title {
+      margin: 0 0 16px;
+      color: #eef4ff;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .admin-section { display: none; }
+    .admin-section.is-active { display: block; }
+    body.panel-page { padding: 0; }
   </style>
 </head>
 <body class="auth-page">
@@ -425,128 +522,152 @@
   </div>
 
   <div id="panel-shell" class="hidden">
-  <div class="card">
-    <h1>Director cabinet</h1>
-    <p class="subtitle" id="admin-label"></p>
+    <div class="panel-layout">
+      <aside class="admin-sidebar" aria-label="Director navigation">
+        <h1 class="sidebar-brand">AutoSender</h1>
+        <p class="sidebar-user" id="admin-label"></p>
 
-    <div id="panel-view">
-      <div class="steps">
-        <strong>Create operator accounts</strong>
-        <ol>
-          <li>Fill mail + password below</li>
-          <li>Click <strong>Create operator</strong></li>
-          <li>Give those credentials to your operator</li>
-          <li>Operator logs in inside the Chrome extension (Login only)</li>
-        </ol>
-      </div>
-      <div class="section-title">New operator</div>
-      <div class="field">
-        <input id="operator-email" type="text" placeholder=" ">
-        <label for="operator-email">Login</label>
-      </div>
-      <div class="field">
-        <input id="operator-password" type="password" placeholder=" ">
-        <label for="operator-password">Password</label>
-      </div>
-      <div class="field">
-        <input id="operator-name" type="text" placeholder=" ">
-        <label for="operator-name">Name</label>
-      </div>
-      <button type="button" id="create-operator-btn">Create operator</button>
+        <div class="sidebar-section-title">Акаунт менеджер</div>
+        <nav class="sidebar-nav" aria-label="Account manager">
+          <button type="button" class="sidebar-nav-btn is-active" data-section="ladies">Аккаунты леди</button>
+          <button type="button" class="sidebar-nav-btn" data-section="operators">Аккаунты операторов</button>
+        </nav>
 
-      <div class="operators-card">
-        <div class="mailings-head">
-          <h2>Ваши операторы</h2>
-          <button type="button" id="refresh-operators-btn" class="refresh-btn">Обновить</button>
-        </div>
-        <p class="muted-note">Логин и пароль видны для операторов, созданных после обновления. Старые аккаунты — пароль не сохранялся.</p>
-        <div id="operators-empty" class="mailings-empty hidden">Операторов пока нет.</div>
-        <div id="operators-wrap" class="hidden">
-          <table class="mailings-table operators-table">
-            <thead>
-              <tr>
-                <th>Имя</th>
-                <th>Логин</th>
-                <th>Пароль</th>
-                <th>Создан</th>
-              </tr>
-            </thead>
-            <tbody id="operators-body"></tbody>
-          </table>
-        </div>
-      </div>
+        <div class="sidebar-section-title">Контроль</div>
+        <nav class="sidebar-nav" aria-label="Control">
+          <button type="button" class="sidebar-nav-btn" data-section="mailings">Рассылки</button>
+        </nav>
 
-      <div class="operators-card">
-        <div class="mailings-head">
-          <h2>Анкеты (Dream)</h2>
-          <button type="button" id="refresh-profiles-btn" class="refresh-btn">Обновить</button>
-        </div>
-        <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Назначьте оператора.</p>
-        <div class="section-title">Новая анкета</div>
-        <div class="field">
-          <input id="profile-dream-login" type="text" placeholder=" ">
-          <label for="profile-dream-login">Логин Dream</label>
-        </div>
-        <div class="field">
-          <input id="profile-dream-password" type="password" placeholder=" ">
-          <label for="profile-dream-password">Пароль Dream</label>
-        </div>
-        <div class="field">
-          <input id="profile-display-name" type="text" placeholder=" ">
-          <label for="profile-display-name">Имя (необязательно)</label>
-        </div>
-        <div class="field">
-          <select id="profile-assigned-operator" style="width:100%;min-height:46px;padding:12px;border:1px solid rgba(120,170,255,.28);border-radius:8px;background:rgba(8,16,32,.85);color:#eef4ff;">
-            <option value="">— оператор не назначен —</option>
-          </select>
-        </div>
-        <button type="button" id="create-profile-btn">Добавить анкету</button>
-        <div id="profiles-empty" class="mailings-empty hidden">Анкет пока нет.</div>
-        <div id="profiles-wrap" class="hidden" style="margin-top:12px">
-          <table class="mailings-table operators-table">
-            <thead>
-              <tr>
-                <th>Анкета</th>
-                <th>ID</th>
-                <th>Логин Dream</th>
-                <th>Пароль</th>
-                <th>Оператор</th>
-                <th>В базе</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="profiles-body"></tbody>
-          </table>
-        </div>
-      </div>
+        <div class="sidebar-spacer"></div>
+        <button type="button" id="logout-btn" class="sidebar-logout">Logout</button>
+      </aside>
 
-      <div class="mailings-card">
-        <div class="mailings-head">
-          <h2>Active LetterBot mailings</h2>
-          <button type="button" id="refresh-mailings-btn" class="refresh-btn">Refresh</button>
-        </div>
-        <div id="mailings-empty" class="mailings-empty hidden">No active mailings right now.</div>
-        <div id="mailings-wrap" class="hidden">
-          <table class="mailings-table">
-            <thead>
-              <tr>
-                <th>Operator</th>
-                <th>Profile</th>
-                <th>Filter</th>
-                <th>Progress</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="mailings-body"></tbody>
-          </table>
-        </div>
-      </div>
+      <main class="admin-main">
+        <div id="panel-view">
+          <section id="section-ladies" class="admin-section is-active">
+            <h2 class="admin-main-title">Аккаунты леди</h2>
+            <div class="operators-card" style="margin-top:0">
+              <div class="mailings-head">
+                <h2>Анкеты Dream</h2>
+                <button type="button" id="refresh-profiles-btn" class="refresh-btn">Обновить</button>
+              </div>
+              <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Назначьте оператора.</p>
+              <div class="section-title">Новая анкета</div>
+              <div class="field">
+                <input id="profile-dream-login" type="text" placeholder=" ">
+                <label for="profile-dream-login">Логин Dream</label>
+              </div>
+              <div class="field">
+                <input id="profile-dream-password" type="password" placeholder=" ">
+                <label for="profile-dream-password">Пароль Dream</label>
+              </div>
+              <div class="field">
+                <input id="profile-display-name" type="text" placeholder=" ">
+                <label for="profile-display-name">Имя (необязательно)</label>
+              </div>
+              <div class="field">
+                <select id="profile-assigned-operator" style="width:100%;min-height:46px;padding:12px;border:1px solid rgba(120,170,255,.28);border-radius:8px;background:rgba(8,16,32,.85);color:#eef4ff;">
+                  <option value="">— оператор не назначен —</option>
+                </select>
+              </div>
+              <button type="button" id="create-profile-btn">Добавить анкету</button>
+              <div id="profiles-empty" class="mailings-empty hidden">Анкет пока нет.</div>
+              <div id="profiles-wrap" class="hidden" style="margin-top:12px">
+                <table class="mailings-table operators-table">
+                  <thead>
+                    <tr>
+                      <th>Анкета</th>
+                      <th>ID</th>
+                      <th>Логин Dream</th>
+                      <th>Пароль</th>
+                      <th>Оператор</th>
+                      <th>В базе</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="profiles-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
 
-      <button type="button" id="logout-btn" class="logout">Logout</button>
+          <section id="section-operators" class="admin-section">
+            <h2 class="admin-main-title">Аккаунты операторов</h2>
+            <div class="steps">
+              <strong>Создание оператора</strong>
+              <ol>
+                <li>Заполните логин и пароль</li>
+                <li>Нажмите <strong>Создать оператора</strong></li>
+                <li>Оператор входит в расширение AutoSender</li>
+              </ol>
+            </div>
+            <div class="section-title">Новый оператор</div>
+            <div class="field">
+              <input id="operator-email" type="text" placeholder=" ">
+              <label for="operator-email">Login</label>
+            </div>
+            <div class="field">
+              <input id="operator-password" type="password" placeholder=" ">
+              <label for="operator-password">Password</label>
+            </div>
+            <div class="field">
+              <input id="operator-name" type="text" placeholder=" ">
+              <label for="operator-name">Name</label>
+            </div>
+            <button type="button" id="create-operator-btn">Создать оператора</button>
+
+            <div class="operators-card">
+              <div class="mailings-head">
+                <h2>Список операторов</h2>
+                <button type="button" id="refresh-operators-btn" class="refresh-btn">Обновить</button>
+              </div>
+              <p class="muted-note">Логин и пароль видны для операторов, созданных после обновления.</p>
+              <div id="operators-empty" class="mailings-empty hidden">Операторов пока нет.</div>
+              <div id="operators-wrap" class="hidden">
+                <table class="mailings-table operators-table">
+                  <thead>
+                    <tr>
+                      <th>Имя</th>
+                      <th>Логин</th>
+                      <th>Пароль</th>
+                      <th>Создан</th>
+                    </tr>
+                  </thead>
+                  <tbody id="operators-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-mailings" class="admin-section">
+            <h2 class="admin-main-title">Рассылки</h2>
+            <div class="mailings-card" style="margin-top:0">
+              <div class="mailings-head">
+                <h2>Active LetterBot mailings</h2>
+                <button type="button" id="refresh-mailings-btn" class="refresh-btn">Refresh</button>
+              </div>
+              <div id="mailings-empty" class="mailings-empty hidden">No active mailings right now.</div>
+              <div id="mailings-wrap" class="hidden">
+                <table class="mailings-table">
+                  <thead>
+                    <tr>
+                      <th>Operator</th>
+                      <th>Profile</th>
+                      <th>Filter</th>
+                      <th>Progress</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="mailings-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <p id="status" class="status" aria-live="polite"></p>
+      </main>
     </div>
-
-    <p id="status" class="status" aria-live="polite"></p>
-  </div>
   </div>
 
   <script>
@@ -647,8 +768,9 @@
     }
 
     function openPanel(user) {
-      document.getElementById("admin-label").textContent = `Signed in as ${user.email}`;
+      document.getElementById("admin-label").textContent = user.email || "";
       showView("panel");
+      showAdminSection("ladies");
       setStatus("");
       void refreshOperators();
       void refreshProfiles();
@@ -658,6 +780,29 @@
         void refreshMailings({ quiet: true });
       }, 10000);
     }
+
+    function showAdminSection(sectionId) {
+      const sections = {
+        ladies: document.getElementById("section-ladies"),
+        operators: document.getElementById("section-operators"),
+        mailings: document.getElementById("section-mailings"),
+      };
+      Object.entries(sections).forEach(([key, el]) => {
+        if (el) el.classList.toggle("is-active", key === sectionId);
+      });
+      document.querySelectorAll(".sidebar-nav-btn").forEach((button) => {
+        button.classList.toggle("is-active", button.getAttribute("data-section") === sectionId);
+      });
+    }
+
+    document.querySelectorAll(".sidebar-nav-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        const sectionId = button.getAttribute("data-section");
+        if (!sectionId) return;
+        showAdminSection(sectionId);
+        setStatus("");
+      });
+    });
 
     function formatCreatedAt(value) {
       if (!value) return "—";
