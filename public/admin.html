@@ -3,113 +3,172 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GlobalSync</title>
+  <title>AutoSender Admin</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: "Segoe UI", Roboto, Arial, sans-serif;
-      color: #111827;
-      background: #121721;
-    }
-    body.auth-page {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px 16px;
+      font-family: Arial, sans-serif;
+      color: #eef4ff;
     }
     body.panel-page {
       padding: 24px 16px;
-      color: #eef4ff;
       background:
         radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
         linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
     }
-    .auth-card {
-      width: 100%;
-      max-width: 420px;
-      padding: 28px 32px 32px;
-      border-radius: 4px;
-      background: #ffffff;
-      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
-    }
-    .auth-brand {
+    .app-auth-gate {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 4px 0 18px;
+      min-height: 100vh;
+      padding: 24px 16px;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
+        radial-gradient(circle at 80% 70%, rgba(30, 90, 200, 0.12), transparent 38%),
+        linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
     }
-    .auth-brand img {
-      display: block;
-      width: min(220px, 100%);
-      height: auto;
-    }
-    .auth-divider {
-      margin: 0 0 24px;
-      border: 0;
-      border-top: 1px solid #e5e7eb;
+    .auth-card {
+      width: 100%;
+      max-width: 320px;
+      padding: 28px 24px 22px;
+      border: 1px solid rgba(120, 170, 255, 0.22);
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(18, 32, 58, 0.96), rgba(12, 22, 42, 0.98));
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     }
     .auth-title {
       margin: 0 0 22px;
-      font-size: 28px;
-      font-weight: 700;
-      line-height: 1.2;
-      color: #111827;
+      text-align: center;
+      color: #f4f8ff;
+      font: 700 22px/1.2 Arial, sans-serif;
+      letter-spacing: 0.01em;
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
     .auth-field {
-      margin-bottom: 14px;
+      position: relative;
     }
     .auth-field input {
       width: 100%;
-      min-height: 48px;
-      padding: 0 14px;
-      border: 1px solid #d1d5db;
-      border-radius: 4px;
-      background: #fff;
-      color: #111827;
-      font-size: 15px;
+      min-height: 46px;
+      padding: 16px 14px 8px;
+      border: 1px solid rgba(120, 170, 255, 0.28);
+      border-radius: 8px;
+      background: rgba(8, 16, 32, 0.85);
+      color: #eef4ff;
+      font: 14px/1.2 Arial, sans-serif;
       outline: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    .auth-field input::placeholder { color: #9ca3af; }
     .auth-field input:focus {
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+      border-color: rgba(90, 190, 255, 0.65);
+      box-shadow: 0 0 0 2px rgba(56, 140, 255, 0.18);
+    }
+    .auth-field label {
+      position: absolute;
+      top: -8px;
+      left: 10px;
+      padding: 0 6px;
+      background: #142038;
+      color: #b8c9e8;
+      font: 12px/1 Arial, sans-serif;
+      pointer-events: none;
+    }
+    .auth-field--password input {
+      padding-right: 42px;
+    }
+    .auth-eye {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #5ecfff;
+      cursor: pointer;
+      transform: translateY(-50%);
+    }
+    .auth-eye:hover { background: rgba(94, 207, 255, 0.08); }
+    .auth-eye svg {
+      display: block;
+      width: 18px;
+      height: 18px;
+      margin: 0 auto;
+      fill: currentColor;
     }
     .auth-submit {
       width: 100%;
-      min-height: 48px;
-      margin-top: 8px;
-      border: 0;
-      border-radius: 4px;
-      background: #121721;
-      color: #ffffff;
-      font: 600 16px/1 "Segoe UI", Roboto, Arial, sans-serif;
+      min-height: 44px;
+      margin-top: 6px;
+      border: 1px solid rgba(120, 170, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(16, 30, 54, 0.95);
+      color: #5ecfff;
+      font: 700 15px/1 Arial, sans-serif;
       cursor: pointer;
-      transition: background 0.15s ease;
     }
-    .auth-submit:hover:not(:disabled) { background: #1f2937; }
-    .auth-submit:disabled { opacity: 0.65; cursor: wait; }
+    .auth-submit:hover:not(:disabled) {
+      background: rgba(24, 42, 72, 0.98);
+      color: #8de4ff;
+    }
+    .auth-submit:disabled { opacity: 0.6; cursor: wait; }
+    .auth-save-credentials {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid rgba(4, 242, 160, 0.35);
+      border-radius: 8px;
+      background: rgba(10, 20, 38, 0.55);
+      color: #04f2a0;
+      font: 600 13px/1 Arial, sans-serif;
+      cursor: pointer;
+    }
+    .auth-save-credentials:hover:not(:disabled) {
+      background: rgba(18, 34, 58, 0.85);
+      color: #7dffb8;
+    }
+    .auth-save-credentials.is-saved {
+      border-color: rgba(4, 242, 160, 0.35);
+      color: #04f2a0;
+    }
     .auth-status {
-      margin: 14px 0 0;
+      margin: 10px 0 0;
       min-height: 18px;
       text-align: center;
-      color: #6b7280;
-      font-size: 13px;
+      color: #8ea8cc;
+      font-size: 12px;
       line-height: 1.4;
     }
-    .auth-status.error { color: #dc2626; }
-    .auth-status.ok { color: #059669; }
-    .auth-setup-link {
-      display: block;
-      margin-top: 18px;
+    .auth-status.is-error { color: #ff8a9a; }
+    .auth-status.ok { color: #7dffb8; }
+    .auth-hint {
+      margin: 14px 0 0;
       text-align: center;
-      color: #9ca3af;
+      color: #6d88ad;
       font-size: 12px;
-      text-decoration: none;
+      line-height: 1.45;
     }
-    .auth-setup-link:hover { color: #6b7280; text-decoration: underline; }
+    .auth-mode-switch {
+      display: block;
+      width: 100%;
+      margin-top: 14px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #7eb8ff;
+      font: 13px/1.4 Arial, sans-serif;
+      cursor: pointer;
+      text-align: center;
+    }
+    .auth-mode-switch:hover { text-decoration: underline; }
     .hidden { display: none !important; }
     .card {
       width: 100%;
@@ -320,39 +379,48 @@
   </style>
 </head>
 <body class="auth-page">
-  <div id="auth-shell" class="auth-card">
-    <div class="auth-brand">
-      <img src="/globalsync-logo.png" alt="GlobalSync" width="220" height="40">
-    </div>
-    <hr class="auth-divider">
-
-    <div id="login-view">
-      <h2 class="auth-title">Log In</h2>
-      <div class="auth-field">
-        <input id="login-email" type="text" placeholder="Username" autocomplete="username">
-      </div>
-      <div class="auth-field">
-        <input id="login-password" type="password" placeholder="Password" autocomplete="current-password">
-      </div>
-      <button type="button" id="login-btn" class="auth-submit">Log in</button>
+  <div id="auth-shell" class="app-auth-gate">
+    <div id="login-view" class="auth-card">
+      <h1 class="auth-title">AutoSender</h1>
+      <form id="login-form" class="auth-form" autocomplete="on">
+        <div class="auth-field">
+          <input id="login-email" type="text" autocomplete="username" placeholder=" ">
+          <label for="login-email">Login</label>
+        </div>
+        <div class="auth-field auth-field--password">
+          <input id="login-password" type="password" autocomplete="current-password" placeholder=" ">
+          <label for="login-password">Password</label>
+          <button type="button" id="login-toggle-password" class="auth-eye" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C7 5 2.73 8.11 1 12c1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>
+          </button>
+        </div>
+        <button type="button" id="login-save-btn" class="auth-save-credentials">Save login and password</button>
+        <button type="submit" id="login-btn" class="auth-submit">Login</button>
+      </form>
       <p id="auth-status" class="auth-status" aria-live="polite"></p>
-      <a href="#" id="toggle-bootstrap" class="auth-setup-link">Initial setup</a>
+      <p class="auth-hint">Director cabinet</p>
+      <button type="button" id="toggle-bootstrap" class="auth-mode-switch">Initial setup</button>
     </div>
 
-    <div id="bootstrap-view" class="hidden">
-      <h2 class="auth-title">Setup</h2>
-      <div class="auth-field">
-        <input id="bootstrap-secret" type="password" placeholder="Setup key" autocomplete="off">
-      </div>
-      <div class="auth-field">
-        <input id="bootstrap-email" type="text" placeholder="Username" autocomplete="username">
-      </div>
-      <div class="auth-field">
-        <input id="bootstrap-password" type="password" placeholder="Password" autocomplete="new-password">
-      </div>
-      <button type="button" id="bootstrap-btn" class="auth-submit">Create admin</button>
+    <div id="bootstrap-view" class="auth-card hidden">
+      <h1 class="auth-title">AutoSender</h1>
+      <form id="bootstrap-form" class="auth-form">
+        <div class="auth-field">
+          <input id="bootstrap-secret" type="password" autocomplete="off" placeholder=" ">
+          <label for="bootstrap-secret">Setup key</label>
+        </div>
+        <div class="auth-field">
+          <input id="bootstrap-email" type="text" autocomplete="username" placeholder=" ">
+          <label for="bootstrap-email">Login</label>
+        </div>
+        <div class="auth-field auth-field--password">
+          <input id="bootstrap-password" type="password" autocomplete="new-password" placeholder=" ">
+          <label for="bootstrap-password">Password</label>
+        </div>
+        <button type="submit" id="bootstrap-btn" class="auth-submit">Create admin</button>
+      </form>
       <p id="bootstrap-status" class="auth-status" aria-live="polite"></p>
-      <a href="#" id="toggle-login" class="auth-setup-link">Back to login</a>
+      <button type="button" id="toggle-login" class="auth-mode-switch">Back to login</button>
     </div>
   </div>
 
@@ -502,7 +570,11 @@
       const el = target === "auth" ? authStatusEl : target === "bootstrap" ? bootstrapStatusEl : statusEl;
       if (!el) return;
       el.textContent = text || "";
-      el.className = (target === "auth" || target === "bootstrap" ? "auth-status" : "status") + (type ? ` ${type}` : "");
+      if (target === "auth" || target === "bootstrap") {
+        el.className = "auth-status" + (type === "error" ? " is-error" : type === "ok" ? " ok" : "");
+      } else {
+        el.className = "status" + (type ? ` ${type}` : "");
+      }
     }
 
     function showView(name) {
@@ -514,6 +586,43 @@
       views.bootstrap.classList.toggle("hidden", name !== "bootstrap");
       views.login.classList.toggle("hidden", name !== "login");
       views.panel.classList.remove("hidden");
+    }
+
+    const SAVED_LOGIN_KEY = "autosenderAdminSavedLogin";
+    const SAVED_PASSWORD_KEY = "autosenderAdminSavedPassword";
+
+    function loadSavedCredentials() {
+      const login = localStorage.getItem(SAVED_LOGIN_KEY) || "";
+      const password = localStorage.getItem(SAVED_PASSWORD_KEY) || "";
+      if (login) document.getElementById("login-email").value = login;
+      if (password) document.getElementById("login-password").value = password;
+    }
+
+    function saveLoginCredentials() {
+      const login = String(document.getElementById("login-email").value || "").trim();
+      const password = String(document.getElementById("login-password").value || "");
+      if (!login || !password) {
+        setStatus("Enter login and password first", "error", "auth");
+        return;
+      }
+      localStorage.setItem(SAVED_LOGIN_KEY, login);
+      localStorage.setItem(SAVED_PASSWORD_KEY, password);
+      const btn = document.getElementById("login-save-btn");
+      btn.classList.add("is-saved");
+      btn.textContent = "Saved";
+      setStatus("", "auth");
+    }
+
+    function bindPasswordToggle(buttonId, inputId) {
+      const button = document.getElementById(buttonId);
+      const input = document.getElementById(inputId);
+      if (!button || !input) return;
+      button.addEventListener("click", () => {
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        button.setAttribute("aria-pressed", show ? "true" : "false");
+        button.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      });
     }
 
     async function api(path, options = {}) {
@@ -792,18 +901,22 @@
         clearSession();
       }
       showView("login");
+      loadSavedCredentials();
     }
 
     function bindAuthEnterKey() {
-      const submitLogin = () => document.getElementById("login-btn")?.click();
-      document.getElementById("login-password")?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") submitLogin();
+      document.getElementById("login-form")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        document.getElementById("login-btn")?.click();
       });
-      document.getElementById("bootstrap-password")?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") document.getElementById("bootstrap-btn")?.click();
+      document.getElementById("bootstrap-form")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        document.getElementById("bootstrap-btn")?.click();
       });
     }
     bindAuthEnterKey();
+    bindPasswordToggle("login-toggle-password", "login-password");
+    document.getElementById("login-save-btn")?.addEventListener("click", saveLoginCredentials);
 
     document.getElementById("bootstrap-btn").addEventListener("click", async () => {
       setStatus("Creating admin account...", "", "bootstrap");
@@ -897,15 +1010,13 @@
       }
     }
 
-    document.getElementById("toggle-bootstrap").addEventListener("click", (event) => {
-      event.preventDefault();
+    document.getElementById("toggle-bootstrap").addEventListener("click", () => {
       showView("bootstrap");
       setStatus("", "", "auth");
       setStatus("", "", "bootstrap");
     });
 
-    document.getElementById("toggle-login").addEventListener("click", (event) => {
-      event.preventDefault();
+    document.getElementById("toggle-login").addEventListener("click", () => {
       showView("login");
       setStatus("", "", "auth");
       setStatus("", "", "bootstrap");
