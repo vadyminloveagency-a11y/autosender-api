@@ -196,6 +196,9 @@ router.get("/mine", authMiddleware, async (req, res) => {
       assigned: profiles.length > 0,
       profiles,
       profile: profiles[0] || null,
+      userId: Number(req.user.id) || null,
+      userEmail: req.user.email || "",
+      userRole: req.user.role || "operator",
     });
   } catch (error) {
     console.error(error);
