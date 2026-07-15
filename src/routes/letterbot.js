@@ -9,10 +9,13 @@ import {
   ensureLetterBotTables,
   getDreamCredentials,
   getLetterBotJob,
+  getOperatorShiftDisconnectRequest,
   getUserById,
   listRunningLetterBotJobs,
   listRunningLetterBotJobsWithUsers,
   markLetterBotJobStopped,
+  clearOperatorShiftDisconnect,
+  requestOperatorShiftDisconnect,
   upsertDreamCredentials,
   upsertLetterBotJob,
 } from "../letterbotStore.js";
@@ -548,6 +551,55 @@ router.post("/admin/stop", adminMiddleware, async (req, res) => {
       error: error?.message || String(error),
       state: idleState(profileId),
     });
+  }
+});
+
+/** Director cabinet — stop mailing and remote-logout operator profile (анкета). */
+router.post("/admin/disconnect-shift", adminMiddleware, async (req, res) => {
+  const userId = Number(req.body?.userId);
+  const profileId = String(req.body?.profileId || "default");
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "userId is required" });
+  }
+  try {
+    const state = await stopWorkerForProfile(userId, profileId);
+    await requestOperatorShiftDisconnect(userId, profileId);
+    return res.json({ ok: true, state, stopped: true, disconnectRequested: true });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error?.message || String(error),
+      state: idleState(profileId),
+    });
+  }
+});
+
+router.get("/shift-control", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  try {
+    const requestedAt = await getOperatorShiftDisconnectRequest(req.user.id, profileId);
+    return res.json({
+      ok: true,
+      profileId,
+      disconnectRequested: Boolean(requestedAt),
+      requestedAt: requestedAt || null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+      disconnectRequested: false,
+    });
+  }
+});
+
+router.post("/shift-control/ack", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  try {
+    await clearOperatorShiftDisconnect(req.user.id, profileId);
+    return res.json({ ok: true, profileId });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
   }
 });
 

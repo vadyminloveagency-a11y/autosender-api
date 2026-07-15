@@ -26,6 +26,15 @@ export async function ensureLetterBotTables() {
       UNIQUE (user_id, profile_id)
     )
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS operator_shift_commands (
+      user_id INTEGER NOT NULL,
+      profile_id TEXT NOT NULL DEFAULT 'default',
+      disconnect_requested_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, profile_id)
+    )
+  `);
 }
 
 export async function upsertLetterBotJob({
@@ -160,6 +169,40 @@ export async function deleteDreamCredentials(userId, profileId) {
   const db = getPool();
   await db.query(
     `DELETE FROM dream_credentials WHERE user_id = $1 AND profile_id = $2`,
+    [Number(userId), String(profileId || "default")],
+  );
+}
+
+export async function requestOperatorShiftDisconnect(userId, profileId) {
+  const db = getPool();
+  await db.query(
+    `INSERT INTO operator_shift_commands (user_id, profile_id, disconnect_requested_at, updated_at)
+     VALUES ($1, $2, NOW(), NOW())
+     ON CONFLICT (user_id, profile_id) DO UPDATE SET
+       disconnect_requested_at = NOW(),
+       updated_at = NOW()`,
+    [Number(userId), String(profileId || "default")],
+  );
+}
+
+export async function getOperatorShiftDisconnectRequest(userId, profileId) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT disconnect_requested_at
+     FROM operator_shift_commands
+     WHERE user_id = $1 AND profile_id = $2
+     LIMIT 1`,
+    [Number(userId), String(profileId || "default")],
+  );
+  return result.rows[0]?.disconnect_requested_at || null;
+}
+
+export async function clearOperatorShiftDisconnect(userId, profileId) {
+  const db = getPool();
+  await db.query(
+    `UPDATE operator_shift_commands
+     SET disconnect_requested_at = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND profile_id = $2`,
     [Number(userId), String(profileId || "default")],
   );
 }

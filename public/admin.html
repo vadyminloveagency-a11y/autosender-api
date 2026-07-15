@@ -160,6 +160,13 @@
       border-color: rgba(255, 120, 140, 0.35);
     }
     .stop-btn:hover:not(:disabled) { color: #ffd0d8; }
+    .logout-profile-btn {
+      color: #ffd56a;
+      border-color: rgba(255, 193, 7, 0.35);
+      margin-top: 4px;
+    }
+    .logout-profile-btn:hover:not(:disabled) { color: #ffe59a; }
+    .action-cell { min-width: 108px; }
     .mailings-empty {
       color: #8ea8cc;
       font-size: 12px;
@@ -397,7 +404,10 @@
               <td>${job.profileId}</td>
               <td>${job.filter || "—"}</td>
               <td>${formatProgress(job)}</td>
-              <td><button type="button" class="stop-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Stop</button></td>
+              <td class="action-cell">
+                <button type="button" class="stop-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Stop</button>
+                <button type="button" class="logout-profile-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Вылогинить анкету</button>
+              </td>
             `;
             bodyEl.appendChild(tr);
           }
@@ -512,6 +522,26 @@
       setStatus("");
     });
 
+    async function forceLogoutProfile(userId, profileId, button) {
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = "Logging out…";
+      setStatus("Stopping and logging out profile...");
+      try {
+        await api("/letterbot/admin/disconnect-shift", {
+          method: "POST",
+          body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
+        });
+        setStatus("Mailing stopped — profile logout sent to operator", "ok");
+        await refreshMailings({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+      }
+    }
+
     document.getElementById("toggle-bootstrap").addEventListener("click", (event) => {
       event.preventDefault();
       showView("bootstrap");
@@ -529,13 +559,23 @@
     });
 
     document.getElementById("mailings-body").addEventListener("click", (event) => {
-      const button = event.target.closest(".stop-btn");
-      if (!button) return;
-      const userId = button.getAttribute("data-user-id");
-      const profileId = button.getAttribute("data-profile-id");
-      if (!userId) return;
-      if (!window.confirm(`Stop mailing for profile ${profileId}?`)) return;
-      void forceStopMailing(userId, profileId, button);
+      const stopBtn = event.target.closest(".stop-btn");
+      if (stopBtn) {
+        const userId = stopBtn.getAttribute("data-user-id");
+        const profileId = stopBtn.getAttribute("data-profile-id");
+        if (!userId) return;
+        if (!window.confirm(`Stop mailing for profile ${profileId}?`)) return;
+        void forceStopMailing(userId, profileId, stopBtn);
+        return;
+      }
+      const logoutBtn = event.target.closest(".logout-profile-btn");
+      if (logoutBtn) {
+        const userId = logoutBtn.getAttribute("data-user-id");
+        const profileId = logoutBtn.getAttribute("data-profile-id");
+        if (!userId) return;
+        if (!window.confirm(`Stop mailing and logout profile ${profileId} on operator Chrome?`)) return;
+        void forceLogoutProfile(userId, profileId, logoutBtn);
+      }
     });
 
     init();
