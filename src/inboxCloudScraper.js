@@ -203,6 +203,27 @@ function extractFemaleIdFromHtml(html) {
   return null;
 }
 
+/** Resolve female questionnaire id from an authenticated Dream session. */
+export async function resolveDreamFemaleProfileId(cookieHeader) {
+  const header = String(cookieHeader || "").trim();
+  if (!header) return null;
+
+  const urls = [
+    `${ORIGIN}/members/messaging/inbox`,
+    `${ORIGIN}/members/`,
+    `${ORIGIN}/members/profile`,
+  ];
+  for (const url of urls) {
+    try {
+      const page = await dreamFetch({ value: header }, url, { acceptJson: false, timeoutMs: 20000 });
+      const html = page.text || "";
+      const id = extractFemaleIdFromHtml(html);
+      if (id) return id;
+    } catch (_) {}
+  }
+  return null;
+}
+
 function extractEmbeddedInboxJson(html) {
   const text = String(html || "");
   const match =

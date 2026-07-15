@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { initDb } from "./db.js";
 import authRoutes from "./routes/auth.js";
+import profilesRoutes from "./routes/profiles.js";
+import { ensureAgencyProfileTables } from "./agencyProfileStore.js";
 import favoritesRoutes from "./routes/favorites.js";
 import inboxRoutes from "./routes/inbox.js";
 import letterbotRoutes, { restoreRunningLetterBotJobs } from "./routes/letterbot.js";
@@ -38,6 +40,7 @@ app.get("/admin", (_req, res) => {
 app.use(express.static(path.join(__dirname, "../public")));
 
 app.use("/auth", authRoutes);
+app.use("/profiles", profilesRoutes);
 app.use("/favorites", favoritesRoutes);
 app.use("/inbox", inboxRoutes);
 app.use("/letterbot", letterbotRoutes);
@@ -46,6 +49,7 @@ app.use("/sender-reads", senderReadsRoutes);
 async function start() {
   await initDb();
   await ensureLetterBotTables();
+  await ensureAgencyProfileTables();
   await ensureSenderReadsTables();
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port}`);

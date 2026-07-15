@@ -166,6 +166,17 @@
       margin-top: 4px;
     }
     .logout-profile-btn:hover:not(:disabled) { color: #ffe59a; }
+    .scan-btn {
+      color: #7dffb8;
+      border-color: rgba(46, 204, 113, 0.35);
+      margin-top: 4px;
+    }
+    .scan-btn:hover:not(:disabled) { color: #a8ffd0; }
+    .delete-btn {
+      color: #ff8a9a;
+      border-color: rgba(255, 120, 140, 0.35);
+      margin-top: 4px;
+    }
     .action-cell { min-width: 108px; }
     .mailings-empty {
       color: #8ea8cc;
@@ -323,6 +334,50 @@
         </div>
       </div>
 
+      <div class="operators-card">
+        <div class="mailings-head">
+          <h2>Анкеты (Dream)</h2>
+          <button type="button" id="refresh-profiles-btn" class="refresh-btn">Обновить</button>
+        </div>
+        <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Назначьте оператора.</p>
+        <div class="section-title">Новая анкета</div>
+        <div class="field">
+          <input id="profile-dream-login" type="text" placeholder=" ">
+          <label for="profile-dream-login">Логин Dream</label>
+        </div>
+        <div class="field">
+          <input id="profile-dream-password" type="password" placeholder=" ">
+          <label for="profile-dream-password">Пароль Dream</label>
+        </div>
+        <div class="field">
+          <input id="profile-display-name" type="text" placeholder=" ">
+          <label for="profile-display-name">Имя (необязательно)</label>
+        </div>
+        <div class="field">
+          <select id="profile-assigned-operator" style="width:100%;min-height:46px;padding:12px;border:1px solid rgba(120,170,255,.28);border-radius:8px;background:rgba(8,16,32,.85);color:#eef4ff;">
+            <option value="">— оператор не назначен —</option>
+          </select>
+        </div>
+        <button type="button" id="create-profile-btn">Добавить анкету</button>
+        <div id="profiles-empty" class="mailings-empty hidden">Анкет пока нет.</div>
+        <div id="profiles-wrap" class="hidden" style="margin-top:12px">
+          <table class="mailings-table operators-table">
+            <thead>
+              <tr>
+                <th>Анкета</th>
+                <th>ID</th>
+                <th>Логин Dream</th>
+                <th>Пароль</th>
+                <th>Оператор</th>
+                <th>В базе</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="profiles-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="mailings-card">
         <div class="mailings-head">
           <h2>Active LetterBot mailings</h2>
@@ -355,6 +410,7 @@
     const API = window.location.origin;
     let token = localStorage.getItem("autosenderAdminToken") || "";
     let mailingsTimer = null;
+    let cachedOperators = [];
 
     const views = {
       bootstrap: document.getElementById("bootstrap-view"),
@@ -398,6 +454,7 @@
       showView("panel");
       setStatus("");
       void refreshOperators();
+      void refreshProfiles();
       void refreshMailings();
       if (mailingsTimer) clearInterval(mailingsTimer);
       mailingsTimer = setInterval(() => {
@@ -428,6 +485,8 @@
       try {
         const data = await api("/auth/operators");
         const operators = Array.isArray(data.operators) ? data.operators : [];
+        cachedOperators = operators;
+        paintOperatorSelect();
         bodyEl.innerHTML = "";
         if (!operators.length) {
           emptyEl.classList.remove("hidden");
@@ -452,6 +511,109 @@
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
+      }
+    }
+
+    function paintOperatorSelect(selectedId = "") {
+      const select = document.getElementById("profile-assigned-operator");
+      if (!select) return;
+      const current = String(selectedId || select.value || "");
+      select.innerHTML = '<option value="">— оператор не назначен —</option>';
+      for (const operator of cachedOperators) {
+        const option = document.createElement("option");
+        option.value = String(operator.id);
+        option.textContent = `${operator.name || operator.email} (${operator.email})`;
+        select.appendChild(option);
+      }
+      if (current) select.value = current;
+    }
+
+    async function refreshProfiles({ quiet = false } = {}) {
+      const emptyEl = document.getElementById("profiles-empty");
+      const wrapEl = document.getElementById("profiles-wrap");
+      const bodyEl = document.getElementById("profiles-body");
+      if (!quiet) setStatus("Загрузка анкет...");
+      try {
+        const data = await api("/profiles/admin/list");
+        const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+        bodyEl.innerHTML = "";
+        if (!profiles.length) {
+          emptyEl.classList.remove("hidden");
+          wrapEl.classList.add("hidden");
+        } else {
+          emptyEl.classList.add("hidden");
+          wrapEl.classList.remove("hidden");
+          for (const profile of profiles) {
+            const tr = document.createElement("tr");
+            const operatorLabel = profile.assignedOperatorEmail
+              ? `${profile.assignedOperatorName || ""}<br><span style="color:#8ea8cc">${escapeHtml(profile.assignedOperatorEmail)}</span>`
+              : '<span style="color:#8ea8cc">не назначен</span>';
+            const password = profile.password
+              ? `<code>${escapeHtml(profile.password)}</code>`
+              : '<span style="color:#8ea8cc">—</span>';
+            tr.innerHTML = `
+              <td>${escapeHtml(profile.displayName || "—")}</td>
+              <td>${profile.femaleProfileId || "—"}</td>
+              <td><code>${escapeHtml(profile.dreamUsername || "—")}</code></td>
+              <td>${password}</td>
+              <td>${operatorLabel}</td>
+              <td>${profile.inboxMenCount || 0}</td>
+              <td class="action-cell">
+                <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
+                <button type="button" class="scan-btn profile-scanall-btn" data-profile-id="${profile.id}">Scan All</button>
+                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Удалить</button>
+              </td>
+            `;
+            bodyEl.appendChild(tr);
+          }
+        }
+        if (!quiet) setStatus("");
+      } catch (error) {
+        if (!quiet) setStatus(error.message, "error");
+      }
+    }
+
+    async function createProfile() {
+      setStatus("Проверка логина Dream...");
+      try {
+        const assignedUserId = document.getElementById("profile-assigned-operator").value;
+        await api("/profiles/admin", {
+          method: "POST",
+          body: JSON.stringify({
+            dreamUsername: document.getElementById("profile-dream-login").value,
+            password: document.getElementById("profile-dream-password").value,
+            displayName: document.getElementById("profile-display-name").value,
+            assignedUserId: assignedUserId ? Number(assignedUserId) : null,
+          }),
+        });
+        document.getElementById("profile-dream-login").value = "";
+        document.getElementById("profile-dream-password").value = "";
+        document.getElementById("profile-display-name").value = "";
+        document.getElementById("profile-assigned-operator").value = "";
+        setStatus("Анкета добавлена", "ok");
+        await refreshProfiles({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }
+
+    async function scanProfile(profileId, maxPages, button) {
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = maxPages === 0 ? "Scan All…" : "Update…";
+      setStatus(maxPages === 0 ? "Scan All..." : "Update...");
+      try {
+        const data = await api(`/profiles/admin/${profileId}/scan`, {
+          method: "POST",
+          body: JSON.stringify({ maxPages }),
+        });
+        setStatus(`Готово: ${data.men || 0} мужчин, в базе +${data.added || 0}`, "ok");
+        await refreshProfiles({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
       }
     }
 
@@ -649,6 +811,46 @@
 
     document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
       void refreshMailings();
+    });
+
+    document.getElementById("create-profile-btn").addEventListener("click", () => {
+      void createProfile();
+    });
+
+    document.getElementById("refresh-profiles-btn").addEventListener("click", () => {
+      void refreshProfiles();
+    });
+
+    document.getElementById("profiles-body").addEventListener("click", (event) => {
+      const updateBtn = event.target.closest(".profile-update-btn");
+      if (updateBtn) {
+        const profileId = updateBtn.getAttribute("data-profile-id");
+        if (profileId) void scanProfile(profileId, 3, updateBtn);
+        return;
+      }
+      const scanAllBtn = event.target.closest(".profile-scanall-btn");
+      if (scanAllBtn) {
+        const profileId = scanAllBtn.getAttribute("data-profile-id");
+        if (!profileId) return;
+        if (!window.confirm("Scan All — весь инбокс в базу?")) return;
+        void scanProfile(profileId, 0, scanAllBtn);
+        return;
+      }
+      const deleteBtn = event.target.closest(".profile-delete-btn");
+      if (deleteBtn) {
+        const profileId = deleteBtn.getAttribute("data-profile-id");
+        if (!profileId) return;
+        if (!window.confirm("Удалить анкету из кабинета? (данные в базе останутся)")) return;
+        void (async () => {
+          try {
+            await api(`/profiles/admin/${profileId}`, { method: "DELETE" });
+            setStatus("Анкета удалена", "ok");
+            await refreshProfiles({ quiet: true });
+          } catch (error) {
+            setStatus(error.message, "error");
+          }
+        })();
+      }
     });
 
     document.getElementById("refresh-operators-btn").addEventListener("click", () => {
