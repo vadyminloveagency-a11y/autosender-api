@@ -270,41 +270,52 @@ export class SenderReadsWorker {
   }
 
   async ensureSession() {
+    const probeUrl =
+      this.channel === "online"
+        ? `${ONLINE_URL}?online=men&page=1`
+        : `${READS_URL}?mode=sent&page=1&returnJson=1&view=read`;
+
     if (this.cookieHeader) {
       try {
-        const res = await this.dreamFetch(
-          `${READS_URL}?mode=sent&page=1&returnJson=1&view=read`,
-          { method: "GET" },
-        );
+        const res = await this.dreamFetch(probeUrl, { method: "GET" });
         if (res.ok || res.status === 200) {
           const text = await res.text().catch(() => "");
-          if (!/id=["']loginform2["']/i.test(text) && !/\/login_check/i.test(text)) {
-            return;
-          }
+          const finalUrl = String(res.url || "");
+          const looksLogin =
+            /id=["']loginform2["']/i.test(text) ||
+            /\/login(?:[/?#]|$)/i.test(finalUrl) ||
+            res.status === 401 ||
+            res.status === 403;
+          if (!looksLogin) return;
         }
       } catch (_) {}
     }
 
     if (!this.credentialsProvider) {
       throw new Error(
-        "Save Dream login in LetterBot cloud first" +
-          (hasTwoCaptcha() || hasDreamProxy()
-            ? ""
-            : " and set TWOCAPTCHA_API_KEY on the server"),
+        "Dream session expired — open dream-singles.com in Chrome and Start again, or save Cloud Dream login in LetterBot",
       );
     }
     const creds = await this.credentialsProvider();
     if (!creds?.username || !creds?.password) {
-      throw new Error("Save Dream login in LetterBot cloud first");
+      throw new Error(
+        "Dream session expired — open dream-singles.com in Chrome and Start again, or save Cloud Dream login in LetterBot",
+      );
     }
     try {
       const { cookieHeader } = await dreamLogin(creds.username, creds.password);
       this.setCookieHeader(cookieHeader);
     } catch (error) {
       const msg = String(error?.message || error);
+      if (!hasTwoCaptcha() && !hasDreamProxy() && /captcha/i.test(msg)) {
+        throw new Error(
+          "Dream re-login needs captcha from server IP — set TWOCAPTCHA_API_KEY on Render (or open Chrome and Start with a live session)",
+        );
+      }
       if (!hasTwoCaptcha() && !hasDreamProxy()) {
         throw new Error(
-          "Cloud Reads needs TWOCAPTCHA_API_KEY (or DREAM_PROXY_URL) — Hetzner IP hits Dream captcha",
+          msg ||
+            "Dream re-login failed from server — set TWOCAPTCHA_API_KEY on Render or Start from Chrome while logged in",
         );
       }
       throw new Error(msg || "Dream login failed");

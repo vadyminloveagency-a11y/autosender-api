@@ -157,8 +157,10 @@ router.get("/capabilities", authMiddleware, async (_req, res) => {
     ok: true,
     hasProxy,
     hasCaptchaSolver,
-    cloudReads: hasProxy || hasCaptchaSolver,
-    cloudOnline: hasProxy || hasCaptchaSolver,
+    cookieFirst: true,
+    cloudReads: true,
+    cloudOnline: true,
+    reloginCaptcha: hasCaptchaSolver,
   });
 });
 
@@ -211,28 +213,17 @@ router.post("/start", authMiddleware, async (req, res) => {
   const channel = requireChannel(req, res);
   if (!channel) return;
   try {
+    const cookieHeader = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
     const creds = await getDreamCredentials(req.user.id, profileId);
-    if (!creds?.username) {
+    if (!cookieHeader && !creds?.username) {
       return res.status(400).json({
         ok: false,
-        error: "Save Dream credentials in LetterBot (cloud) first",
+        error:
+          "Open dream-singles.com in Chrome (cookies) or save Cloud Dream login in LetterBot",
         useLocal: true,
-      });
-    }
-    if (
-      !String(process.env.DREAM_PROXY_URL || "").trim() &&
-      !String(process.env.TWOCAPTCHA_API_KEY || "").trim()
-    ) {
-      return res.status(400).json({
-        ok: false,
-        error: "Set TWOCAPTCHA_API_KEY (or DREAM_PROXY_URL) on the API server for cloud Sender",
-        useLocal: true,
-        needsProxy: true,
-        needsCaptchaSolver: true,
       });
     }
     const worker = getWorker(req, profileId, channel);
-    const cookieHeader = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);
     if (cookieHeader) worker.setCookieHeader(cookieHeader);
     const existing = await getSenderReadsJob(req.user.id, storeProfileId(profileId, channel));
     const result = await worker.start({
