@@ -100,6 +100,18 @@ export async function getAgencyProfileAssignedToUser(userId) {
   return result.rows[0] || null;
 }
 
+export async function listAgencyProfilesAssignedToUser(userId) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT *
+     FROM agency_profiles
+     WHERE assigned_user_id = $1
+     ORDER BY display_name ASC, dream_username ASC, id ASC`,
+    [Number(userId)],
+  );
+  return result.rows;
+}
+
 export async function getAgencyProfileSecrets(row) {
   if (!row) return null;
   let password = "";

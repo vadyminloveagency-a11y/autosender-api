@@ -3,6 +3,7 @@ import { adminMiddleware, authMiddleware } from "../auth.js";
 import {
   createAgencyProfile,
   deleteAgencyProfile,
+  listAgencyProfilesAssignedToUser,
   getAgencyProfileAssignedToUser,
   getAgencyProfileById,
   getAgencyProfileSecrets,
@@ -20,11 +21,15 @@ const router = express.Router();
 
 function mapPublicProfile(row) {
   if (!row) return null;
+  const femaleProfileId = row.female_profile_id ? Number(row.female_profile_id) : null;
   return {
     id: row.id,
-    femaleProfileId: row.female_profile_id ? Number(row.female_profile_id) : null,
+    femaleProfileId,
     displayName: row.display_name || "",
     dreamUsername: row.dream_username || "",
+    photoUrl: femaleProfileId
+      ? `https://profile-photos-cdn.dream-singles.com/im${femaleProfileId}_small.jpg`
+      : "",
     assignedUserId: row.assigned_user_id ? Number(row.assigned_user_id) : null,
   };
 }
@@ -184,26 +189,44 @@ router.post("/admin/:id/scan", adminMiddleware, async (req, res) => {
 
 router.get("/mine", authMiddleware, async (req, res) => {
   try {
-    const row = await getAgencyProfileAssignedToUser(req.user.id);
-    if (!row) {
-      return res.json({ ok: true, assigned: false, profile: null });
-    }
+    const rows = await listAgencyProfilesAssignedToUser(req.user.id);
+    const profiles = rows.map((row) => mapPublicProfile(row));
     return res.json({
       ok: true,
-      assigned: true,
-      profile: mapPublicProfile(row),
+      assigned: profiles.length > 0,
+      profiles,
+      profile: profiles[0] || null,
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ ok: false, error: error?.message || "Failed to load profile" });
+    return res.status(500).json({ ok: false, error: error?.message || "Failed to load profile", profiles: [] });
   }
 });
 
+async function resolveAssignedProfileRow(userId, agencyProfileId) {
+  const id = Number(agencyProfileId);
+  if (id) {
+    const row = await getAgencyProfileRowById(id);
+    if (!row || Number(row.assigned_user_id) !== Number(userId)) {
+      return null;
+    }
+    return row;
+  }
+  return getAgencyProfileAssignedToUser(userId);
+}
+
 router.post("/connect", authMiddleware, async (req, res) => {
   try {
-    const row = await getAgencyProfileAssignedToUser(req.user.id);
+    const row = await resolveAssignedProfileRow(req.user.id, req.body?.agencyProfileId);
     if (!row) {
-      return res.json({ ok: false, assigned: false, error: "No questionnaire assigned by director" });
+      const hasAny = (await listAgencyProfilesAssignedToUser(req.user.id)).length > 0;
+      return res.json({
+        ok: false,
+        assigned: hasAny,
+        error: hasAny
+          ? "Questionnaire not assigned to you"
+          : "No questionnaire assigned by director",
+      });
     }
 
     const secrets = await getAgencyProfileSecrets(row);
@@ -231,6 +254,7 @@ router.post("/connect", authMiddleware, async (req, res) => {
     return res.json({
       ok: true,
       assigned: true,
+      agencyProfileId: row.id,
       femaleProfileId,
       displayName: verified.displayName,
       photoUrl,
