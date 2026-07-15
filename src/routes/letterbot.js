@@ -1,5 +1,5 @@
 import express from "express";
-import { authMiddleware } from "../auth.js";
+import { adminMiddleware, authMiddleware } from "../auth.js";
 import { decryptSecret, encryptSecret, maskUsername } from "../cryptoUtil.js";
 import { withDreamGate } from "../dreamGate.js";
 import { dreamLogin } from "../dreamLogin.js";
@@ -9,7 +9,9 @@ import {
   ensureLetterBotTables,
   getDreamCredentials,
   getLetterBotJob,
+  getUserById,
   listRunningLetterBotJobs,
+  listRunningLetterBotJobsWithUsers,
   markLetterBotJobStopped,
   upsertDreamCredentials,
   upsertLetterBotJob,
@@ -330,6 +332,68 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
   };
 }
 
+function summarizeMailingJob(userId, profileId, state, user = {}) {
+  const progress = state?.progress && typeof state.progress === "object" ? state.progress : {};
+  const pct = Number(progress.percent);
+  return {
+    userId: Number(userId),
+    profileId: String(profileId || "default"),
+    operatorEmail: String(user.email || ""),
+    operatorName: String(user.name || ""),
+    sessionActive: Boolean(state?.sessionActive),
+    isPaused: Boolean(state?.isPaused),
+    filter: String(progress.filter || state?.filter || ""),
+    percent: Number.isFinite(pct) ? pct : null,
+    sent: progress.sent ?? null,
+    statusMessage: String(state?.statusMessage || ""),
+    updatedAt: state?.updatedAt || null,
+  };
+}
+
+async function listActiveMailingJobs() {
+  const byKey = new Map();
+
+  const rows = await listRunningLetterBotJobsWithUsers();
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const profileId = String(row.profile_id || "default");
+    const key = workerKey(userId, profileId);
+    const live = workers.get(key);
+    const state = live ? live.getState() : row.state || {};
+    byKey.set(
+      key,
+      summarizeMailingJob(userId, profileId, state, {
+        email: row.email,
+        name: row.name,
+      }),
+    );
+  }
+
+  for (const [key, worker] of workers) {
+    if (byKey.has(key)) continue;
+    const state = worker.getState();
+    if (!state.sessionActive && !worker.senderRunning) continue;
+    const colon = key.indexOf(":");
+    if (colon <= 0) continue;
+    const userId = Number(key.slice(0, colon));
+    const profileId = key.slice(colon + 1);
+    const user = await getUserById(userId);
+    byKey.set(
+      key,
+      summarizeMailingJob(userId, profileId, state, {
+        email: user?.email || "",
+        name: user?.name || "",
+      }),
+    );
+  }
+
+  return [...byKey.values()].sort((a, b) => {
+    const au = Number(a.updatedAt) || 0;
+    const bu = Number(b.updatedAt) || 0;
+    return bu - au;
+  });
+}
+
 router.get("/status", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const state = await resolveLiveState(req.user.id, profileId);
@@ -430,6 +494,41 @@ router.post("/connect", authMiddleware, async (req, res) => {
       ok: false,
       error: error?.message || String(error),
       state: worker.getState(),
+    });
+  }
+});
+
+/** Director cabinet — list all operators with active cloud LetterBot mailings. */
+router.get("/admin/running", adminMiddleware, async (req, res) => {
+  try {
+    const jobs = await listActiveMailingJobs();
+    return res.json({ ok: true, jobs });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+      jobs: [],
+    });
+  }
+});
+
+/** Director cabinet — force-stop operator mailing (no operator Chrome required). */
+router.post("/admin/stop", adminMiddleware, async (req, res) => {
+  const userId = Number(req.body?.userId);
+  const profileId = String(req.body?.profileId || "default");
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "userId is required" });
+  }
+  try {
+    const state = await stopWorkerForProfile(userId, profileId, {
+      complete: Boolean(req.body?.complete),
+    });
+    return res.json({ ok: true, state, stopped: true });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error?.message || String(error),
+      state: idleState(profileId),
     });
   }
 });

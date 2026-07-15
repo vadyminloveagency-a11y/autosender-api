@@ -128,10 +128,75 @@
       text-decoration: none;
     }
     .link-row a:hover { text-decoration: underline; }
+    .mailings-card {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid rgba(120, 170, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(8, 16, 32, 0.55);
+    }
+    .mailings-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .mailings-head h2 {
+      margin: 0;
+      font-size: 14px;
+      color: #eef4ff;
+    }
+    .refresh-btn, .stop-btn {
+      width: auto;
+      min-height: 34px;
+      margin: 0;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .stop-btn {
+      color: #ffb4c0;
+      border-color: rgba(255, 120, 140, 0.35);
+    }
+    .stop-btn:hover:not(:disabled) { color: #ffd0d8; }
+    .mailings-empty {
+      color: #8ea8cc;
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 8px 0;
+    }
+    .mailings-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .mailings-table th,
+    .mailings-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid rgba(120, 170, 255, 0.12);
+      text-align: left;
+      vertical-align: top;
+    }
+    .mailings-table th {
+      color: #8ea8cc;
+      font-weight: 600;
+    }
+    .mailings-table td { color: #dbe8ff; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-running { background: rgba(46, 204, 113, 0.18); color: #7dffb8; }
+    .badge-paused { background: rgba(255, 193, 7, 0.16); color: #ffd56a; }
+    .card.wide { max-width: 920px; }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card wide">
     <h1>AutoSender Admin</h1>
     <p class="subtitle">For the agency owner / administrator only</p>
 
@@ -209,6 +274,29 @@
         <label for="operator-name">Name</label>
       </div>
       <button type="button" id="create-operator-btn">Create operator</button>
+
+      <div class="mailings-card">
+        <div class="mailings-head">
+          <h2>Active LetterBot mailings</h2>
+          <button type="button" id="refresh-mailings-btn" class="refresh-btn">Refresh</button>
+        </div>
+        <div id="mailings-empty" class="mailings-empty hidden">No active mailings right now.</div>
+        <div id="mailings-wrap" class="hidden">
+          <table class="mailings-table">
+            <thead>
+              <tr>
+                <th>Operator</th>
+                <th>Profile</th>
+                <th>Filter</th>
+                <th>Progress</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="mailings-body"></tbody>
+          </table>
+        </div>
+      </div>
+
       <button type="button" id="logout-btn" class="logout">Logout</button>
     </div>
 
@@ -218,6 +306,7 @@
   <script>
     const API = window.location.origin;
     let token = localStorage.getItem("autosenderAdminToken") || "";
+    let mailingsTimer = null;
 
     const views = {
       bootstrap: document.getElementById("bootstrap-view"),
@@ -260,6 +349,83 @@
       document.getElementById("admin-label").textContent = `Signed in as ${user.email}`;
       showView("panel");
       setStatus("");
+      void refreshMailings();
+      if (mailingsTimer) clearInterval(mailingsTimer);
+      mailingsTimer = setInterval(() => {
+        void refreshMailings({ quiet: true });
+      }, 10000);
+    }
+
+    function formatOperator(job) {
+      const name = String(job.operatorName || "").trim();
+      const email = String(job.operatorEmail || "").trim();
+      if (name && email) return `${name}<br><span style="color:#8ea8cc">${email}</span>`;
+      return email || `User #${job.userId}`;
+    }
+
+    function formatProgress(job) {
+      const pct = job.percent != null ? `${job.percent}%` : "—";
+      const sent = job.sent != null ? `SENT ${job.sent}` : "";
+      return `${pct}${sent ? `<br>${sent}` : ""}`;
+    }
+
+    function statusBadge(job) {
+      if (job.isPaused) return '<span class="badge badge-paused">Paused</span>';
+      if (job.sessionActive) return '<span class="badge badge-running">Sending</span>';
+      return '<span class="badge">Unknown</span>';
+    }
+
+    async function refreshMailings({ quiet = false } = {}) {
+      const emptyEl = document.getElementById("mailings-empty");
+      const wrapEl = document.getElementById("mailings-wrap");
+      const bodyEl = document.getElementById("mailings-body");
+      if (!quiet) setStatus("Loading mailings...");
+      try {
+        const data = await api("/letterbot/admin/running");
+        const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+        bodyEl.innerHTML = "";
+        if (!jobs.length) {
+          emptyEl.classList.remove("hidden");
+          wrapEl.classList.add("hidden");
+        } else {
+          emptyEl.classList.add("hidden");
+          wrapEl.classList.remove("hidden");
+          for (const job of jobs) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td>${formatOperator(job)}<br>${statusBadge(job)}</td>
+              <td>${job.profileId}</td>
+              <td>${job.filter || "—"}</td>
+              <td>${formatProgress(job)}</td>
+              <td><button type="button" class="stop-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Stop</button></td>
+            `;
+            bodyEl.appendChild(tr);
+          }
+        }
+        if (!quiet) setStatus("");
+      } catch (error) {
+        if (!quiet) setStatus(error.message, "error");
+      }
+    }
+
+    async function forceStopMailing(userId, profileId, button) {
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = "Stopping…";
+      setStatus("Stopping mailing...");
+      try {
+        await api("/letterbot/admin/stop", {
+          method: "POST",
+          body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
+        });
+        setStatus("Mailing stopped", "ok");
+        await refreshMailings({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+      }
     }
 
     async function init() {
@@ -337,6 +503,10 @@
     });
 
     document.getElementById("logout-btn").addEventListener("click", () => {
+      if (mailingsTimer) {
+        clearInterval(mailingsTimer);
+        mailingsTimer = null;
+      }
       clearSession();
       showView("login");
       setStatus("");
@@ -352,6 +522,20 @@
       event.preventDefault();
       showView("login");
       setStatus("");
+    });
+
+    document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
+      void refreshMailings();
+    });
+
+    document.getElementById("mailings-body").addEventListener("click", (event) => {
+      const button = event.target.closest(".stop-btn");
+      if (!button) return;
+      const userId = button.getAttribute("data-user-id");
+      const profileId = button.getAttribute("data-profile-id");
+      if (!userId) return;
+      if (!window.confirm(`Stop mailing for profile ${profileId}?`)) return;
+      void forceStopMailing(userId, profileId, button);
     });
 
     init();
