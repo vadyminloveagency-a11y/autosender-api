@@ -1,6 +1,7 @@
 import express from "express";
 import { adminMiddleware, authMiddleware } from "../auth.js";
 import { decryptSecret } from "../cryptoUtil.js";
+import { dreamLogin } from "../dreamLogin.js";
 import { getDreamCredentials, getUserById } from "../letterbotStore.js";
 import {
   ensureSenderReadsTables,
@@ -225,7 +226,19 @@ router.post("/start", authMiddleware, async (req, res) => {
       });
     }
     const worker = getWorker(req, profileId, channel);
-    if (cookieHeader) worker.setCookieHeader(cookieHeader);
+    // Online must survive Chrome / cabinet logout — prefer saved LetterBot Dream login
+    // (fresh server session). Browser cookies are only a fallback when no creds saved.
+    if (channel === "online" && creds?.username && creds?.password) {
+      try {
+        const login = await dreamLogin(creds.username, creds.password);
+        worker.setCookieHeader(login.cookieHeader);
+      } catch (loginError) {
+        if (cookieHeader) worker.setCookieHeader(cookieHeader);
+        else throw loginError;
+      }
+    } else if (cookieHeader) {
+      worker.setCookieHeader(cookieHeader);
+    }
     const existing = await getSenderReadsJob(req.user.id, storeProfileId(profileId, channel));
     const result = await worker.start({
       text: req.body?.text,
@@ -236,6 +249,7 @@ router.post("/start", authMiddleware, async (req, res) => {
       excludeFavorites: req.body?.excludeFavorites,
       checkDuplicates: req.body?.checkDuplicates,
       readsFromDate: req.body?.readsFromDate,
+      resumeFrom: req.body?.resumeFrom,
       channel,
       direction: channel,
       dupes: Array.isArray(existing?.dupes) ? existing.dupes : [],

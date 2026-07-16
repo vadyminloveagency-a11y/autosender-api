@@ -1597,9 +1597,9 @@ export class SenderReadsWorker {
             continue;
           }
           const msg = String(error?.message || error || "");
-          // Transient Dream WS blips must not kill Online (same idea as LetterBot reconnect).
+          // Transient Dream WS / session blips must not kill Online (LetterBot-style).
           if (
-            /timeout|web\s*socket|men-online|jwt|closed|connection|ECONN|ENOTFOUND|socket/i.test(
+            /timeout|web\s*socket|men-online|jwt|closed|connection|ECONN|ENOTFOUND|socket|session|expired|auth|login|credentials|captcha/i.test(
               msg,
             )
           ) {
@@ -1608,6 +1608,14 @@ export class SenderReadsWorker {
               lastError: "",
             });
             this.closeOnlineWs();
+            try {
+              await this.ensureSession();
+            } catch (sessionError) {
+              this.emit({
+                statusMessage: `Dream re-login… (${sessionError?.message || sessionError})`,
+                lastError: "",
+              });
+            }
             await new Promise((r) => setTimeout(r, 5000));
             if (this.state.stopRequested || token !== this.runToken) break;
             continue;
@@ -1732,6 +1740,12 @@ export class SenderReadsWorker {
                 });
                 await this.persist(true);
               }
+            } else if (/session expired/i.test(String(error?.message || ""))) {
+              // Cabinet/Chrome logout can kill the cookie jar — re-login and retry this man.
+              this.emit({ statusMessage: "Dream session expired — re-login…" });
+              await this.ensureSession();
+              this.seenMemberIds.delete(String(maleProfileId));
+              continue;
             } else {
               const duped = await rememberDupeFromReject(error);
               this.emit({
@@ -1810,10 +1824,20 @@ export class SenderReadsWorker {
       }
 
       this.closeOnlineWs();
+      // Online is endless until Stop — never idle as "complete" after a normal loop exit.
+      if (token === this.runToken && this.state.running && !this.state.stopRequested) {
+        this.emit({ statusMessage: "Online cycle ended — restarting…" });
+        await this.persist(true);
+        await new Promise((r) => setTimeout(r, 3000));
+        if (token === this.runToken && !this.state.stopRequested) {
+          return this.runOnlineLoop(token, plain, filters, photoId, delayMs);
+        }
+      }
       if (token === this.runToken && this.state.running) {
         this.emit({
           ...this.idleState(this.state.stopRequested ? "Stopped" : "Online complete"),
           ...this.keepRunStats(),
+          statusMessage: this.state.stopRequested ? "Stopped" : "Online complete",
           channel: "online",
           direction: "online",
         });
@@ -1821,16 +1845,36 @@ export class SenderReadsWorker {
       await this.persist(false);
     } catch (error) {
       this.closeOnlineWs();
-      if (token === this.runToken) {
-        const msg = error?.message || String(error);
+      if (token !== this.runToken) return;
+      const msg = error?.message || String(error);
+      if (this.state.stopRequested) {
         this.emit({
-          ...this.idleState(msg || "Online failed"),
+          ...this.idleState("Stopped"),
           ...this.keepRunStats(),
-          lastError: msg,
+          statusMessage: "Stopped",
+          lastError: "",
           channel: "online",
           direction: "online",
         });
         await this.persist(false);
+        return;
+      }
+      // Survive unexpected errors (session death after cabinet logout, Render blips, …).
+      this.emit({
+        running: true,
+        paused: false,
+        statusMessage: `Online recovering… (${msg})`,
+        lastError: "",
+        channel: "online",
+        direction: "online",
+      });
+      await this.persist(true);
+      try {
+        await this.ensureSession();
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 8000));
+      if (token === this.runToken && !this.state.stopRequested) {
+        return this.runOnlineLoop(token, plain, filters, photoId, delayMs);
       }
     }
   }
