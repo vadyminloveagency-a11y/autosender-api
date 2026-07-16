@@ -37,14 +37,14 @@ const PRESETS = {
     excludeFavorites: true,
     checkDuplicates: true,
     onlineOnly: false,
-    enableCycling: false,
+    enableCycling: true,
     todayOnly: true,
   },
   readersTodayOnline: {
     excludeFavorites: true,
     checkDuplicates: true,
     onlineOnly: true,
-    enableCycling: false,
+    enableCycling: true,
     todayOnly: true,
   },
 };
@@ -1078,7 +1078,7 @@ export class SenderReadsWorker {
       let skipBad = 0;
       let skipSeen = 0;
       let skipOld = 0;
-      const readsFromDate = filters.todayOnly
+      let readsFromDate = filters.todayOnly
         ? String(this._readsFromDate || this.state.readsFromDate || "").trim()
         : "";
 
@@ -1297,7 +1297,10 @@ export class SenderReadsWorker {
         if (this.state.stopRequested || token !== this.runToken) break;
 
         const restartCycle = async () => {
-          if (this.state.sent === sentAtCycleStart) {
+          const emptyCycle = this.state.sent === sentAtCycleStart;
+          // Readers today (all day): empty pass → wait and re-scan from page 1 for
+          // new readers / newly online men. List grows as LetterBot keeps mailing.
+          if (emptyCycle && !filters.todayOnly) {
             this.emit({
               ...this.idleState(
                 `No new sends after cycle ${this.state.cycle}. Sent ${this.state.sent}, skipped ${this.state.skipped} (${skipSummary()}).`,
@@ -1307,14 +1310,32 @@ export class SenderReadsWorker {
             await this.persist(false);
             return false;
           }
+          if (emptyCycle && filters.todayOnly) {
+            this.emit({
+              statusMessage: `Cycle ${this.state.cycle}: waiting for new online readers…`,
+            });
+            await new Promise((r) => setTimeout(r, 20000));
+            if (this.state.stopRequested || token !== this.runToken) return false;
+          }
+          if (filters.todayOnly) {
+            const nextFd = formatDreamFdDate(Date.now());
+            if (nextFd && nextFd !== readsFromDate) {
+              readsFromDate = nextFd;
+              this._readsFromDate = nextFd;
+            }
+          }
           sentAtCycleStart = this.state.sent;
           this.seenMemberIds.clear();
           this.emit({
             cycle: this.state.cycle + 1,
-            statusMessage: `Cycle ${this.state.cycle + 1} restart…`,
+            page: 1,
+            readsFromDate: readsFromDate || undefined,
+            statusMessage: `Cycle ${this.state.cycle + 1} · page 1…`,
           });
           page = 1;
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) =>
+            setTimeout(r, emptyCycle && filters.todayOnly ? 500 : 3000),
+          );
           return true;
         };
 
