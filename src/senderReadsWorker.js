@@ -1498,7 +1498,7 @@ export class SenderReadsWorker {
       const timer = setTimeout(() => {
         cleanup();
         reject(new Error("men-online timeout"));
-      }, 15000);
+      }, 25000);
       const cleanup = () => {
         if (settled) return;
         settled = true;
@@ -1594,6 +1594,22 @@ export class SenderReadsWorker {
               statusMessage: `Rate limit — wait ${Math.ceil(error.retryMs / 1000)}s`,
             });
             await new Promise((r) => setTimeout(r, error.retryMs));
+            continue;
+          }
+          const msg = String(error?.message || error || "");
+          // Transient Dream WS blips must not kill Online (same idea as LetterBot reconnect).
+          if (
+            /timeout|web\s*socket|men-online|jwt|closed|connection|ECONN|ENOTFOUND|socket/i.test(
+              msg,
+            )
+          ) {
+            this.emit({
+              statusMessage: `Online list reconnecting… (${msg})`,
+              lastError: "",
+            });
+            this.closeOnlineWs();
+            await new Promise((r) => setTimeout(r, 5000));
+            if (this.state.stopRequested || token !== this.runToken) break;
             continue;
           }
           throw error;
