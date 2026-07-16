@@ -351,6 +351,9 @@ export class SenderReadsWorker {
           maxPages: this._jobMaxPages || 0,
           channel: this.channel || "read",
           direction: this.channel || "read",
+          excludeFavorites: this.state.excludeFavorites !== false,
+          checkDuplicates: this.state.checkDuplicates !== false,
+          favoritesExcludeIds: this._favoritesExcludeIds,
         },
         state: this.getState(),
         dupes: safeDupes,
@@ -900,6 +903,13 @@ export class SenderReadsWorker {
     this._jobText = plain;
     this._jobDelayMs = delayMs;
     this._jobMaxPages = maxPages;
+    this._favoritesExcludeIds = Array.isArray(selection.favoritesExcludeIds)
+      ? [
+          ...new Set(
+            selection.favoritesExcludeIds.map(Number).filter((id) => id >= 1000),
+          ),
+        ]
+      : null;
     // Dream fd= fixed at Start (UTC calendar day on server clock).
     const resumeFrom =
       selection.resumeFrom && typeof selection.resumeFrom === "object"
@@ -1041,8 +1051,11 @@ export class SenderReadsWorker {
           await this.persist(false);
           return;
         }
-        this.emit({ statusMessage: "Loading skip list…" });
-        favorites = await this.fetchFavoritesIds();
+        this.emit({ statusMessage: "Loading Favorites table…" });
+        favorites =
+          this._favoritesExcludeIds != null
+            ? new Set(this._favoritesExcludeIds)
+            : await this.fetchFavoritesIds();
         if (this.state.stopRequested || token !== this.runToken) {
           this.emit(this.idleState("Stopped"));
           await this.persist(false);
@@ -1050,7 +1063,7 @@ export class SenderReadsWorker {
         }
         this.emit({
           ...this.setFavoritesFetched(favorites),
-          statusMessage: `Skip list: ${favorites.size} (★ Favorites + already sent)`,
+          statusMessage: `Favorites table: ${favorites.size}`,
         });
       }
 
@@ -1551,8 +1564,11 @@ export class SenderReadsWorker {
           await this.persist(false);
           return;
         }
-        this.emit({ statusMessage: "Loading skip list…" });
-        favorites = await this.fetchFavoritesIdsFast();
+        this.emit({ statusMessage: "Loading Favorites table…" });
+        favorites =
+          this._favoritesExcludeIds != null
+            ? new Set(this._favoritesExcludeIds)
+            : await this.fetchFavoritesIdsFast();
         if (this.state.stopRequested || token !== this.runToken) {
           this.emit(this.idleState("Stopped"));
           await this.persist(false);
@@ -1560,7 +1576,7 @@ export class SenderReadsWorker {
         }
         this.emit({
           ...this.setFavoritesFetched(favorites),
-          statusMessage: `Skip list: ${favorites.size} (★ Favorites)`,
+          statusMessage: `Favorites table: ${favorites.size}`,
         });
       }
 
@@ -1895,6 +1911,7 @@ export class SenderReadsWorker {
       direction: channel,
       excludeFavorites: selection.excludeFavorites,
       checkDuplicates: selection.checkDuplicates,
+      favoritesExcludeIds: selection.favoritesExcludeIds,
       dupes: this.dupeList,
       resumeFrom: state,
     });

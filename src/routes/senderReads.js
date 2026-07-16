@@ -250,6 +250,9 @@ router.post("/start", authMiddleware, async (req, res) => {
       checkDuplicates: req.body?.checkDuplicates,
       readsFromDate: req.body?.readsFromDate,
       resumeFrom: req.body?.resumeFrom,
+      favoritesExcludeIds: Array.isArray(req.body?.favoritesExcludeIds)
+        ? req.body.favoritesExcludeIds
+        : undefined,
       channel,
       direction: channel,
       dupes: Array.isArray(existing?.dupes) ? existing.dupes : [],
