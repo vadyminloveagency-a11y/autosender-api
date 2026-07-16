@@ -909,7 +909,7 @@ export class SenderReadsWorker {
             selection.favoritesExcludeIds.map(Number).filter((id) => id >= 1000),
           ),
         ]
-      : null;
+      : [];
     // Dream fd= fixed at Start (UTC calendar day on server clock).
     const resumeFrom =
       selection.resumeFrom && typeof selection.resumeFrom === "object"
@@ -1052,10 +1052,11 @@ export class SenderReadsWorker {
           return;
         }
         this.emit({ statusMessage: "Loading Favorites table…" });
-        favorites =
-          this._favoritesExcludeIds != null
-            ? new Set(this._favoritesExcludeIds)
-            : await this.fetchFavoritesIds();
+        // Active+Gold IDs from extension Favorites table only — never Dream ★ scrape
+        // (site stars include men who are not in AutoSender Favorites / Last Man).
+        favorites = new Set(
+          Array.isArray(this._favoritesExcludeIds) ? this._favoritesExcludeIds : [],
+        );
         if (this.state.stopRequested || token !== this.runToken) {
           this.emit(this.idleState("Stopped"));
           await this.persist(false);
@@ -1565,10 +1566,10 @@ export class SenderReadsWorker {
           return;
         }
         this.emit({ statusMessage: "Loading Favorites table…" });
-        favorites =
-          this._favoritesExcludeIds != null
-            ? new Set(this._favoritesExcludeIds)
-            : await this.fetchFavoritesIdsFast();
+        // Active+Gold from extension Favorites UI only — never Dream ★ / WS favorites.
+        favorites = new Set(
+          Array.isArray(this._favoritesExcludeIds) ? this._favoritesExcludeIds : [],
+        );
         if (this.state.stopRequested || token !== this.runToken) {
           this.emit(this.idleState("Stopped"));
           await this.persist(false);
