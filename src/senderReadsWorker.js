@@ -1566,15 +1566,12 @@ export class SenderReadsWorker {
 
       const dupeSet = filters.checkDuplicates ? new Set(this.dupeList) : new Set();
       let page = Math.max(1, Number(this.state.page) || 1);
-      // After API restore mid-cycle, avoid false "no new sends" stop on first cycle end.
-      let sentAtCycleStart =
-        Number(this.state.sent) > 0 ? Number(this.state.sent) - 1 : 0;
       let skipFav = 0;
       let skipDupe = 0;
       let skipSeen = 0;
       const pageSoftCap = 100;
-      const gap = Math.max(200, Number(delayMs) || 1000);
-      let emptyRetries = 0;
+      // Consecutive pages with nobody new to mail → wrap + wait for fresh online men.
+      let barrenPages = 0;
 
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
@@ -1586,7 +1583,7 @@ export class SenderReadsWorker {
           onlineRows = Array.isArray(fetched?.rows) ? fetched.rows : [];
           this.emit({
             page,
-            statusMessage: `Cycle ${this.state.cycle} · page ${page}…`,
+            statusMessage: `Looking online · page ${page}…`,
           });
         } catch (error) {
           if (error?.retryMs) {
@@ -1597,7 +1594,6 @@ export class SenderReadsWorker {
             continue;
           }
           const msg = String(error?.message || error || "");
-          // Transient Dream WS / session blips must not kill Online (LetterBot-style).
           if (
             /timeout|web\s*socket|men-online|jwt|closed|connection|ECONN|ENOTFOUND|socket|session|expired|auth|login|credentials|captcha/i.test(
               msg,
@@ -1623,7 +1619,26 @@ export class SenderReadsWorker {
           throw error;
         }
 
+        // End of list or blank page → back to page 1 and keep watching.
+        if (!onlineRows.length) {
+          barrenPages += 1;
+          this.closeOnlineWs();
+          this.seenMemberIds.clear();
+          page = 1;
+          this.emit({
+            page: 1,
+            statusMessage:
+              barrenPages <= 2
+                ? `No online men on list — refresh ${barrenPages}…`
+                : `Waiting for new online men…`,
+          });
+          await new Promise((r) => setTimeout(r, barrenPages <= 2 ? 4000 : 12000));
+          if (this.state.stopRequested || token !== this.runToken) break;
+          continue;
+        }
+
         this.emit({ remaining: onlineRows.length });
+        let mailedThisPage = 0;
 
         for (const row of onlineRows) {
           if (this.state.stopRequested || token !== this.runToken) break;
@@ -1637,32 +1652,27 @@ export class SenderReadsWorker {
             continue;
           }
           if (this.seenMemberIds.has(String(maleProfileId))) {
-            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             skipSeen += 1;
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             continue;
           }
           if (filters.excludeFavorites && favorites.has(Number(maleProfileId) || 0)) {
+            this.seenMemberIds.add(String(maleProfileId));
+            skipFav += 1;
             this.emit({
               skipped: this.state.skipped + 1,
               ...this.rememberExcludedFav(maleProfileId),
               ...this.nextRemaining(),
             });
-            skipFav += 1;
             continue;
           }
 
           const hash = messageHash(maleProfileId, plain);
           if (filters.checkDuplicates && dupeSet.has(hash)) {
-            skipDupe += 1;
+            // Already mailed this letter — skip quietly on re-scan (don't inflate Failed).
             this.seenMemberIds.add(String(maleProfileId));
-            this.emit({
-              failed: this.state.failed + 1,
-              duplicates: (Number(this.state.duplicates) || 0) + 1,
-              failedIds: this.rememberId("failed", maleProfileId),
-              statusMessage: `Duplicate → ${maleProfileId}`,
-              lastError: "",
-              ...this.nextRemaining(),
-            });
+            skipDupe += 1;
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             continue;
           }
 
@@ -1688,6 +1698,8 @@ export class SenderReadsWorker {
               maleProfileId,
               linkMemberId,
             });
+            mailedThisPage += 1;
+            barrenPages = 0;
             this.emit({
               sent: this.state.sent + 1,
               lastError: "",
@@ -1714,6 +1726,8 @@ export class SenderReadsWorker {
                   maleProfileId,
                   linkMemberId,
                 });
+                mailedThisPage += 1;
+                barrenPages = 0;
                 this.emit({
                   sent: this.state.sent + 1,
                   lastError: "",
@@ -1741,7 +1755,6 @@ export class SenderReadsWorker {
                 await this.persist(true);
               }
             } else if (/session expired/i.test(String(error?.message || ""))) {
-              // Cabinet/Chrome logout can kill the cookie jar — re-login and retry this man.
               this.emit({ statusMessage: "Dream session expired — re-login…" });
               await this.ensureSession();
               this.seenMemberIds.delete(String(maleProfileId));
@@ -1768,58 +1781,28 @@ export class SenderReadsWorker {
         }
 
         this.emit({ remaining: 0 });
-
         if (this.state.stopRequested || token !== this.runToken) break;
 
-        const restartCycle = async () => {
-          const emptyCycle = this.state.sent === sentAtCycleStart;
-          // Keep Online watching — empty pass is normal; wait and re-scan page 1.
-          if (emptyCycle) {
-            if (emptyRetries < 3) {
-              emptyRetries += 1;
-              this.emit({
-                statusMessage: `Online list empty — retry ${emptyRetries}/3…`,
-              });
-              this.closeOnlineWs();
-              page = 1;
-              await new Promise((r) => setTimeout(r, 5000));
-              return true;
-            }
-            this.emit({
-              statusMessage: `Cycle ${this.state.cycle}: waiting for online men…`,
-            });
-            this.closeOnlineWs();
-            await new Promise((r) => setTimeout(r, 20000));
-            if (this.state.stopRequested || token !== this.runToken) return false;
-            emptyRetries = 0;
-          } else {
-            emptyRetries = 0;
-          }
-          sentAtCycleStart = this.state.sent;
-          this.seenMemberIds.clear();
-          this.emit({
-            cycle: this.state.cycle + 1,
-            page: 1,
-            statusMessage: `Cycle ${this.state.cycle + 1} · page 1…`,
-          });
-          page = 1;
-          await new Promise((r) => setTimeout(r, emptyCycle ? 500 : 3000));
-          return true;
-        };
+        if (mailedThisPage === 0) barrenPages += 1;
+        else barrenPages = 0;
 
-        // After WS→HTML smart fetch, empty still means no men — retry / next cycle.
-        if (!onlineRows.length) {
-          const ok = await restartCycle();
-          if (!ok) break;
-          continue;
-        }
-
-        emptyRetries = 0;
+        // Same as DreamAuto actionWorker: next page, wrap at soft cap.
         page += 1;
-        await new Promise((r) => setTimeout(r, 400));
-        if (page > pageSoftCap) {
-          const ok = await restartCycle();
-          if (!ok) break;
+        if (page > pageSoftCap || barrenPages >= 2) {
+          this.seenMemberIds.clear();
+          page = 1;
+          this.emit({
+            cycle: (Number(this.state.cycle) || 1) + 1,
+            page: 1,
+            statusMessage:
+              barrenPages >= 2
+                ? "Waiting for new online men…"
+                : `Cycle ${(Number(this.state.cycle) || 1) + 1} · looking…`,
+          });
+          await new Promise((r) => setTimeout(r, barrenPages >= 2 ? 10000 : 2500));
+          if (barrenPages >= 2) barrenPages = 0;
+        } else {
+          await new Promise((r) => setTimeout(r, 400));
         }
       }
 
