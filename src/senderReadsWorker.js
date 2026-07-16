@@ -1615,24 +1615,23 @@ export class SenderReadsWorker {
     });
   }
 
-  /** Prefer DreamAuto WS list; empty WS → HTML gallery (same as DreamAuto/actionWorker). */
+  /**
+   * DreamAuto MessageSender Online (default): WS men-online only.
+   * Empty WS page → treat as empty (caller restarts page 1) — do NOT walk HTML gallery.
+   * HTML gallery only when WebSocket itself fails (≈ doNotUseWebSocket / connection error).
+   */
   async fetchOnlineUsersPageSmart(page) {
     try {
       const rows = await this.fetchOnlineUsersPageViaWs(page);
-      if (Array.isArray(rows) && rows.length) {
-        return { rows, source: "ws" };
-      }
-      console.warn(
-        `[senderReads] Online WS page ${page} empty — HTML gallery fallback`,
-      );
+      return { rows: Array.isArray(rows) ? rows : [], source: "ws" };
     } catch (error) {
       console.warn(
         `[senderReads] Online WS page ${page} failed, HTML fallback:`,
         error?.message || error,
       );
       this.closeOnlineWs();
+      return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
     }
-    return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
   }
 
   async runOnlineLoop(token, plain, filters, photoId, delayMs) {
@@ -1678,17 +1677,19 @@ export class SenderReadsWorker {
         await this.waitWhilePaused(token);
         if (this.state.stopRequested || token !== this.runToken) break;
 
-        this.emit({
-          page,
-          statusMessage: `Cycle ${this.state.cycle} · Online page ${page}…`,
-        });
-
         let onlineRows = [];
         let onlineSource = "ws";
         try {
           const fetched = await this.fetchOnlineUsersPageSmart(page);
           onlineRows = Array.isArray(fetched?.rows) ? fetched.rows : [];
           onlineSource = fetched?.source === "html" ? "html" : "ws";
+          this.emit({
+            page,
+            statusMessage:
+              onlineSource === "html"
+                ? `Cycle ${this.state.cycle} · HTML gallery page ${page} (${onlineRows.length})…`
+                : `Cycle ${this.state.cycle} · Dream WS page ${page} (${onlineRows.length})…`,
+          });
         } catch (error) {
           if (error?.retryMs) {
             this.emit({
