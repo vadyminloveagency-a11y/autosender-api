@@ -7,7 +7,6 @@ import WebSocket from "ws";
 const ORIGIN = "https://www.dream-singles.com";
 const READS_URL = `${ORIGIN}/members/messaging/inbox`;
 const FAVORITES_URL = `${ORIGIN}/members/connections/myFavorites`;
-const ONLINE_URL = `${ORIGIN}/gallery/results`;
 const DREAM_WS_URL = "wss://ws.dream-singles.com/ws";
 const DUPES_MAX = 8000;
 
@@ -152,42 +151,6 @@ function isReadOnlineEligible(message, onlineOnly) {
 
 function normalizeChannel(value) {
   return String(value || "").toLowerCase() === "online" ? "online" : "read";
-}
-
-/** DreamAuto Online Users HTML fallback: a.profile-link[data-profile_id] */
-function parseOnlineUsersHtml(html) {
-  const ids = [];
-  const seen = new Set();
-  const re = /<a\b[^>]*>/gi;
-  let match;
-  while ((match = re.exec(String(html || "")))) {
-    const tag = match[0];
-    if (!/\bprofile-link\b/i.test(tag)) continue;
-    const idMatch =
-      tag.match(/\bdata-profile_id=["'](\d+)["']/i) ||
-      tag.match(/\bdata-profile-id=["'](\d+)["']/i);
-    const hrefMatch =
-      tag.match(/\bhref=["'](?:https?:\/\/(?:www\.)?dream-singles\.com)?\/(\d+)\.html[^"']*["']/i) ||
-      tag.match(/\bhref=["']\/(\d+)\.html[^"']*["']/i);
-    if (!idMatch && !hrefMatch) continue;
-    const id = Number(idMatch?.[1] || hrefMatch?.[1]) || 0;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    ids.push(id);
-  }
-  // Absolute / bare id links without profile-link class (Dream DOM drifts).
-  if (!ids.length) {
-    const loose = String(html || "").matchAll(
-      /data-profile_id=["'](\d+)["']|href=["'](?:https?:\/\/[^"']+)?\/(\d+)\.html/gi,
-    );
-    for (const m of loose) {
-      const id = Number(m[1] || m[2]) || 0;
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      ids.push(id);
-    }
-  }
-  return ids;
 }
 
 /** DreamAuto men-online-response row → profile id + compose member id */
@@ -401,7 +364,7 @@ export class SenderReadsWorker {
   async ensureSession() {
     const probeUrl =
       this.channel === "online"
-        ? `${ONLINE_URL}?online=men&page=1`
+        ? `${ORIGIN}/members/jwtToken`
         : `${READS_URL}?mode=sent&page=1&returnJson=1&view=read`;
 
     if (this.cookieHeader) {
@@ -1409,54 +1372,6 @@ export class SenderReadsWorker {
     }
   }
 
-  async fetchOnlineUsersPage(page) {
-    const url = `${ONLINE_URL}?online=men&page=${Math.max(1, Number(page) || 1)}`;
-    const response = await this.dreamFetch(url, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        Referer: `${ORIGIN}/gallery/results?online=men`,
-      },
-    });
-    if (response.status === 401 || response.status === 403) {
-      throw new Error("Dream session expired — re-save credentials");
-    }
-    if (response.status === 429) {
-      const retryAfter = Number(response.headers.get("Retry-After") || 60);
-      const err = new Error("Rate limit reached");
-      err.retryMs = Math.max(5, retryAfter) * 1000;
-      throw err;
-    }
-    if (!response.ok) throw new Error(`Online page HTTP ${response.status}`);
-
-    // Refuse wrong targets — same guards as Chrome Online channel.
-    const finalUrl = String(response.url || url);
-    if (/messaging\/inbox|mode=sent|view=read|\/login/i.test(finalUrl)) {
-      throw new Error(
-        `Online refused redirect to ${finalUrl.slice(0, 120)} — gallery?online=men only`,
-      );
-    }
-    if (!/gallery\/results/i.test(finalUrl) || !/online=men/i.test(finalUrl)) {
-      throw new Error(
-        `Online refused page ${finalUrl.slice(0, 120)} — must be gallery?online=men`,
-      );
-    }
-
-    const html = await response.text();
-    const raw = String(html || "");
-    if (
-      /"sender_pid"\s*:|"link_read"\s*:|"messages"\s*:\s*\[|mode=sent&(?:amp;)?view=read|messaging\/inbox\?mode=sent/i.test(
-        raw,
-      )
-    ) {
-      throw new Error("Online refused Reads/Inbox payload — gallery Online Users only");
-    }
-    if (/id=["']loginform2["']/i.test(raw) || /\/login_check/i.test(raw)) {
-      throw new Error("Dream session expired — re-save credentials");
-    }
-
-    return parseOnlineUsersHtml(html).map((id) => ({ id, memberId: "" }));
-  }
-
   async fetchInviteJwt() {
     // DreamAuto / actionWorker: /members/jwtToken (raw token text).
     try {
@@ -1475,7 +1390,6 @@ export class SenderReadsWorker {
     const urls = [
       `${ORIGIN}/members/messaging/bot/send`,
       `${ORIGIN}/members/`,
-      `${ONLINE_URL}?online=men`,
     ];
     for (const url of urls) {
       try {
@@ -1616,22 +1530,11 @@ export class SenderReadsWorker {
   }
 
   /**
-   * DreamAuto MessageSender Online (default): WS men-online only.
-   * Empty WS page → treat as empty (caller restarts page 1) — do NOT walk HTML gallery.
-   * HTML gallery only when WebSocket itself fails (≈ doNotUseWebSocket / connection error).
+   * Online list: WebSocket men-online only (no HTML gallery fallback).
    */
   async fetchOnlineUsersPageSmart(page) {
-    try {
-      const rows = await this.fetchOnlineUsersPageViaWs(page);
-      return { rows: Array.isArray(rows) ? rows : [], source: "ws" };
-    } catch (error) {
-      console.warn(
-        `[senderReads] Online WS page ${page} failed, HTML fallback:`,
-        error?.message || error,
-      );
-      this.closeOnlineWs();
-      return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
-    }
+    const rows = await this.fetchOnlineUsersPageViaWs(page);
+    return { rows: Array.isArray(rows) ? rows : [], source: "ws" };
   }
 
   async runOnlineLoop(token, plain, filters, photoId, delayMs) {
@@ -1678,11 +1581,9 @@ export class SenderReadsWorker {
         if (this.state.stopRequested || token !== this.runToken) break;
 
         let onlineRows = [];
-        let onlineSource = "ws";
         try {
           const fetched = await this.fetchOnlineUsersPageSmart(page);
           onlineRows = Array.isArray(fetched?.rows) ? fetched.rows : [];
-          onlineSource = fetched?.source === "html" ? "html" : "ws";
           this.emit({
             page,
             statusMessage: `Cycle ${this.state.cycle} · page ${page}…`,
