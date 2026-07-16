@@ -194,7 +194,11 @@ function parseOnlineUsersHtml(html) {
 function parseMenOnlinePayload(payload) {
   const rows = [];
   const seen = new Set();
-  for (const row of Array.isArray(payload) ? payload : []) {
+  let list = payload;
+  if (!Array.isArray(list) && list && typeof list === "object") {
+    list = list.users || list.data || list.men || list.payload || list.items || [];
+  }
+  for (const row of Array.isArray(list) ? list : []) {
     const id = Number(row?.id || row?.profile_id || row?.regularId) || 0;
     const memberId = String(row?.member_id || row?.memberId || "").trim();
     if (!id || seen.has(id)) continue;
@@ -202,6 +206,25 @@ function parseMenOnlinePayload(payload) {
     rows.push({ id, memberId });
   }
   return rows;
+}
+
+function normalizeInviteJwt(raw) {
+  let token = String(raw || "").trim();
+  if (!token) return "";
+  if (
+    (token.startsWith('"') && token.endsWith('"')) ||
+    (token.startsWith("'") && token.endsWith("'"))
+  ) {
+    token = token.slice(1, -1).trim();
+  }
+  try {
+    if (token.startsWith("{")) {
+      const obj = JSON.parse(token);
+      token = String(obj.token || obj.jwt || obj.jwtKey || obj.payload || "").trim();
+    }
+  } catch (_) {}
+  if (token.length < 20 || token.startsWith("<")) return "";
+  return token;
 }
 
 export class SenderReadsWorker {
@@ -1444,8 +1467,8 @@ export class SenderReadsWorker {
         },
       });
       if (response.ok) {
-        const token = String(await response.text() || "").trim();
-        if (token && token.length > 20 && !token.startsWith("<")) return token;
+        const token = normalizeInviteJwt(await response.text());
+        if (token) return token;
       }
     } catch (_) {}
 
@@ -1462,7 +1485,8 @@ export class SenderReadsWorker {
         if (!response.ok) continue;
         const html = await response.text();
         const match = String(html || "").match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/);
-        if (match?.[1]) return match[1];
+        const token = normalizeInviteJwt(match?.[1] || "");
+        if (token) return token;
       } catch (_) {}
     }
     throw new Error("Dream JWT not found for Online WebSocket — re-save Dream login");
@@ -1487,7 +1511,13 @@ export class SenderReadsWorker {
 
     return new Promise((resolve, reject) => {
       let settled = false;
-      const ws = new WebSocket(DREAM_WS_URL);
+      const ws = new WebSocket(DREAM_WS_URL, {
+        headers: {
+          Origin: ORIGIN,
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
       const timer = setTimeout(() => {
         fail(new Error("Online WebSocket timeout"));
       }, 20000);
@@ -1585,20 +1615,24 @@ export class SenderReadsWorker {
     });
   }
 
-  /** Prefer DreamAuto WS list; HTML gallery is fallback only. */
+  /** Prefer DreamAuto WS list; empty WS → HTML gallery (same as DreamAuto/actionWorker). */
   async fetchOnlineUsersPageSmart(page) {
     try {
       const rows = await this.fetchOnlineUsersPageViaWs(page);
-      // Empty WS page is valid (DreamAuto restarts cycle) — do not HTML-fallback that page.
-      return { rows, source: "ws" };
+      if (Array.isArray(rows) && rows.length) {
+        return { rows, source: "ws" };
+      }
+      console.warn(
+        `[senderReads] Online WS page ${page} empty — HTML gallery fallback`,
+      );
     } catch (error) {
       console.warn(
         `[senderReads] Online WS page ${page} failed, HTML fallback:`,
         error?.message || error,
       );
       this.closeOnlineWs();
-      return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
     }
+    return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
   }
 
   async runOnlineLoop(token, plain, filters, photoId, delayMs) {
@@ -1638,6 +1672,7 @@ export class SenderReadsWorker {
       let skipSeen = 0;
       const pageSoftCap = 100;
       const gap = Math.max(200, Number(delayMs) || 1000);
+      let emptyRetries = 0;
 
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
@@ -1808,40 +1843,49 @@ export class SenderReadsWorker {
         if (this.state.stopRequested || token !== this.runToken) break;
 
         const restartCycle = async () => {
-          if (this.state.sent === sentAtCycleStart) {
+          const emptyCycle = this.state.sent === sentAtCycleStart;
+          // Keep Online watching — empty pass is normal; wait and re-scan page 1.
+          if (emptyCycle) {
+            if (emptyRetries < 3) {
+              emptyRetries += 1;
+              this.emit({
+                statusMessage: `Online list empty — retry ${emptyRetries}/3…`,
+              });
+              this.closeOnlineWs();
+              page = 1;
+              await new Promise((r) => setTimeout(r, 5000));
+              return true;
+            }
             this.emit({
-              ...this.idleState(
-                `No new sends after cycle ${this.state.cycle}. Sent ${this.state.sent}, skipped ${this.state.skipped} (fav ${skipFav}, dupe ${skipDupe}, seen ${skipSeen}).`,
-              ),
-              ...this.keepRunStats(),
-              channel: "online",
-              direction: "online",
+              statusMessage: `Cycle ${this.state.cycle}: waiting for online men…`,
             });
-            return false;
+            this.closeOnlineWs();
+            await new Promise((r) => setTimeout(r, 20000));
+            if (this.state.stopRequested || token !== this.runToken) return false;
+            emptyRetries = 0;
+          } else {
+            emptyRetries = 0;
           }
           sentAtCycleStart = this.state.sent;
           this.seenMemberIds.clear();
           this.emit({
             cycle: this.state.cycle + 1,
-            statusMessage: `Cycle ${this.state.cycle + 1} restart…`,
+            page: 1,
+            statusMessage: `Cycle ${this.state.cycle + 1} · page 1…`,
           });
           page = 1;
-          await new Promise((r) => setTimeout(r, 3000));
+          await new Promise((r) => setTimeout(r, emptyCycle ? 500 : 3000));
           return true;
         };
 
-        // DreamAuto WS: empty men-online page → restart from page 1 (do not walk empty HTML pages).
+        // After WS→HTML smart fetch, empty still means no men — retry / next cycle.
         if (!onlineRows.length) {
-          if (onlineSource === "ws" || page >= pageSoftCap) {
-            const ok = await restartCycle();
-            if (!ok) break;
-            continue;
-          }
-          page += 1;
-          await new Promise((r) => setTimeout(r, gap));
+          const ok = await restartCycle();
+          if (!ok) break;
           continue;
         }
 
+        emptyRetries = 0;
         page += 1;
         await new Promise((r) => setTimeout(r, 400));
         if (page > pageSoftCap) {
