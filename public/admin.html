@@ -672,7 +672,7 @@
             <h2 class="admin-main-title">Рассылки</h2>
             <div class="mailings-card" style="margin-top:0">
               <div class="mailings-head">
-                <h2>Active LetterBot mailings</h2>
+                <h2>Active mailings (LetterBot + Sender)</h2>
                 <button type="button" id="refresh-mailings-btn" class="refresh-btn">Refresh</button>
               </div>
               <div id="mailings-empty" class="mailings-empty hidden">No active mailings right now.</div>
@@ -681,6 +681,7 @@
                   <thead>
                     <tr>
                       <th>Operator</th>
+                      <th>Product</th>
                       <th>Profile</th>
                       <th>Filter</th>
                       <th>Progress</th>
@@ -1030,7 +1031,17 @@
     function formatProgress(job) {
       const pct = job.percent != null ? `${job.percent}%` : "—";
       const sent = job.sent != null ? `SENT ${job.sent}` : "";
-      return `${pct}${sent ? `<br>${sent}` : ""}`;
+      const failed = job.failed != null && Number(job.failed) > 0 ? ` · FAIL ${job.failed}` : "";
+      return `${pct}${sent ? `<br>${sent}${failed}` : ""}`;
+    }
+
+    function productLabel(job) {
+      const product = String(job.product || "letterbot").toLowerCase();
+      if (product === "sender") {
+        const ch = String(job.channel || "read").toLowerCase();
+        return ch === "online" ? "Sender · Online" : "Sender · Read";
+      }
+      return "LetterBot";
     }
 
     function statusBadge(job) {
@@ -1045,8 +1056,21 @@
       const bodyEl = document.getElementById("mailings-body");
       if (!quiet) setStatus("Loading mailings...");
       try {
-        const data = await api("/letterbot/admin/running");
-        const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+        const [lbData, senderData] = await Promise.all([
+          api("/letterbot/admin/running").catch(() => ({ jobs: [] })),
+          api("/sender-reads/admin/running").catch(() => ({ jobs: [] })),
+        ]);
+        const lbJobs = (Array.isArray(lbData.jobs) ? lbData.jobs : []).map((job) => ({
+          ...job,
+          product: "letterbot",
+          channel: "letterbot",
+        }));
+        const senderJobs = Array.isArray(senderData.jobs) ? senderData.jobs : [];
+        const jobs = [...lbJobs, ...senderJobs].sort((a, b) => {
+          const au = Number(a.updatedAt) || 0;
+          const bu = Number(b.updatedAt) || 0;
+          return bu - au;
+        });
         bodyEl.innerHTML = "";
         if (!jobs.length) {
           emptyEl.classList.remove("hidden");
@@ -1055,15 +1079,24 @@
           emptyEl.classList.add("hidden");
           wrapEl.classList.remove("hidden");
           for (const job of jobs) {
+            const product = String(job.product || "letterbot").toLowerCase();
+            const channel = String(job.channel || "").toLowerCase();
             const tr = document.createElement("tr");
             tr.innerHTML = `
               <td>${formatOperator(job)}<br>${statusBadge(job)}</td>
+              <td>${productLabel(job)}</td>
               <td>${job.profileId}</td>
               <td>${job.filter || "—"}</td>
               <td>${formatProgress(job)}</td>
               <td class="action-cell">
-                <button type="button" class="stop-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Stop</button>
-                <button type="button" class="logout-profile-btn" data-user-id="${job.userId}" data-profile-id="${job.profileId}">Вылогинить анкету</button>
+                <button type="button" class="stop-btn"
+                  data-product="${product}"
+                  data-channel="${channel}"
+                  data-user-id="${job.userId}"
+                  data-profile-id="${job.profileId}">Stop</button>
+                <button type="button" class="logout-profile-btn"
+                  data-user-id="${job.userId}"
+                  data-profile-id="${job.profileId}">Вылогинить анкету</button>
               </td>
             `;
             bodyEl.appendChild(tr);
@@ -1075,16 +1108,27 @@
       }
     }
 
-    async function forceStopMailing(userId, profileId, button) {
+    async function forceStopMailing(userId, profileId, button, { product = "letterbot", channel = "read" } = {}) {
       const label = button.textContent;
       button.disabled = true;
       button.textContent = "Stopping…";
       setStatus("Stopping mailing...");
       try {
-        await api("/letterbot/admin/stop", {
-          method: "POST",
-          body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
-        });
+        if (product === "sender") {
+          await api("/sender-reads/admin/stop", {
+            method: "POST",
+            body: JSON.stringify({
+              userId: Number(userId),
+              profileId: String(profileId || "default"),
+              channel: channel === "online" ? "online" : "read",
+            }),
+          });
+        } else {
+          await api("/letterbot/admin/stop", {
+            method: "POST",
+            body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
+          });
+        }
         setStatus("Mailing stopped", "ok");
         await refreshMailings({ quiet: true });
       } catch (error) {
@@ -1289,9 +1333,11 @@
       if (stopBtn) {
         const userId = stopBtn.getAttribute("data-user-id");
         const profileId = stopBtn.getAttribute("data-profile-id");
+        const product = stopBtn.getAttribute("data-product") || "letterbot";
+        const channel = stopBtn.getAttribute("data-channel") || "read";
         if (!userId) return;
         if (!window.confirm(`Stop mailing for profile ${profileId}?`)) return;
-        void forceStopMailing(userId, profileId, stopBtn);
+        void forceStopMailing(userId, profileId, stopBtn, { product, channel });
         return;
       }
       const logoutBtn = event.target.closest(".logout-profile-btn");

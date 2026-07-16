@@ -68,6 +68,19 @@ export async function listRunningSenderReadsJobs() {
   return result.rows;
 }
 
+/** Director cabinet — running Sender Read/Online jobs with operator email/name. */
+export async function listRunningSenderReadsJobsWithUsers() {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT j.user_id, j.profile_id, j.selection, j.state, j.updated_at, u.email, u.name
+     FROM sender_reads_jobs j
+     JOIN users u ON u.id = j.user_id
+     WHERE j.is_running = TRUE
+     ORDER BY j.updated_at DESC`,
+  );
+  return result.rows;
+}
+
 export async function getSenderReadsJob(userId, profileId) {
   const db = getPool();
   const result = await db.query(

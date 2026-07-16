@@ -2,11 +2,13 @@ import { dreamLogin } from "./dreamLogin.js";
 import { withDreamGate } from "./dreamGate.js";
 import { dreamHttp, hasDreamProxy } from "./dreamHttp.js";
 import { hasTwoCaptcha } from "./twoCaptcha.js";
+import WebSocket from "ws";
 
 const ORIGIN = "https://www.dream-singles.com";
 const READS_URL = `${ORIGIN}/members/messaging/inbox`;
 const FAVORITES_URL = `${ORIGIN}/members/connections/myFavorites`;
 const ONLINE_URL = `${ORIGIN}/gallery/results`;
+const DREAM_WS_URL = "wss://ws.dream-singles.com/ws";
 const DUPES_MAX = 8000;
 
 const PRESETS = {
@@ -15,21 +17,49 @@ const PRESETS = {
     checkDuplicates: true,
     onlineOnly: false,
     enableCycling: false,
+    todayOnly: false,
+  },
+  allReadersOnline: {
+    excludeFavorites: true,
+    checkDuplicates: true,
+    onlineOnly: true,
+    enableCycling: true,
+    todayOnly: false,
   },
   onlyOnline: {
     excludeFavorites: true,
     checkDuplicates: true,
     onlineOnly: true,
     enableCycling: true,
+    todayOnly: false,
+  },
+  readersToday: {
+    excludeFavorites: true,
+    checkDuplicates: true,
+    onlineOnly: false,
+    enableCycling: false,
+    todayOnly: true,
+  },
+  readersTodayOnline: {
+    excludeFavorites: true,
+    checkDuplicates: true,
+    onlineOnly: true,
+    enableCycling: false,
+    todayOnly: true,
   },
 };
 
 function normalizePreset(value) {
-  return value === "onlyOnline" ? "onlyOnline" : "allReaders";
+  const v = String(value || "").trim();
+  if (v === "onlyOnline" || v === "allReadersOnline") return "allReadersOnline";
+  if (v === "readersLast24h" || v === "readersToday") return "readersToday";
+  if (v === "readersTodayOnline") return "readersTodayOnline";
+  return "allReaders";
 }
 
 function resolveFilters(preset, overrides = {}) {
-  const base = { ...PRESETS[normalizePreset(preset)] };
+  const key = normalizePreset(preset);
+  const base = { ...(PRESETS[key] || PRESETS.allReaders) };
   if (typeof overrides.excludeFavorites === "boolean") {
     base.excludeFavorites = overrides.excludeFavorites;
   }
@@ -37,6 +67,52 @@ function resolveFilters(preset, overrides = {}) {
     base.checkDuplicates = overrides.checkDuplicates;
   }
   return base;
+}
+
+/** Dream UI fd=MM/DD/YYYY — calendar day at Start (server local / UTC day of start). */
+function formatDreamFdDate(nowMs = Date.now()) {
+  const d = new Date(nowMs);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const yyyy = String(d.getUTCFullYear());
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+function dayKeyFromFd(fd) {
+  const m = String(fd || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return "";
+  const mm = String(Number(m[1])).padStart(2, "0");
+  const dd = String(Number(m[2])).padStart(2, "0");
+  return `${m[3]}-${mm}-${dd}`;
+}
+
+function parseReadMessageDate(message) {
+  const raw = String(message?.date || "").trim();
+  if (!raw) return null;
+  const normalized = /(?:z|gmt|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw} UTC`;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function utcDayKey(ms) {
+  return new Date(ms).toISOString().split("T")[0];
+}
+
+function isReadOnFdDay(message, fd) {
+  const want = dayKeyFromFd(fd);
+  if (!want) return true;
+  const readAt = parseReadMessageDate(message);
+  if (readAt == null) return true;
+  return utcDayKey(readAt) === want;
+}
+
+function readPageHasOlderThanFd(messages, fd) {
+  const want = dayKeyFromFd(fd);
+  if (!want) return false;
+  return (messages || []).some((message) => {
+    const readAt = parseReadMessageDate(message);
+    return readAt != null && utcDayKey(readAt) < want;
+  });
 }
 
 function messageHash(profileId, text) {
@@ -78,7 +154,7 @@ function normalizeChannel(value) {
   return String(value || "").toLowerCase() === "online" ? "online" : "read";
 }
 
-/** DreamAuto Online Users HTML: a.profile-link[data-profile_id] */
+/** DreamAuto Online Users HTML fallback: a.profile-link[data-profile_id] */
 function parseOnlineUsersHtml(html) {
   const ids = [];
   const seen = new Set();
@@ -87,15 +163,45 @@ function parseOnlineUsersHtml(html) {
   while ((match = re.exec(String(html || "")))) {
     const tag = match[0];
     if (!/\bprofile-link\b/i.test(tag)) continue;
-    const idMatch = tag.match(/\bdata-profile_id=["'](\d+)["']/i);
-    const hrefMatch = tag.match(/\bhref=["'](\/\d+\.html)["']/i);
-    if (!idMatch || !hrefMatch) continue;
-    const id = Number(idMatch[1]);
+    const idMatch =
+      tag.match(/\bdata-profile_id=["'](\d+)["']/i) ||
+      tag.match(/\bdata-profile-id=["'](\d+)["']/i);
+    const hrefMatch =
+      tag.match(/\bhref=["'](?:https?:\/\/(?:www\.)?dream-singles\.com)?\/(\d+)\.html[^"']*["']/i) ||
+      tag.match(/\bhref=["']\/(\d+)\.html[^"']*["']/i);
+    if (!idMatch && !hrefMatch) continue;
+    const id = Number(idMatch?.[1] || hrefMatch?.[1]) || 0;
     if (!id || seen.has(id)) continue;
     seen.add(id);
     ids.push(id);
   }
+  // Absolute / bare id links without profile-link class (Dream DOM drifts).
+  if (!ids.length) {
+    const loose = String(html || "").matchAll(
+      /data-profile_id=["'](\d+)["']|href=["'](?:https?:\/\/[^"']+)?\/(\d+)\.html/gi,
+    );
+    for (const m of loose) {
+      const id = Number(m[1] || m[2]) || 0;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+  }
   return ids;
+}
+
+/** DreamAuto men-online-response row → profile id + compose member id */
+function parseMenOnlinePayload(payload) {
+  const rows = [];
+  const seen = new Set();
+  for (const row of Array.isArray(payload) ? payload : []) {
+    const id = Number(row?.id || row?.profile_id || row?.regularId) || 0;
+    const memberId = String(row?.member_id || row?.memberId || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    rows.push({ id, memberId });
+  }
+  return rows;
 }
 
 export class SenderReadsWorker {
@@ -383,8 +489,76 @@ export class SenderReadsWorker {
     return ids;
   }
 
-  async fetchReadPage(page) {
-    const url = `${READS_URL}?mode=sent&page=${Math.max(1, page)}&returnJson=1&view=read`;
+  /** DreamAuto Online: favorites via WS (one round-trip), not 80 HTML pages. */
+  async fetchFavoritesViaWs() {
+    const ws = await this.ensureOnlineWs();
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("favorites-response timeout"));
+      }, 12000);
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          ws.removeListener("message", onMessage);
+        } catch (_) {}
+      };
+      const onMessage = (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(String(raw));
+        } catch {
+          return;
+        }
+        if (msg.type !== "favorites-response") return;
+        cleanup();
+        const ids = new Set();
+        const payload = Array.isArray(msg.payload) ? msg.payload : [];
+        for (const item of payload) {
+          const id = Number(item?.profile_to || item?.profile_id || item?.id || item?.regularId) || 0;
+          if (id >= 1000) ids.add(id);
+        }
+        resolve(ids);
+      };
+      ws.on("message", onMessage);
+      try {
+        ws.send(JSON.stringify({ type: "favorites-request" }));
+      } catch (error) {
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /** Prefer DreamAuto WS favorites; HTML scrape only if WS fails. */
+  async fetchFavoritesIdsFast() {
+    try {
+      return await this.fetchFavoritesViaWs();
+    } catch (error) {
+      console.warn(
+        "[senderReads] favorites WS failed, HTML fallback:",
+        error?.message || error,
+      );
+      return this.fetchFavoritesIds();
+    }
+  }
+
+  async fetchReadPage(page, { fromDate = "" } = {}) {
+    const params = new URLSearchParams({
+      mode: "sent",
+      page: String(Math.max(1, Number(page) || 1)),
+      returnJson: "1",
+      view: "read",
+    });
+    const fd = String(fromDate || "").trim();
+    if (fd) {
+      params.set("fd", fd);
+      params.set("td", "");
+    }
+    const url = `${READS_URL}?${params.toString()}`;
     const response = await this.dreamFetch(url);
     if (response.status === 401 || response.status === 403) {
       throw new Error("Dream session expired — re-save credentials");
@@ -594,15 +768,16 @@ export class SenderReadsWorker {
     return interpretHtml(html, { status: response.status });
   }
 
-  async sendCompose({ linkMemberId = "", text, galleryId = "", maleProfileId = 0 }) {    const plain = String(text || "").trim();
+  async sendCompose({ linkMemberId = "", text, galleryId = "", maleProfileId = 0 }) {
+    const plain = String(text || "").trim();
     if (!plain) throw new Error("Letter text is empty");
     const photoId = String(galleryId || "").trim();
     const profileId = Number(maleProfileId) || 0;
     const fromLink = String(linkMemberId || "").trim();
 
-    let composeId = "";
-    if (profileId) composeId = await this.resolveComposeIdFromProfile(profileId);
-    if (!composeId && fromLink) composeId = fromLink;
+    // DreamAuto Online WS already gives member_id — prefer it (skip profile scrape).
+    let composeId = fromLink;
+    if (!composeId && profileId) composeId = await this.resolveComposeIdFromProfile(profileId);
     if (!composeId) throw new Error(`No compose id for profile ${profileId || "?"}`);
 
     // Favorites-style empty replyId first; then generated (DreamAuto READ).
@@ -667,6 +842,7 @@ export class SenderReadsWorker {
   stop() {
     // Invalidate the in-flight loop immediately (including DreamGate queue / favorites fetch).
     this.runToken += 1;
+    this.closeOnlineWs();
     const stopped = {
       ...this.idleState("Stopped"),
       ...this.keepRunStats(),
@@ -719,6 +895,7 @@ export class SenderReadsWorker {
                 : true,
             enableCycling: true,
             onlineOnly: false,
+            todayOnly: false,
           }
         : resolveFilters(selection.preset, {
             excludeFavorites:
@@ -737,12 +914,20 @@ export class SenderReadsWorker {
     this._jobText = plain;
     this._jobDelayMs = delayMs;
     this._jobMaxPages = maxPages;
-
+    // Dream fd= fixed at Start (UTC calendar day on server clock).
     const resumeFrom =
       selection.resumeFrom && typeof selection.resumeFrom === "object"
         ? selection.resumeFrom
         : null;
     const resuming = Boolean(resumeFrom);
+    if (filters.todayOnly) {
+      this._readsFromDate =
+        (resuming && String(resumeFrom.readsFromDate || "").trim()) ||
+        String(selection.readsFromDate || "").trim() ||
+        formatDreamFdDate(Date.now());
+    } else {
+      this._readsFromDate = "";
+    }
 
     this.seenMemberIds.clear();
     if (resuming) {
@@ -816,7 +1001,10 @@ export class SenderReadsWorker {
           : "Resuming cloud Reads…"
         : channel === "online"
           ? "Starting cloud Online…"
-          : "Starting cloud Reads…",
+          : filters.todayOnly && this._readsFromDate
+            ? `Readers from ${this._readsFromDate}…`
+            : "Starting cloud Reads…",
+      readsFromDate: this._readsFromDate || "",
     });
 
     try {
@@ -889,9 +1077,13 @@ export class SenderReadsWorker {
       let skipDupe = 0;
       let skipBad = 0;
       let skipSeen = 0;
+      let skipOld = 0;
+      const readsFromDate = filters.todayOnly
+        ? String(this._readsFromDate || this.state.readsFromDate || "").trim()
+        : "";
 
       const skipSummary = () =>
-        `offline ${skipOffline}, fav ${skipFav}, dupe ${skipDupe}, bad ${skipBad}, seen ${skipSeen}`;
+        `offline ${skipOffline}, fav ${skipFav}, dupe ${skipDupe}, notToday ${skipOld}, bad ${skipBad}, seen ${skipSeen}`;
 
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
@@ -899,14 +1091,17 @@ export class SenderReadsWorker {
 
         this.emit({
           page,
+          readsFromDate: readsFromDate || undefined,
           statusMessage: filters.enableCycling
             ? `Cycle ${this.state.cycle} · Reads page ${page}…`
-            : `Reads page ${page}…`,
+            : readsFromDate
+              ? `Reads page ${page} · from ${readsFromDate}…`
+              : `Reads page ${page}…`,
         });
 
         let result;
         try {
-          result = await this.fetchReadPage(page);
+          result = await this.fetchReadPage(page, { fromDate: readsFromDate });
         } catch (error) {
           if (error?.retryMs) {
             this.emit({
@@ -956,6 +1151,11 @@ export class SenderReadsWorker {
             });
             pageFav += 1;
             skipFav += 1;
+            continue;
+          }
+          if (filters.todayOnly && readsFromDate && !isReadOnFdDay(message, readsFromDate)) {
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
+            skipOld += 1;
             continue;
           }
           if (!isReadOnlineEligible(message, filters.onlineOnly)) {
@@ -1127,7 +1327,12 @@ export class SenderReadsWorker {
           break;
         }
 
-        if (endOfPages) {
+        const reachedTodayCutoff =
+          filters.todayOnly &&
+          readsFromDate &&
+          readPageHasOlderThanFd(messages, readsFromDate);
+
+        if (endOfPages || reachedTodayCutoff) {
           if (filters.enableCycling) {
             const ok = await restartCycle();
             if (!ok) return;
@@ -1205,7 +1410,174 @@ export class SenderReadsWorker {
       throw new Error("Dream session expired — re-save credentials");
     }
 
-    return parseOnlineUsersHtml(html);
+    return parseOnlineUsersHtml(html).map((id) => ({ id, memberId: "" }));
+  }
+
+  async fetchInviteJwt() {
+    // DreamAuto / actionWorker: /members/jwtToken (raw token text).
+    try {
+      const response = await this.dreamFetch(`${ORIGIN}/members/jwtToken`, {
+        headers: {
+          Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+      if (response.ok) {
+        const token = String(await response.text() || "").trim();
+        if (token && token.length > 20 && !token.startsWith("<")) return token;
+      }
+    } catch (_) {}
+
+    const urls = [
+      `${ORIGIN}/members/messaging/bot/send`,
+      `${ORIGIN}/members/`,
+      `${ONLINE_URL}?online=men`,
+    ];
+    for (const url of urls) {
+      try {
+        const response = await this.dreamFetch(url, {
+          headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+        });
+        if (!response.ok) continue;
+        const html = await response.text();
+        const match = String(html || "").match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/);
+        if (match?.[1]) return match[1];
+      } catch (_) {}
+    }
+    throw new Error("Dream JWT not found for Online WebSocket — re-save Dream login");
+  }
+
+  closeOnlineWs() {
+    const ws = this._onlineWs;
+    this._onlineWs = null;
+    this._onlineJwt = "";
+    if (!ws) return;
+    try {
+      ws.removeAllListeners?.();
+      ws.close();
+    } catch (_) {}
+  }
+
+  async ensureOnlineWs() {
+    if (this._onlineWs?.readyState === WebSocket.OPEN) return this._onlineWs;
+    this.closeOnlineWs();
+    const jwt = await this.fetchInviteJwt();
+    this._onlineJwt = jwt;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const ws = new WebSocket(DREAM_WS_URL);
+      const timer = setTimeout(() => {
+        fail(new Error("Online WebSocket timeout"));
+      }, 20000);
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          ws.close();
+        } catch (_) {}
+        this._onlineWs = null;
+        reject(err instanceof Error ? err : new Error(String(err)));
+      };
+      const ok = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this._onlineWs = ws;
+        resolve(ws);
+      };
+
+      ws.on("open", () => {
+        try {
+          ws.send(
+            JSON.stringify({
+              type: "auth",
+              connection: "invite",
+              subscribe_to: ["auth-response", "men-online-response", "favorites-response"],
+              payload: jwt,
+            }),
+          );
+        } catch (error) {
+          fail(error);
+        }
+      });
+      ws.on("message", (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(String(raw));
+        } catch {
+          return;
+        }
+        if (msg.type !== "auth-response") return;
+        if (msg.success) ok();
+        else fail(new Error(msg.error || msg.message || "Online WS auth failed"));
+      });
+      ws.on("error", () => fail(new Error("Online WebSocket connection error")));
+      ws.on("close", () => {
+        if (!settled) fail(new Error("Online WebSocket closed"));
+        if (this._onlineWs === ws) this._onlineWs = null;
+      });
+    });
+  }
+
+  /**
+   * DreamAuto default Online list: WS type men-online / men-online-response.
+   * Returns [{ id, memberId }] — memberId is compose id when present.
+   */
+  async fetchOnlineUsersPageViaWs(page) {
+    const ws = await this.ensureOnlineWs();
+    const pageNum = Math.max(1, Number(page) || 1);
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("men-online timeout"));
+      }, 15000);
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          ws.removeListener("message", onMessage);
+        } catch (_) {}
+      };
+      const onMessage = (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(String(raw));
+        } catch {
+          return;
+        }
+        if (msg.type !== "men-online-response") return;
+        cleanup();
+        resolve(parseMenOnlinePayload(msg.payload));
+      };
+      ws.on("message", onMessage);
+      try {
+        ws.send(JSON.stringify({ type: "men-online", sort: "login", page: pageNum }));
+      } catch (error) {
+        cleanup();
+        this.closeOnlineWs();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  /** Prefer DreamAuto WS list; HTML gallery is fallback only. */
+  async fetchOnlineUsersPageSmart(page) {
+    try {
+      const rows = await this.fetchOnlineUsersPageViaWs(page);
+      // Empty WS page is valid (DreamAuto restarts cycle) — do not HTML-fallback that page.
+      return { rows, source: "ws" };
+    } catch (error) {
+      console.warn(
+        `[senderReads] Online WS page ${page} failed, HTML fallback:`,
+        error?.message || error,
+      );
+      this.closeOnlineWs();
+      return { rows: await this.fetchOnlineUsersPage(page), source: "html" };
+    }
   }
 
   async runOnlineLoop(token, plain, filters, photoId, delayMs) {
@@ -1223,7 +1595,7 @@ export class SenderReadsWorker {
           return;
         }
         this.emit({ statusMessage: "Loading skip list…" });
-        favorites = await this.fetchFavoritesIds();
+        favorites = await this.fetchFavoritesIdsFast();
         if (this.state.stopRequested || token !== this.runToken) {
           this.emit(this.idleState("Stopped"));
           await this.persist(false);
@@ -1231,7 +1603,7 @@ export class SenderReadsWorker {
         }
         this.emit({
           ...this.setFavoritesFetched(favorites),
-          statusMessage: `Skip list: ${favorites.size} (★ Favorites + already sent)`,
+          statusMessage: `Skip list: ${favorites.size} (★ Favorites)`,
         });
       }
 
@@ -1255,9 +1627,12 @@ export class SenderReadsWorker {
           statusMessage: `Cycle ${this.state.cycle} · Online page ${page}…`,
         });
 
-        let profileIds = [];
+        let onlineRows = [];
+        let onlineSource = "ws";
         try {
-          profileIds = await this.fetchOnlineUsersPage(page);
+          const fetched = await this.fetchOnlineUsersPageSmart(page);
+          onlineRows = Array.isArray(fetched?.rows) ? fetched.rows : [];
+          onlineSource = fetched?.source === "html" ? "html" : "ws";
         } catch (error) {
           if (error?.retryMs) {
             this.emit({
@@ -1269,13 +1644,15 @@ export class SenderReadsWorker {
           throw error;
         }
 
-        this.emit({ remaining: profileIds.length });
+        this.emit({ remaining: onlineRows.length });
 
-        for (const maleProfileId of profileIds) {
+        for (const row of onlineRows) {
           if (this.state.stopRequested || token !== this.runToken) break;
           await this.waitWhilePaused(token);
           if (this.state.stopRequested || token !== this.runToken) break;
 
+          const maleProfileId = Number(row?.id) || 0;
+          const linkMemberId = String(row?.memberId || "").trim();
           if (!maleProfileId) {
             this.emit({ ...this.nextRemaining() });
             continue;
@@ -1330,6 +1707,7 @@ export class SenderReadsWorker {
               text: plain,
               galleryId: photoId,
               maleProfileId,
+              linkMemberId,
             });
             this.emit({
               sent: this.state.sent + 1,
@@ -1355,6 +1733,7 @@ export class SenderReadsWorker {
                   text: plain,
                   galleryId: photoId,
                   maleProfileId,
+                  linkMemberId,
                 });
                 this.emit({
                   sent: this.state.sent + 1,
@@ -1430,13 +1809,15 @@ export class SenderReadsWorker {
           return true;
         };
 
-        if (!profileIds.length) {
-          page += 1;
-          await new Promise((r) => setTimeout(r, gap));
-          if (page > pageSoftCap) {
+        // DreamAuto WS: empty men-online page → restart from page 1 (do not walk empty HTML pages).
+        if (!onlineRows.length) {
+          if (onlineSource === "ws" || page >= pageSoftCap) {
             const ok = await restartCycle();
             if (!ok) break;
+            continue;
           }
+          page += 1;
+          await new Promise((r) => setTimeout(r, gap));
           continue;
         }
 
@@ -1448,6 +1829,7 @@ export class SenderReadsWorker {
         }
       }
 
+      this.closeOnlineWs();
       if (token === this.runToken && this.state.running) {
         this.emit({
           ...this.idleState(this.state.stopRequested ? "Stopped" : "Online complete"),
@@ -1458,6 +1840,7 @@ export class SenderReadsWorker {
       }
       await this.persist(false);
     } catch (error) {
+      this.closeOnlineWs();
       if (token === this.runToken) {
         const msg = error?.message || String(error);
         this.emit({

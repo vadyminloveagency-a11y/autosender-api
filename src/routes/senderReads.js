@@ -1,11 +1,12 @@
 import express from "express";
-import { authMiddleware } from "../auth.js";
+import { adminMiddleware, authMiddleware } from "../auth.js";
 import { decryptSecret } from "../cryptoUtil.js";
-import { getDreamCredentials } from "../letterbotStore.js";
+import { getDreamCredentials, getUserById } from "../letterbotStore.js";
 import {
   ensureSenderReadsTables,
   getSenderReadsJob,
   listRunningSenderReadsJobs,
+  listRunningSenderReadsJobsWithUsers,
   markSenderReadsJobStopped,
   upsertSenderReadsJob,
 } from "../senderReadsStore.js";
@@ -234,6 +235,7 @@ router.post("/start", authMiddleware, async (req, res) => {
       maxPages: req.body?.maxPages,
       excludeFavorites: req.body?.excludeFavorites,
       checkDuplicates: req.body?.checkDuplicates,
+      readsFromDate: req.body?.readsFromDate,
       channel,
       direction: channel,
       dupes: Array.isArray(existing?.dupes) ? existing.dupes : [],
@@ -295,6 +297,149 @@ router.post("/stop", authMiddleware, async (req, res) => {
     return res.json({ ok: true, channel, state: { ...state, channel, direction: channel } });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
+function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}, selection = {}) {
+  const channel = channelFromStoreProfileId(storeProfileIdValue);
+  const dreamProfileId = dreamProfileIdFromStore(storeProfileIdValue);
+  const preset = String(state?.preset || selection?.preset || "").trim();
+  const filter =
+    channel === "online"
+      ? "Online men"
+      : preset === "readersToday" || preset === "readersTodayOnline"
+        ? preset.endsWith("Online")
+          ? "Readers today · Online"
+          : "Readers today"
+        : preset === "allReadersOnline" || preset === "onlyOnline"
+          ? "All readers · Online"
+          : "All readers";
+  const running = Boolean(state?.running) && !Boolean(state?.stopRequested);
+  return {
+    product: "sender",
+    channel,
+    userId: Number(userId),
+    profileId: dreamProfileId,
+    storeProfileId: String(storeProfileIdValue || "default"),
+    operatorEmail: String(user.email || ""),
+    operatorName: String(user.name || ""),
+    sessionActive: running,
+    isPaused: Boolean(state?.paused),
+    filter,
+    percent: null,
+    sent: Number.isFinite(Number(state?.sent)) ? Number(state.sent) : null,
+    failed: Number.isFinite(Number(state?.failed)) ? Number(state.failed) : null,
+    statusMessage: String(state?.statusMessage || ""),
+    updatedAt: state?.updatedAt || null,
+  };
+}
+
+async function listActiveSenderMailingJobs() {
+  const byKey = new Map();
+
+  const rows = await listRunningSenderReadsJobsWithUsers();
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const storeId = String(row.profile_id || "default");
+    const channel = channelFromStoreProfileId(storeId);
+    const dreamProfileId = dreamProfileIdFromStore(storeId);
+    const key = workerKey(userId, dreamProfileId, channel);
+    const live = workers.get(key);
+    const state = live ? live.getState() : row.state || {};
+    if (!Boolean(state?.running) && !live) continue;
+    byKey.set(
+      key,
+      summarizeSenderMailingJob(userId, storeId, state, {
+        email: row.email,
+        name: row.name,
+      }, row.selection || {}),
+    );
+  }
+
+  for (const [key, worker] of workers) {
+    if (byKey.has(key)) continue;
+    const state = worker.getState?.() || {};
+    if (!state.running || state.stopRequested) continue;
+    const parts = String(key).split(":");
+    if (parts.length < 3) continue;
+    const userId = Number(parts[0]);
+    const dreamProfileId = parts[1] || "default";
+    const channel = parts[2] === "online" ? "online" : "read";
+    const storeId = storeProfileId(dreamProfileId, channel);
+    const user = await getUserById(userId);
+    byKey.set(
+      key,
+      summarizeSenderMailingJob(
+        userId,
+        storeId,
+        state,
+        { email: user?.email || "", name: user?.name || "" },
+        {},
+      ),
+    );
+  }
+
+  return [...byKey.values()].sort((a, b) => {
+    const au = Number(a.updatedAt) || 0;
+    const bu = Number(b.updatedAt) || 0;
+    return bu - au;
+  });
+}
+
+async function stopSenderWorkerForProfile(userId, profileId, channel = "read") {
+  const ch = channel === "online" ? "online" : "read";
+  const dreamPid = String(profileId || "default");
+  const storeId = storeProfileId(dreamPid, ch);
+  const key = workerKey(userId, dreamPid, ch);
+  const worker = workers.get(key) || getWorkerForUser(userId, dreamPid, ch);
+  const state = worker.stop();
+  await markSenderReadsJobStopped(userId, storeId).catch(() => {});
+  lastStates.set(key, state);
+  return { ...state, channel: ch, direction: ch, running: false };
+}
+
+/** Stop both Read + Online for a profile (director logout / shift disconnect). */
+export async function stopAllSenderChannelsForProfile(userId, profileId) {
+  const results = [];
+  for (const channel of ["read", "online"]) {
+    try {
+      results.push(await stopSenderWorkerForProfile(userId, profileId, channel));
+    } catch (_) {}
+  }
+  return results;
+}
+
+/** Director cabinet — active cloud Sender Read/Online mailings. */
+router.get("/admin/running", adminMiddleware, async (req, res) => {
+  try {
+    const jobs = await listActiveSenderMailingJobs();
+    return res.json({ ok: true, jobs });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+      jobs: [],
+    });
+  }
+});
+
+/** Director cabinet — force-stop Sender Read or Online. */
+router.post("/admin/stop", adminMiddleware, async (req, res) => {
+  const userId = Number(req.body?.userId);
+  const profileId = String(req.body?.profileId || "default");
+  const channelRaw = String(req.body?.channel || "read").toLowerCase();
+  const channel = channelRaw === "online" ? "online" : "read";
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "userId is required" });
+  }
+  try {
+    const state = await stopSenderWorkerForProfile(userId, profileId, channel);
+    return res.json({ ok: true, state, stopped: true, channel });
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      error: error?.message || String(error),
+    });
   }
 });
 

@@ -563,6 +563,10 @@ router.post("/admin/disconnect-shift", adminMiddleware, async (req, res) => {
   }
   try {
     const state = await stopWorkerForProfile(userId, profileId);
+    try {
+      const { stopAllSenderChannelsForProfile } = await import("./senderReads.js");
+      await stopAllSenderChannelsForProfile(userId, profileId);
+    } catch (_) {}
     await requestOperatorShiftDisconnect(userId, profileId);
     return res.json({ ok: true, state, stopped: true, disconnectRequested: true });
   } catch (error) {
