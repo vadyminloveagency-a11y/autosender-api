@@ -1685,10 +1685,7 @@ export class SenderReadsWorker {
           onlineSource = fetched?.source === "html" ? "html" : "ws";
           this.emit({
             page,
-            statusMessage:
-              onlineSource === "html"
-                ? `Cycle ${this.state.cycle} · HTML gallery page ${page} (${onlineRows.length})…`
-                : `Cycle ${this.state.cycle} · Dream WS page ${page} (${onlineRows.length})…`,
+            statusMessage: `Cycle ${this.state.cycle} · page ${page}…`,
           });
         } catch (error) {
           if (error?.retryMs) {
