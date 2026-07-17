@@ -278,6 +278,15 @@ export class SenderReadsWorker {
     return list;
   }
 
+  /** Unique Failed men only — Online cycles must not inflate the counter. */
+  bumpFailed(id) {
+    const list = this.rememberId("failed", id);
+    return {
+      failed: list.length,
+      failedIds: list,
+    };
+  }
+
   rememberExcludedFav(id) {
     const n = Number(id) || 0;
     const list = Array.isArray(this.state.favoritesExcludedIds)
@@ -1173,9 +1182,8 @@ export class SenderReadsWorker {
             skipDupe += 1;
             this.seenMemberIds.add(String(target.maleProfileId));
             this.emit({
-              failed: this.state.failed + 1,
+              ...this.bumpFailed(target.maleProfileId),
               duplicates: (Number(this.state.duplicates) || 0) + 1,
-              failedIds: this.rememberId("failed", target.maleProfileId),
               statusMessage: `Duplicate → ${target.maleProfileId}`,
               lastError: "",
               ...this.nextRemaining(),
@@ -1245,12 +1253,11 @@ export class SenderReadsWorker {
               } catch (retryError) {
                 const duped = await rememberDupeFromReject(retryError);
                 this.emit({
-                  failed: this.state.failed + 1,
+                  ...this.bumpFailed(target.maleProfileId),
                   duplicates: duped
                     ? (Number(this.state.duplicates) || 0) + 1
                     : this.state.duplicates,
                   lastError: retryError?.message || String(retryError),
-                  failedIds: this.rememberId("failed", target.maleProfileId),
                   statusMessage: duped
                     ? `Duplicate → ${target.maleProfileId}`
                     : this.state.statusMessage,
@@ -1264,12 +1271,11 @@ export class SenderReadsWorker {
             } else {
               const duped = await rememberDupeFromReject(error);
               this.emit({
-                failed: this.state.failed + 1,
+                ...this.bumpFailed(target.maleProfileId),
                 duplicates: duped
                   ? (Number(this.state.duplicates) || 0) + 1
                   : this.state.duplicates,
                 lastError: error?.message || String(error),
-                failedIds: this.rememberId("failed", target.maleProfileId),
                 statusMessage: duped
                   ? `Duplicate → ${target.maleProfileId}`
                   : this.state.statusMessage,
@@ -1761,12 +1767,11 @@ export class SenderReadsWorker {
               } catch (retryError) {
                 const duped = await rememberDupeFromReject(retryError);
                 this.emit({
-                  failed: this.state.failed + 1,
+                  ...this.bumpFailed(maleProfileId),
                   duplicates: duped
                     ? (Number(this.state.duplicates) || 0) + 1
                     : this.state.duplicates,
                   lastError: retryError?.message || String(retryError),
-                  failedIds: this.rememberId("failed", maleProfileId),
                   statusMessage: duped ? `Duplicate → ${maleProfileId}` : undefined,
                   ...this.nextRemaining(),
                 });
@@ -1780,12 +1785,11 @@ export class SenderReadsWorker {
             } else {
               const duped = await rememberDupeFromReject(error);
               this.emit({
-                failed: this.state.failed + 1,
+                ...this.bumpFailed(maleProfileId),
                 duplicates: duped
                   ? (Number(this.state.duplicates) || 0) + 1
                   : this.state.duplicates,
                 lastError: error?.message || String(error),
-                failedIds: this.rememberId("failed", maleProfileId),
                 statusMessage: duped ? `Duplicate → ${maleProfileId}` : undefined,
                 ...this.nextRemaining(),
               });
