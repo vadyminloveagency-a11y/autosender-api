@@ -4,96 +4,121 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AutoSender Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-0: #070d18;
+      --bg-1: #0c1526;
+      --bg-2: #111c31;
+      --bg-3: #162338;
+      --line: rgba(148, 178, 220, 0.14);
+      --line-strong: rgba(148, 178, 220, 0.28);
+      --text: #e8effa;
+      --text-soft: #a8bad4;
+      --muted: #7f94b3;
+      --accent: #3d8bfd;
+      --accent-soft: rgba(61, 139, 253, 0.16);
+      --cyan: #5ecfff;
+      --ok: #3ecf8e;
+      --ok-soft: rgba(62, 207, 142, 0.14);
+      --warn: #e6b84d;
+      --danger: #f07178;
+      --danger-soft: rgba(240, 113, 120, 0.14);
+      --radius: 12px;
+      --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+    }
     *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Arial, sans-serif;
-      color: #eef4ff;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg-0);
+      -webkit-font-smoothing: antialiased;
     }
     body.panel-page {
-      padding: 24px 16px;
       background:
-        radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
-        linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
+        radial-gradient(ellipse 80% 50% at 0% 0%, rgba(61, 139, 253, 0.12), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(30, 90, 160, 0.1), transparent 50%),
+        linear-gradient(165deg, #08101c 0%, #0a1424 48%, #070d18 100%);
     }
+    .hidden { display: none !important; }
+
+    /* —— Auth —— */
     .app-auth-gate {
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 24px 16px;
+      padding: 28px 16px;
       background:
-        radial-gradient(circle at 20% 15%, rgba(56, 120, 255, 0.18), transparent 42%),
-        radial-gradient(circle at 80% 70%, rgba(30, 90, 200, 0.12), transparent 38%),
-        linear-gradient(160deg, #0a1224 0%, #0d1830 45%, #08101f 100%);
+        radial-gradient(ellipse 70% 45% at 20% 10%, rgba(61, 139, 253, 0.16), transparent 50%),
+        radial-gradient(ellipse 50% 40% at 85% 80%, rgba(30, 90, 160, 0.1), transparent 45%),
+        linear-gradient(165deg, #08101c 0%, #0a1424 48%, #070d18 100%);
     }
     .auth-card {
       width: 100%;
-      max-width: 320px;
-      padding: 28px 24px 22px;
-      border: 1px solid rgba(120, 170, 255, 0.22);
-      border-radius: 14px;
-      background: linear-gradient(145deg, rgba(18, 32, 58, 0.96), rgba(12, 22, 42, 0.98));
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      max-width: 360px;
+      padding: 32px 28px 26px;
+      border: 1px solid var(--line-strong);
+      border-radius: 16px;
+      background: linear-gradient(160deg, rgba(18, 30, 52, 0.96), rgba(10, 18, 34, 0.98));
+      box-shadow: var(--shadow);
     }
     .auth-title {
-      margin: 0 0 22px;
+      margin: 0 0 6px;
       text-align: center;
-      color: #f4f8ff;
-      font: 700 22px/1.2 Arial, sans-serif;
-      letter-spacing: 0.01em;
+      font: 700 24px/1.2 var(--font);
+      letter-spacing: -0.02em;
     }
     .auth-form {
       display: flex;
       flex-direction: column;
       gap: 14px;
+      margin-top: 22px;
     }
-    .auth-field {
-      position: relative;
-    }
+    .auth-field { position: relative; }
     .auth-field input {
       width: 100%;
-      min-height: 46px;
-      padding: 16px 14px 8px;
-      border: 1px solid rgba(120, 170, 255, 0.28);
-      border-radius: 8px;
-      background: rgba(8, 16, 32, 0.85);
-      color: #eef4ff;
-      font: 14px/1.2 Arial, sans-serif;
+      min-height: 48px;
+      padding: 18px 14px 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.85);
+      color: var(--text);
+      font: 14px/1.2 var(--font);
       outline: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .auth-field input:focus {
-      border-color: rgba(90, 190, 255, 0.65);
-      box-shadow: 0 0 0 2px rgba(56, 140, 255, 0.18);
+      border-color: rgba(94, 207, 255, 0.55);
+      box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.15);
     }
     .auth-field label {
       position: absolute;
       top: -8px;
-      left: 10px;
+      left: 12px;
       padding: 0 6px;
       background: #142038;
-      color: #b8c9e8;
-      font: 12px/1 Arial, sans-serif;
+      color: var(--muted);
+      font: 500 12px/1 var(--font);
       pointer-events: none;
     }
-    .auth-field--password input {
-      padding-right: 42px;
-    }
+    .auth-field--password input { padding-right: 44px; }
     .auth-eye {
       position: absolute;
       top: 50%;
       right: 10px;
-      width: 28px;
-      height: 28px;
+      width: 30px;
+      height: 30px;
       margin: 0;
       padding: 0;
       border: 0;
-      border-radius: 6px;
+      border-radius: 8px;
       background: transparent;
-      color: #5ecfff;
+      color: var(--cyan);
       cursor: pointer;
       transform: translateY(-50%);
     }
@@ -107,52 +132,45 @@
     }
     .auth-submit {
       width: 100%;
-      min-height: 44px;
-      margin-top: 6px;
-      border: 1px solid rgba(120, 170, 255, 0.22);
-      border-radius: 8px;
-      background: rgba(16, 30, 54, 0.95);
-      color: #5ecfff;
-      font: 700 15px/1 Arial, sans-serif;
+      min-height: 46px;
+      margin-top: 4px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #4a96ff 0%, #2f78e8 100%);
+      color: #fff;
+      font: 600 15px/1 var(--font);
       cursor: pointer;
+      box-shadow: 0 8px 20px rgba(47, 120, 232, 0.28);
     }
-    .auth-submit:hover:not(:disabled) {
-      background: rgba(24, 42, 72, 0.98);
-      color: #8de4ff;
-    }
+    .auth-submit:hover:not(:disabled) { filter: brightness(1.06); }
     .auth-submit:disabled { opacity: 0.6; cursor: wait; }
     .auth-save-credentials {
       width: 100%;
-      min-height: 38px;
-      border: 1px solid rgba(4, 242, 160, 0.35);
-      border-radius: 8px;
-      background: rgba(10, 20, 38, 0.55);
-      color: #04f2a0;
-      font: 600 13px/1 Arial, sans-serif;
+      min-height: 40px;
+      border: 1px solid rgba(62, 207, 142, 0.35);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--ok);
+      font: 600 13px/1 var(--font);
       cursor: pointer;
     }
     .auth-save-credentials:hover:not(:disabled) {
-      background: rgba(18, 34, 58, 0.85);
-      color: #7dffb8;
-    }
-    .auth-save-credentials.is-saved {
-      border-color: rgba(4, 242, 160, 0.35);
-      color: #04f2a0;
+      background: var(--ok-soft);
     }
     .auth-status {
-      margin: 10px 0 0;
+      margin: 12px 0 0;
       min-height: 18px;
       text-align: center;
-      color: #8ea8cc;
+      color: var(--muted);
       font-size: 12px;
       line-height: 1.4;
     }
-    .auth-status.is-error { color: #ff8a9a; }
-    .auth-status.ok { color: #7dffb8; }
+    .auth-status.is-error { color: var(--danger); }
+    .auth-status.ok { color: var(--ok); }
     .auth-hint {
-      margin: 14px 0 0;
+      margin: 16px 0 0;
       text-align: center;
-      color: #6d88ad;
+      color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
     }
@@ -163,289 +181,154 @@
       padding: 0;
       border: 0;
       background: transparent;
-      color: #7eb8ff;
-      font: 13px/1.4 Arial, sans-serif;
+      color: #8ec0ff;
+      font: 500 13px/1.4 var(--font);
       cursor: pointer;
       text-align: center;
     }
     .auth-mode-switch:hover { text-decoration: underline; }
-    .hidden { display: none !important; }
-    .card {
-      width: 100%;
-      max-width: 920px;
-      margin: 0 auto;
-      padding: 28px 24px 22px;
-      border: 1px solid rgba(120, 170, 255, 0.22);
-      border-radius: 14px;
-      background: linear-gradient(145deg, rgba(18, 32, 58, 0.96), rgba(12, 22, 42, 0.98));
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-    }
-    h1 {
-      margin: 0 0 8px;
-      text-align: center;
-      font-size: 22px;
-    }
-    .subtitle {
-      margin: 0 0 16px;
-      text-align: center;
-      color: #8ea8cc;
-      font-size: 13px;
-      line-height: 1.45;
-    }
-    .steps {
-      margin: 0 0 18px;
-      padding: 12px 14px;
-      border: 1px solid rgba(120, 170, 255, 0.18);
-      border-radius: 8px;
-      background: rgba(8, 16, 32, 0.55);
-      color: #b8c9e8;
-      font-size: 12px;
-      line-height: 1.55;
-    }
-    .steps strong { color: #eef4ff; }
-    .steps ol { margin: 8px 0 0; padding-left: 18px; }
+
+    /* —— Shared controls —— */
     .field {
       position: relative;
-      margin-bottom: 14px;
+      margin: 0;
     }
     .field input,
     .field select {
       width: 100%;
       min-height: 46px;
       padding: 16px 14px 8px;
-      border: 1px solid rgba(120, 170, 255, 0.28);
-      border-radius: 8px;
-      background: rgba(8, 16, 32, 0.85);
-      color: #eef4ff;
-      font-size: 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.75);
+      color: var(--text);
+      font: 14px/1.2 var(--font);
       outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .field input:focus,
+    .field select:focus {
+      border-color: rgba(94, 207, 255, 0.5);
+      box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.12);
     }
     .field label {
       position: absolute;
       top: -8px;
-      left: 10px;
+      left: 12px;
       padding: 0 6px;
-      background: #142038;
-      color: #b8c9e8;
-      font-size: 12px;
+      background: var(--bg-3);
+      color: var(--muted);
+      font: 500 12px/1 var(--font);
     }
     button {
-      width: 100%;
-      min-height: 44px;
-      margin-top: 6px;
-      border: 1px solid rgba(120, 170, 255, 0.22);
-      border-radius: 8px;
-      background: rgba(16, 30, 54, 0.95);
-      color: #5ecfff;
-      font: 700 15px/1 Arial, sans-serif;
+      font-family: var(--font);
       cursor: pointer;
     }
-    button:hover:not(:disabled) { color: #8de4ff; }
     button:disabled { opacity: 0.6; cursor: wait; }
-    .status {
-      margin: 10px 0 0;
-      min-height: 18px;
-      text-align: center;
-      color: #8ea8cc;
-      font-size: 12px;
-      line-height: 1.4;
+    .btn-primary {
+      width: auto;
+      min-height: 42px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #4a96ff 0%, #2f78e8 100%);
+      color: #fff;
+      font: 600 14px/1 var(--font);
+      box-shadow: 0 6px 16px rgba(47, 120, 232, 0.25);
     }
-    .status.error { color: #ff8a9a; }
-    .status.ok { color: #7dffb8; }
-    .section-title {
-      margin: 18px 0 10px;
-      color: #b8c9e8;
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .logout, .link-btn {
-      margin-top: 14px;
-      background: transparent;
-      color: #7eb8ff;
-      font-size: 13px;
-      font-weight: 400;
-    }
-    .link-row {
-      margin-top: 12px;
-      text-align: center;
-    }
-    .link-row a {
-      color: #7eb8ff;
-      font-size: 13px;
-      text-decoration: none;
-    }
-    .link-row a:hover { text-decoration: underline; }
-    .mailings-card {
-      margin-top: 18px;
-      padding: 14px;
-      border: 1px solid rgba(120, 170, 255, 0.18);
-      border-radius: 8px;
-      background: rgba(8, 16, 32, 0.55);
-    }
-    .mailings-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .mailings-head h2 {
-      margin: 0;
-      font-size: 14px;
-      color: #eef4ff;
-    }
-    .refresh-btn, .stop-btn {
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
+    .btn-ghost {
       width: auto;
       min-height: 34px;
       margin: 0;
       padding: 0 12px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .stop-btn {
-      color: #ffb4c0;
-      border-color: rgba(255, 120, 140, 0.35);
-    }
-    .stop-btn:hover:not(:disabled) { color: #ffd0d8; }
-    .logout-profile-btn {
-      color: #ffd56a;
-      border-color: rgba(255, 193, 7, 0.35);
-      margin-top: 4px;
-    }
-    .logout-profile-btn:hover:not(:disabled) { color: #ffe59a; }
-    .scan-btn {
-      color: #7dffb8;
-      border-color: rgba(46, 204, 113, 0.35);
-    }
-    .scan-btn:hover:not(:disabled) { color: #a8ffd0; }
-    .delete-btn {
-      color: #ff8a9a;
-      border-color: rgba(255, 120, 140, 0.35);
-    }
-    .action-cell {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-      min-width: 0;
-      white-space: nowrap;
-    }
-    .action-cell button {
-      width: auto;
-      min-height: 26px;
-      margin: 0;
-      padding: 3px 8px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .profile-assign-select {
-      width: 100%;
-      min-width: 140px;
-      max-width: 220px;
-      min-height: 30px;
-      padding: 4px 8px;
-      border: 1px solid rgba(120, 170, 255, 0.28);
-      border-radius: 6px;
-      background: rgba(8, 16, 32, 0.85);
-      color: #eef4ff;
-      font-size: 12px;
-    }
-    .mailings-empty {
-      color: #8ea8cc;
-      font-size: 12px;
-      line-height: 1.5;
-      padding: 8px 0;
-    }
-    .mailings-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    .mailings-table th,
-    .mailings-table td {
-      padding: 8px 6px;
-      border-bottom: 1px solid rgba(120, 170, 255, 0.12);
-      text-align: left;
-      vertical-align: top;
-    }
-    .mailings-table th {
-      color: #8ea8cc;
-      font-weight: 600;
-    }
-    .mailings-table td { color: #dbe8ff; }
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 700;
-    }
-    .badge-running { background: rgba(46, 204, 113, 0.18); color: #7dffb8; }
-    .badge-paused { background: rgba(255, 193, 7, 0.16); color: #ffd56a; }
-    .operators-card {
-      margin-top: 18px;
-      padding: 14px;
-      border: 1px solid rgba(120, 170, 255, 0.18);
+      border: 1px solid var(--line-strong);
       border-radius: 8px;
-      background: rgba(8, 16, 32, 0.55);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-soft);
+      font: 600 12px/1 var(--font);
     }
-    .operators-table code {
-      font-family: Consolas, monospace;
-      font-size: 12px;
-      color: #eef4ff;
-      word-break: break-all;
+    .btn-ghost:hover:not(:disabled) {
+      color: var(--text);
+      border-color: rgba(148, 178, 220, 0.4);
+      background: rgba(255, 255, 255, 0.05);
     }
-    .muted-note {
-      margin: 8px 0 0;
-      color: #8ea8cc;
-      font-size: 11px;
-      line-height: 1.45;
+    .status {
+      position: sticky;
+      bottom: 0;
+      margin: 20px 0 0;
+      padding: 10px 14px;
+      min-height: 18px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: left;
     }
+    .status:empty { display: none; }
+    .status.error {
+      color: #ffb0b6;
+      background: var(--danger-soft);
+      border-color: rgba(240, 113, 120, 0.28);
+    }
+    .status.ok {
+      color: #8ef0bf;
+      background: var(--ok-soft);
+      border-color: rgba(62, 207, 142, 0.28);
+    }
+
+    /* —— Panel shell —— */
     .panel-layout {
       display: flex;
       min-height: 100vh;
       width: 100%;
-      max-width: 1280px;
-      margin: 0 auto;
-      gap: 0;
     }
     .admin-sidebar {
-      width: 240px;
-      flex: 0 0 240px;
-      padding: 20px 14px;
-      border-right: 1px solid rgba(120, 170, 255, 0.16);
-      background: linear-gradient(180deg, rgba(10, 18, 36, 0.98), rgba(8, 14, 28, 0.98));
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      width: 248px;
+      flex: 0 0 248px;
+      height: 100vh;
+      padding: 22px 14px;
+      border-right: 1px solid var(--line);
+      background: rgba(8, 14, 26, 0.92);
+      backdrop-filter: blur(10px);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
     }
     .sidebar-brand {
       margin: 0;
-      padding: 4px 8px 10px;
-      color: #f4f8ff;
-      font: 700 18px/1.2 Arial, sans-serif;
+      padding: 2px 10px 4px;
+      color: var(--text);
+      font: 700 20px/1.2 var(--font);
+      letter-spacing: -0.02em;
     }
     .sidebar-user {
-      margin: 0;
-      padding: 0 8px 12px;
-      color: #8ea8cc;
+      margin: 0 0 10px;
+      padding: 0 10px 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
       font-size: 12px;
       line-height: 1.4;
       word-break: break-word;
     }
     .sidebar-section-title {
-      margin: 8px 0 4px;
-      padding: 0 8px;
-      color: #6d88ad;
+      margin: 14px 0 6px;
+      padding: 0 10px;
+      color: #6a809e;
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
+      font-weight: 600;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
     .sidebar-nav {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
     .sidebar-nav-btn {
       width: 100%;
@@ -453,57 +336,254 @@
       margin: 0;
       padding: 0 12px;
       border: 1px solid transparent;
-      border-radius: 8px;
+      border-radius: 10px;
       background: transparent;
-      color: #c8d8f0;
-      font: 600 13px/1.2 Arial, sans-serif;
+      color: #c2d0e6;
+      font: 500 13px/1.2 var(--font);
       text-align: left;
-      cursor: pointer;
     }
     .sidebar-nav-btn:hover {
-      background: rgba(120, 170, 255, 0.08);
-      color: #eef4ff;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
     }
     .sidebar-nav-btn.is-active {
-      background: rgba(56, 120, 255, 0.16);
-      border-color: rgba(120, 170, 255, 0.28);
-      color: #8de4ff;
+      background: var(--accent-soft);
+      border-color: rgba(61, 139, 253, 0.35);
+      color: #b7d6ff;
     }
     .sidebar-spacer { flex: 1 1 auto; }
     .sidebar-logout {
       width: 100%;
-      min-height: 38px;
+      min-height: 40px;
       margin: 0;
-      border: 1px solid rgba(120, 170, 255, 0.18);
-      border-radius: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
       background: transparent;
-      color: #8ea8cc;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
+      color: var(--muted);
+      font: 600 13px/1 var(--font);
     }
-    .sidebar-logout:hover { color: #ff8a9a; border-color: rgba(255, 120, 140, 0.35); }
+    .sidebar-logout:hover {
+      color: var(--danger);
+      border-color: rgba(240, 113, 120, 0.35);
+      background: var(--danger-soft);
+    }
     .admin-main {
       flex: 1 1 auto;
       min-width: 0;
-      padding: 22px 24px 28px;
+      padding: 28px 32px 36px;
       overflow: auto;
     }
     .admin-main-title {
-      margin: 0 0 16px;
-      color: #eef4ff;
-      font-size: 22px;
-      font-weight: 700;
+      margin: 0 0 6px;
+      color: var(--text);
+      font: 700 26px/1.2 var(--font);
+      letter-spacing: -0.02em;
+    }
+    .admin-main-lead {
+      margin: 0 0 20px;
+      max-width: 640px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
     }
     .admin-section { display: none; }
     .admin-section.is-active { display: block; }
-    body.panel-page { padding: 0; }
+
+    .panel-card {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(165deg, rgba(17, 28, 48, 0.92), rgba(12, 20, 36, 0.96));
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    }
+    .panel-card + .panel-card { margin-top: 16px; }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .card-head h3 {
+      margin: 0;
+      font: 600 15px/1.3 var(--font);
+      color: var(--text);
+    }
+    .muted-note {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .form-grid .field-span-2 { grid-column: 1 / -1; }
+    .form-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .helper-text {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .helper-text strong { color: #c8d8f0; font-weight: 600; }
+    .steps {
+      margin: 0 0 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.4);
+      color: #b5c6de;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .steps strong { color: var(--text); }
+    .steps ol { margin: 8px 0 0; padding-left: 18px; }
+    .section-label {
+      margin: 0 0 12px;
+      color: #a8bad4;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .table-scroll {
+      margin-top: 14px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.35);
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .data-table th,
+    .data-table td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+    .data-table th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.02);
+      white-space: nowrap;
+    }
+    .data-table td { color: #d7e3f5; }
+    .data-table tr:last-child td { border-bottom: 0; }
+    .data-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    .data-table code {
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-size: 12px;
+      color: #e8effa;
+      word-break: break-all;
+    }
+    .empty-state {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 18px 4px 6px;
+    }
+    .profile-assign-select {
+      width: 100%;
+      min-width: 150px;
+      max-width: 220px;
+      min-height: 34px;
+      padding: 4px 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      background: rgba(6, 12, 24, 0.85);
+      color: var(--text);
+      font: 12px/1.2 var(--font);
+    }
+    .action-cell {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+    }
+    .action-cell button {
+      width: auto;
+      min-height: 30px;
+      margin: 0;
+      padding: 0 10px;
+      border-radius: 8px;
+      font: 600 11px/1 var(--font);
+    }
+    .scan-btn {
+      border: 1px solid rgba(62, 207, 142, 0.35);
+      background: var(--ok-soft);
+      color: #8ef0bf;
+    }
+    .scan-btn:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+    .delete-btn {
+      border: 1px solid rgba(240, 113, 120, 0.35);
+      background: var(--danger-soft);
+      color: #ffb0b6;
+    }
+    .delete-btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .stop-btn {
+      border: 1px solid rgba(240, 113, 120, 0.35);
+      background: var(--danger-soft);
+      color: #ffb0b6;
+    }
+    .stop-btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .logout-profile-btn {
+      border: 1px solid rgba(230, 184, 77, 0.35);
+      background: rgba(230, 184, 77, 0.12);
+      color: #f0d48a;
+    }
+    .logout-profile-btn:hover:not(:disabled) { filter: brightness(1.08); }
+    .badge {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-running { background: var(--ok-soft); color: #8ef0bf; }
+    .badge-paused { background: rgba(230, 184, 77, 0.16); color: #f0d48a; }
+
+    @media (max-width: 900px) {
+      .panel-layout { flex-direction: column; }
+      .admin-sidebar {
+        position: relative;
+        width: 100%;
+        flex: none;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .sidebar-spacer { display: none; }
+      .form-grid { grid-template-columns: 1fr; }
+      .admin-main { padding: 20px 16px 28px; }
+    }
   </style>
 </head>
 <body class="auth-page">
   <div id="auth-shell" class="app-auth-gate">
     <div id="login-view" class="auth-card">
       <h1 class="auth-title">AutoSender</h1>
+      <p class="auth-hint" style="margin-top:0">Director cabinet</p>
       <form id="login-form" class="auth-form" autocomplete="on">
         <div class="auth-field">
           <input id="login-email" type="text" autocomplete="username" placeholder=" ">
@@ -520,12 +600,12 @@
         <button type="submit" id="login-btn" class="auth-submit">Login</button>
       </form>
       <p id="auth-status" class="auth-status" aria-live="polite"></p>
-      <p class="auth-hint">Director cabinet</p>
       <button type="button" id="toggle-bootstrap" class="auth-mode-switch">Initial setup</button>
     </div>
 
     <div id="bootstrap-view" class="auth-card hidden">
       <h1 class="auth-title">AutoSender</h1>
+      <p class="auth-hint" style="margin-top:0">Create the first admin account</p>
       <form id="bootstrap-form" class="auth-form">
         <div class="auth-field">
           <input id="bootstrap-secret" type="password" autocomplete="off" placeholder=" ">
@@ -552,15 +632,15 @@
         <h1 class="sidebar-brand">AutoSender</h1>
         <p class="sidebar-user" id="admin-label"></p>
 
-        <div class="sidebar-section-title">Акаунт менеджер</div>
+        <div class="sidebar-section-title">Accounts</div>
         <nav class="sidebar-nav" aria-label="Account manager">
-          <button type="button" class="sidebar-nav-btn is-active" data-section="ladies">Аккаунты леди</button>
-          <button type="button" class="sidebar-nav-btn" data-section="operators">Аккаунты операторов</button>
+          <button type="button" class="sidebar-nav-btn is-active" data-section="ladies">Lady accounts</button>
+          <button type="button" class="sidebar-nav-btn" data-section="operators">Operator accounts</button>
         </nav>
 
-        <div class="sidebar-section-title">Контроль</div>
+        <div class="sidebar-section-title">Control</div>
         <nav class="sidebar-nav" aria-label="Control">
-          <button type="button" class="sidebar-nav-btn" data-section="mailings">Рассылки</button>
+          <button type="button" class="sidebar-nav-btn" data-section="mailings">Mailings</button>
         </nav>
 
         <div class="sidebar-spacer"></div>
@@ -570,126 +650,150 @@
       <main class="admin-main">
         <div id="panel-view">
           <section id="section-ladies" class="admin-section is-active">
-            <h2 class="admin-main-title">Аккаунты леди</h2>
-            <div class="operators-card" style="margin-top:0">
-              <div class="mailings-head">
-                <h2>Анкеты Dream</h2>
-                <button type="button" id="refresh-profiles-btn" class="refresh-btn">Обновить</button>
+            <h2 class="admin-main-title">Lady accounts</h2>
+            <p class="admin-main-lead">Add Dream login/password so operators do not need to enter them in the office. Assign an operator when adding a profile or later in the table.</p>
+
+            <div class="panel-card">
+              <div class="card-head">
+                <h3>Dream profiles</h3>
+                <button type="button" id="refresh-profiles-btn" class="btn-ghost">Refresh</button>
               </div>
-              <p class="muted-note">Добавьте логин/пароль Dream — оператору не нужно вводить их в офисе. Оператора можно выбрать при добавлении или в таблице ниже.</p>
-              <div class="section-title">Новая анкета</div>
-              <div class="field">
-                <input id="profile-dream-login" type="text" placeholder=" ">
-                <label for="profile-dream-login">Логин Dream</label>
+
+              <div class="section-label">New profile</div>
+              <div class="form-grid">
+                <div class="field">
+                  <input id="profile-dream-login" type="text" placeholder=" ">
+                  <label for="profile-dream-login">Dream login</label>
+                </div>
+                <div class="field">
+                  <input id="profile-dream-password" type="password" placeholder=" ">
+                  <label for="profile-dream-password">Dream password</label>
+                </div>
+                <div class="field">
+                  <input id="profile-display-name" type="text" placeholder=" ">
+                  <label for="profile-display-name">Name (optional)</label>
+                </div>
+                <div class="field">
+                  <select id="profile-assigned-operator" class="profile-assign-select" style="width:100%;min-height:46px;padding:12px 14px 8px;max-width:none">
+                    <option value="">— Unassigned —</option>
+                  </select>
+                  <label for="profile-assigned-operator">Operator</label>
+                </div>
               </div>
-              <div class="field">
-                <input id="profile-dream-password" type="password" placeholder=" ">
-                <label for="profile-dream-password">Пароль Dream</label>
+              <div class="form-actions">
+                <button type="button" id="create-profile-btn" class="btn-primary">Add profile</button>
               </div>
-              <div class="field">
-                <input id="profile-display-name" type="text" placeholder=" ">
-                <label for="profile-display-name">Имя (необязательно)</label>
-              </div>
-              <div class="field">
-                <select id="profile-assigned-operator" class="profile-assign-select" style="width:100%;min-height:46px;padding:12px;">
-                  <option value="">— оператор не назначен —</option>
-                </select>
-                <label for="profile-assigned-operator">Оператор</label>
-              </div>
-              <button type="button" id="create-profile-btn">Добавить анкету</button>
-              <div id="profiles-empty" class="mailings-empty hidden">Анкет пока нет.</div>
-              <div id="profiles-wrap" class="hidden" style="margin-top:12px">
-                <p class="auth-hint" style="margin:0 0 10px;text-align:left">
-                  Оператор видит анкету только если в расширении входит под <strong>этим же логином</strong> (не под логином директора).
+
+              <div id="profiles-empty" class="empty-state hidden">No profiles yet.</div>
+              <div id="profiles-wrap" class="hidden">
+                <p class="helper-text">
+                  An operator only sees a profile if they sign in to the extension with <strong>the same login</strong> (not the director login).
                 </p>
-                <table class="mailings-table operators-table">
-                  <thead>
-                    <tr>
-                      <th>Анкета</th>
-                      <th>ID</th>
-                      <th>Логин Dream</th>
-                      <th>Пароль</th>
-                      <th>Оператор</th>
-                      <th>В базе</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="profiles-body"></tbody>
-                </table>
+                <div class="table-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Profile</th>
+                        <th>ID</th>
+                        <th>Dream login</th>
+                        <th>Password</th>
+                        <th>Operator</th>
+                        <th>In DB</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="profiles-body"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
 
           <section id="section-operators" class="admin-section">
-            <h2 class="admin-main-title">Аккаунты операторов</h2>
-            <div class="steps">
-              <strong>Создание оператора</strong>
-              <ol>
-                <li>Заполните логин и пароль</li>
-                <li>Нажмите <strong>Создать оператора</strong></li>
-                <li>Оператор входит в расширение AutoSender</li>
-              </ol>
-            </div>
-            <div class="section-title">Новый оператор</div>
-            <div class="field">
-              <input id="operator-email" type="text" placeholder=" ">
-              <label for="operator-email">Login</label>
-            </div>
-            <div class="field">
-              <input id="operator-password" type="password" placeholder=" ">
-              <label for="operator-password">Password</label>
-            </div>
-            <div class="field">
-              <input id="operator-name" type="text" placeholder=" ">
-              <label for="operator-name">Name</label>
-            </div>
-            <button type="button" id="create-operator-btn">Создать оператора</button>
+            <h2 class="admin-main-title">Operator accounts</h2>
+            <p class="admin-main-lead">Create operator logins for the AutoSender Chrome extension.</p>
 
-            <div class="operators-card">
-              <div class="mailings-head">
-                <h2>Список операторов</h2>
-                <button type="button" id="refresh-operators-btn" class="refresh-btn">Обновить</button>
+            <div class="panel-card">
+              <div class="steps">
+                <strong>Create an operator</strong>
+                <ol>
+                  <li>Enter login and password</li>
+                  <li>Click <strong>Create operator</strong></li>
+                  <li>Operator signs in via the AutoSender extension</li>
+                </ol>
               </div>
-              <p class="muted-note">Логин и пароль видны для операторов, созданных после обновления.</p>
-              <div id="operators-empty" class="mailings-empty hidden">Операторов пока нет.</div>
+
+              <div class="section-label">New operator</div>
+              <div class="form-grid">
+                <div class="field">
+                  <input id="operator-email" type="text" placeholder=" ">
+                  <label for="operator-email">Login</label>
+                </div>
+                <div class="field">
+                  <input id="operator-password" type="password" placeholder=" ">
+                  <label for="operator-password">Password</label>
+                </div>
+                <div class="field field-span-2">
+                  <input id="operator-name" type="text" placeholder=" ">
+                  <label for="operator-name">Name</label>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="button" id="create-operator-btn" class="btn-primary">Create operator</button>
+              </div>
+            </div>
+
+            <div class="panel-card">
+              <div class="card-head">
+                <h3>Operators</h3>
+                <button type="button" id="refresh-operators-btn" class="btn-ghost">Refresh</button>
+              </div>
+              <p class="muted-note">Login and password are visible for operators created after this update.</p>
+              <div id="operators-empty" class="empty-state hidden">No operators yet.</div>
               <div id="operators-wrap" class="hidden">
-                <table class="mailings-table operators-table">
-                  <thead>
-                    <tr>
-                      <th>Имя</th>
-                      <th>Логин</th>
-                      <th>Пароль</th>
-                      <th>Создан</th>
-                    </tr>
-                  </thead>
-                  <tbody id="operators-body"></tbody>
-                </table>
+                <div class="table-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Login</th>
+                        <th>Password</th>
+                        <th>Created</th>
+                      </tr>
+                    </thead>
+                    <tbody id="operators-body"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
 
           <section id="section-mailings" class="admin-section">
-            <h2 class="admin-main-title">Рассылки</h2>
-            <div class="mailings-card" style="margin-top:0">
-              <div class="mailings-head">
-                <h2>Active mailings (LetterBot + Sender)</h2>
-                <button type="button" id="refresh-mailings-btn" class="refresh-btn">Refresh</button>
+            <h2 class="admin-main-title">Mailings</h2>
+            <p class="admin-main-lead">Live LetterBot and Sender jobs across operators.</p>
+
+            <div class="panel-card">
+              <div class="card-head">
+                <h3>Active mailings</h3>
+                <button type="button" id="refresh-mailings-btn" class="btn-ghost">Refresh</button>
               </div>
-              <div id="mailings-empty" class="mailings-empty hidden">No active mailings right now.</div>
+              <div id="mailings-empty" class="empty-state hidden">No active mailings right now.</div>
               <div id="mailings-wrap" class="hidden">
-                <table class="mailings-table">
-                  <thead>
-                    <tr>
-                      <th>Operator</th>
-                      <th>Product</th>
-                      <th>Profile</th>
-                      <th>Filter</th>
-                      <th>Progress</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="mailings-body"></tbody>
-                </table>
+                <div class="table-scroll">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Operator</th>
+                        <th>Product</th>
+                        <th>Profile</th>
+                        <th>Filter</th>
+                        <th>Progress</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="mailings-body"></tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
@@ -855,7 +959,7 @@
       const emptyEl = document.getElementById("operators-empty");
       const wrapEl = document.getElementById("operators-wrap");
       const bodyEl = document.getElementById("operators-body");
-      if (!quiet) setStatus("Загрузка операторов...");
+      if (!quiet) setStatus("Loading operators...");
       try {
         const data = await api("/auth/operators");
         const operators = Array.isArray(data.operators) ? data.operators : [];
@@ -872,7 +976,7 @@
             const tr = document.createElement("tr");
             const password = operator.password
               ? `<code>${escapeHtml(operator.password)}</code>`
-              : '<span style="color:#8ea8cc">не сохранён</span>';
+              : '<span style="color:#7f94b3">not saved</span>';
             tr.innerHTML = `
               <td>${escapeHtml(operator.name || "—")}</td>
               <td><code>${escapeHtml(operator.email || "—")}</code></td>
@@ -890,7 +994,7 @@
 
     function operatorSelectOptionsHtml(selectedId = "") {
       const current = String(selectedId || "");
-      let html = '<option value="">— не назначен —</option>';
+      let html = '<option value="">— Unassigned —</option>';
       for (const operator of cachedOperators) {
         const id = String(operator.id);
         const label = `${operator.name || operator.email} (${operator.email})`;
@@ -909,7 +1013,7 @@
     async function assignProfileOperator(profileId, assignedUserId, selectEl) {
       const previous = selectEl.getAttribute("data-prev") || "";
       selectEl.disabled = true;
-      setStatus("Сохранение оператора...");
+      setStatus("Saving operator...");
       try {
         await api(`/profiles/admin/${profileId}`, {
           method: "PATCH",
@@ -918,7 +1022,7 @@
           }),
         });
         selectEl.setAttribute("data-prev", assignedUserId || "");
-        setStatus("Оператор назначен", "ok");
+        setStatus("Operator assigned", "ok");
       } catch (error) {
         selectEl.value = previous;
         setStatus(error.message, "error");
@@ -931,7 +1035,7 @@
       const emptyEl = document.getElementById("profiles-empty");
       const wrapEl = document.getElementById("profiles-wrap");
       const bodyEl = document.getElementById("profiles-body");
-      if (!quiet) setStatus("Загрузка анкет...");
+      if (!quiet) setStatus("Loading profiles...");
       try {
         if (!cachedOperators.length) {
           await refreshOperators({ quiet: true });
@@ -950,7 +1054,7 @@
             const assignedId = profile.assignedUserId ? String(profile.assignedUserId) : "";
             const password = profile.password
               ? `<code>${escapeHtml(profile.password)}</code>`
-              : '<span style="color:#8ea8cc">—</span>';
+              : '<span style="color:#7f94b3">—</span>';
             tr.innerHTML = `
               <td>${escapeHtml(profile.displayName || "—")}</td>
               <td>${profile.femaleProfileId || "—"}</td>
@@ -965,7 +1069,7 @@
               <td class="action-cell">
                 <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
                 <button type="button" class="scan-btn profile-scanall-btn" data-profile-id="${profile.id}">Scan All</button>
-                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Удалить</button>
+                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Delete</button>
               </td>
             `;
             bodyEl.appendChild(tr);
@@ -978,7 +1082,7 @@
     }
 
     async function createProfile() {
-      setStatus("Проверка логина Dream...");
+      setStatus("Checking Dream login...");
       try {
         const assignedUserId = document.getElementById("profile-assigned-operator").value;
         await api("/profiles/admin", {
@@ -994,7 +1098,7 @@
         document.getElementById("profile-dream-password").value = "";
         document.getElementById("profile-display-name").value = "";
         document.getElementById("profile-assigned-operator").value = "";
-        setStatus("Анкета добавлена", "ok");
+        setStatus("Profile added", "ok");
         await refreshProfiles({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
@@ -1011,7 +1115,7 @@
           method: "POST",
           body: JSON.stringify({ maxPages }),
         });
-        setStatus(`Готово: ${data.men || 0} мужчин, в базе +${data.added || 0}`, "ok");
+        setStatus(`Done: ${data.men || 0} men, +${data.added || 0} added to DB`, "ok");
         await refreshProfiles({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
@@ -1024,7 +1128,7 @@
     function formatOperator(job) {
       const name = String(job.operatorName || "").trim();
       const email = String(job.operatorEmail || "").trim();
-      if (name && email) return `${name}<br><span style="color:#8ea8cc">${email}</span>`;
+      if (name && email) return `${name}<br><span style="color:#7f94b3">${email}</span>`;
       return email || `User #${job.userId}`;
     }
 
@@ -1096,7 +1200,7 @@
                   data-profile-id="${job.profileId}">Stop</button>
                 <button type="button" class="logout-profile-btn"
                   data-user-id="${job.userId}"
-                  data-profile-id="${job.profileId}">Вылогинить анкету</button>
+                  data-profile-id="${job.profileId}">Logout profile</button>
               </td>
             `;
             bodyEl.appendChild(tr);
@@ -1303,7 +1407,7 @@
       if (scanAllBtn) {
         const profileId = scanAllBtn.getAttribute("data-profile-id");
         if (!profileId) return;
-        if (!window.confirm("Scan All — весь инбокс в базу?")) return;
+        if (!window.confirm("Scan All — import the full inbox into the database?")) return;
         void scanProfile(profileId, 0, scanAllBtn);
         return;
       }
@@ -1311,11 +1415,11 @@
       if (deleteBtn) {
         const profileId = deleteBtn.getAttribute("data-profile-id");
         if (!profileId) return;
-        if (!window.confirm("Удалить анкету из кабинета? (данные в базе останутся)")) return;
+        if (!window.confirm("Delete this profile from the cabinet? (DB data will remain)")) return;
         void (async () => {
           try {
             await api(`/profiles/admin/${profileId}`, { method: "DELETE" });
-            setStatus("Анкета удалена", "ok");
+            setStatus("Profile deleted", "ok");
             await refreshProfiles({ quiet: true });
           } catch (error) {
             setStatus(error.message, "error");
