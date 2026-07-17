@@ -136,7 +136,7 @@ export async function listProfileAssignmentsForUserDay(userId, dayKey) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
   const db = getPool();
   const result = await db.query(
-    `SELECT DISTINCT ON (h.female_profile_id)
+    `SELECT
        h.agency_profile_id,
        h.female_profile_id,
        h.display_name,

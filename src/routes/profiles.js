@@ -277,20 +277,28 @@ router.get("/balances", authMiddleware, async (req, res) => {
           photoUrl: assignment.photoUrl || "",
           balanceUsd: 0,
           actions: [],
-          assignment,
+          assignments: [],
         });
       }
+      byProfile.get(key).assignments.push(assignment);
     }
 
     for (const action of agencyActions) {
       const entry = byProfile.get(String(action.femaleProfileId));
-      if (!entry || !actionFallsInAssignment(action, entry.assignment)) continue;
+      if (
+        !entry ||
+        !entry.assignments.some((assignment) =>
+          actionFallsInAssignment(action, assignment),
+        )
+      ) {
+        continue;
+      }
       entry.actions.push(action);
       entry.balanceUsd += Number(action.amountUsd) || 0;
     }
 
     const profiles = [...byProfile.values()]
-      .map(({ assignment, ...entry }) => ({
+      .map(({ assignments: _assignments, ...entry }) => ({
         ...entry,
         balanceUsd: Number(entry.balanceUsd.toFixed(2)),
         actions: entry.actions.sort((a, b) =>
