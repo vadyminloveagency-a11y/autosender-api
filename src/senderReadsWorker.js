@@ -221,6 +221,38 @@ export class SenderReadsWorker {
     return [...this._manualBlacklistIds];
   }
 
+  setFavoritesExcludeIds(ids) {
+    this._favoritesExcludeIds = [
+      ...new Set(
+        (Array.isArray(ids) ? ids : [])
+          .map(Number)
+          .filter((id) => id >= 1000),
+      ),
+    ];
+    return this._favoritesExcludeIds;
+  }
+
+  mergeFavoritesExcludeIds(ids) {
+    const next = new Set(
+      (Array.isArray(this._favoritesExcludeIds) ? this._favoritesExcludeIds : [])
+        .map(Number)
+        .filter((id) => id >= 1000),
+    );
+    for (const raw of Array.isArray(ids) ? ids : []) {
+      const id = Number(raw) || 0;
+      if (id >= 1000) next.add(id);
+    }
+    this._favoritesExcludeIds = [...next];
+    return this._favoritesExcludeIds;
+  }
+
+  /** Live Active+Gold / new writers — always read current exclude list. */
+  favoritesExcludeSet() {
+    return new Set(
+      Array.isArray(this._favoritesExcludeIds) ? this._favoritesExcludeIds : [],
+    );
+  }
+
   setCredentialsProvider(fn) {
     this.credentialsProvider = typeof fn === "function" ? fn : null;
   }
@@ -1110,6 +1142,9 @@ export class SenderReadsWorker {
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
         if (this.state.stopRequested || token !== this.runToken) break;
+        if (filters.excludeFavorites) {
+          favorites = this.favoritesExcludeSet();
+        }
 
         this.emit({
           page,
@@ -1618,6 +1653,9 @@ export class SenderReadsWorker {
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
         if (this.state.stopRequested || token !== this.runToken) break;
+        if (filters.excludeFavorites) {
+          favorites = this.favoritesExcludeSet();
+        }
 
         let onlineRows = [];
         try {

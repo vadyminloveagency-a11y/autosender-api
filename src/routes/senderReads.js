@@ -291,6 +291,39 @@ router.post("/blacklist", authMiddleware, async (req, res) => {
   }
 });
 
+router.post("/favorites-exclude", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  const channel = requireChannel(req, res);
+  if (!channel) return;
+  try {
+    const worker = getWorker(req, profileId, channel);
+    const merge = req.body?.merge !== false;
+    const ids = merge
+      ? worker.mergeFavoritesExcludeIds(req.body?.favoritesExcludeIds)
+      : worker.setFavoritesExcludeIds(req.body?.favoritesExcludeIds);
+    try {
+      await worker.persist?.(Boolean(worker.getState().running));
+    } catch (_) {}
+    const favSet = new Set(ids);
+    if (typeof worker.emit === "function") {
+      worker.emit({
+        ...(typeof worker.setFavoritesFetched === "function"
+          ? worker.setFavoritesFetched(favSet)
+          : {}),
+        statusMessage: `Favorites table: ${favSet.size}`,
+      });
+    }
+    return res.json({
+      ok: true,
+      channel,
+      favoritesExcludeIds: ids,
+      state: worker.getState(),
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
 router.post("/pause", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const channel = requireChannel(req, res);
