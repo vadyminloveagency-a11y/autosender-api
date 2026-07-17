@@ -728,6 +728,40 @@
       padding: 18px 8px;
       text-align: center;
     }
+    .mail-agency-creds {
+      margin: 0 0 12px;
+      padding: 10px;
+      border: 1px solid rgba(4, 242, 160, 0.16);
+      border-radius: 10px;
+      background: rgba(8, 14, 18, 0.45);
+    }
+    .mail-agency-creds-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .mail-agency-creds-row input {
+      flex: 1 1 140px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #0c1218;
+      color: var(--text);
+      padding: 0 10px;
+      font: 500 13px/1 var(--font);
+    }
+    .mail-agency-creds-hint {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .mail-balance {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-strong);
+      white-space: nowrap;
+    }
     .scan-btn {
       border: 1px solid rgba(4, 242, 160, 0.45);
       border-radius: 7px;
@@ -1366,6 +1400,15 @@
                 </div>
                 <div class="mail-day-panel">
                   <h4 id="mail-day-title">Selected day</h4>
+                  <div id="mail-balance-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
+                  <div id="agency-finance-creds" class="mail-agency-creds">
+                    <div class="mail-agency-creds-row">
+                      <input id="agency-finance-user" type="text" placeholder="Agency login" autocomplete="username">
+                      <input id="agency-finance-pass" type="password" placeholder="Agency password" autocomplete="current-password">
+                      <button type="button" id="agency-finance-save" class="btn-ghost">Save agency login</button>
+                    </div>
+                    <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
+                  </div>
                   <div id="mail-day-empty" class="mail-day-empty">No letters recorded for this day yet.</div>
                   <div id="mail-day-wrap" class="table-scroll hidden">
                     <table class="data-table">
@@ -1376,6 +1419,7 @@
                           <th>LetterBot</th>
                           <th>Read</th>
                           <th>Online</th>
+                          <th>Balance</th>
                         </tr>
                       </thead>
                       <tbody id="mail-day-body"></tbody>
@@ -2269,19 +2313,40 @@
       grid.innerHTML = cells.join("");
     }
 
-    function renderMailDayProfiles(profiles, date) {
+    function formatBalanceUsd(value) {
+      if (value == null || !Number.isFinite(Number(value))) return "—";
+      return `$${Number(value).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    }
+
+    function renderMailDayProfiles(profiles, date, meta = {}) {
       const emptyEl = document.getElementById("mail-day-empty");
       const wrapEl = document.getElementById("mail-day-wrap");
       const bodyEl = document.getElementById("mail-day-body");
       const titleEl = document.getElementById("mail-day-title");
+      const statusEl = document.getElementById("mail-balance-status");
       if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
       titleEl.textContent = `Questionnaires · ${date}`;
       bodyEl.innerHTML = "";
+      if (statusEl) {
+        if (meta.balanceError) {
+          statusEl.style.display = "block";
+          statusEl.textContent = `Balance: ${meta.balanceError}`;
+        } else if (meta.balanceConfigured === false) {
+          statusEl.style.display = "block";
+          statusEl.textContent = "Balance: save agency login below to load $ per questionnaire.";
+        } else {
+          statusEl.style.display = "none";
+          statusEl.textContent = "";
+        }
+      }
       const list = Array.isArray(profiles) ? profiles : [];
       if (!list.length) {
         emptyEl.classList.remove("hidden");
         wrapEl.classList.add("hidden");
-        emptyEl.textContent = "No letters recorded for this day yet.";
+        emptyEl.textContent = "No letters or bonuses for this day yet.";
         return;
       }
       emptyEl.classList.add("hidden");
@@ -2299,6 +2364,7 @@
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.letterbot) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.read) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.online) || 0).toLocaleString("en-US")}</td>
+          <td class="mail-balance">${formatBalanceUsd(row.balanceUsd)}</td>
         `;
         bodyEl.appendChild(tr);
       }
@@ -2339,13 +2405,22 @@
         // For today: prefer live daySent per questionnaire so calendar matches Active mailings.
         if (mailCalState.selectedDate === mailCalState.today) {
           profiles = mergeLiveDaySentIntoProfiles(profiles, lbData?.jobs || [], senderData?.jobs || []);
-          if (profiles.some((p) => (Number(p.letterbot) || 0) + (Number(p.read) || 0) + (Number(p.online) || 0) > 0)) {
+          if (
+            profiles.some(
+              (p) =>
+                (Number(p.letterbot) || 0) + (Number(p.read) || 0) + (Number(p.online) || 0) > 0 ||
+                (Number(p.balanceUsd) || 0) > 0,
+            )
+          ) {
             mailCalState.monthDays[mailCalState.today] = 1;
           }
         }
 
         renderMailCalendarGrid();
-        renderMailDayProfiles(profiles, mailCalState.selectedDate);
+        renderMailDayProfiles(profiles, mailCalState.selectedDate, {
+          balanceConfigured: data.balanceConfigured,
+          balanceError: data.balanceError,
+        });
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
@@ -2372,6 +2447,7 @@
             read: 0,
             online: 0,
             total: 0,
+            balanceUsd: null,
           });
         }
         const row = byId.get(id);
@@ -2406,8 +2482,20 @@
           ...row,
           total: (Number(row.letterbot) || 0) + (Number(row.read) || 0) + (Number(row.online) || 0),
         }))
-        .filter((row) => row.total > 0)
-        .sort((a, b) => b.total - a.total || String(a.displayName || a.profileId).localeCompare(String(b.displayName || b.profileId), "en"));
+        .filter(
+          (row) =>
+            row.total > 0 ||
+            (row.balanceUsd != null && Number.isFinite(Number(row.balanceUsd))),
+        )
+        .sort((a, b) => {
+          const balA = Number(a.balanceUsd) || 0;
+          const balB = Number(b.balanceUsd) || 0;
+          if (balB !== balA) return balB - balA;
+          return (
+            b.total - a.total ||
+            String(a.displayName || a.profileId).localeCompare(String(b.displayName || b.profileId), "en")
+          );
+        });
     }
 
     async function refreshMailings({ quiet = false } = {}) {
@@ -2677,6 +2765,44 @@
       mailCalState.selectedDate = btn.getAttribute("data-date");
       void refreshMailCalendar({ quiet: true });
     });
+
+    async function refreshAgencyFinanceCredsHint() {
+      const hint = document.getElementById("agency-finance-creds-hint");
+      if (!hint) return;
+      try {
+        const data = await api("/letterbot/admin/agency-finance-credentials");
+        if (data.configured) {
+          hint.textContent = `Agency login saved (${data.usernameMasked || "••••"})${data.source === "env" ? " · from env" : ""}`;
+        } else {
+          hint.textContent = "Not configured — needed for Balance $ column.";
+        }
+      } catch (_) {
+        hint.textContent = "";
+      }
+    }
+
+    document.getElementById("agency-finance-save")?.addEventListener("click", async () => {
+      const username = String(document.getElementById("agency-finance-user")?.value || "").trim();
+      const password = String(document.getElementById("agency-finance-pass")?.value || "");
+      if (!username || !password) {
+        setStatus("Agency login and password required", "error");
+        return;
+      }
+      setStatus("Saving agency finance login...");
+      try {
+        await api("/letterbot/admin/agency-finance-credentials", {
+          method: "POST",
+          body: JSON.stringify({ username, password }),
+        });
+        document.getElementById("agency-finance-pass").value = "";
+        setStatus("Agency login saved", "ok");
+        await refreshAgencyFinanceCredsHint();
+        await refreshMailCalendar({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    });
+    void refreshAgencyFinanceCredsHint();
 
     document.getElementById("accounts-list").addEventListener("click", (event) => {
       const editBtn = event.target.closest(".profile-edit-btn");

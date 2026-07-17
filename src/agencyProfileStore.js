@@ -69,7 +69,7 @@ export async function listAgencyProfiles() {
   );
 }
 
-/** Fast lookup for admin Mailings: femaleProfileId → name + photo. */
+/** Fast lookup for admin Mailings: femaleProfileId → name + photo + operator. */
 export async function mapAgencyProfilesByFemaleId() {
   const profiles = await listAgencyProfiles();
   const map = new Map();
@@ -80,6 +80,8 @@ export async function mapAgencyProfilesByFemaleId() {
       displayName: String(profile.displayName || "").trim(),
       dreamUsername: String(profile.dreamUsername || "").trim(),
       photoUrl: `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg`,
+      operatorName: String(profile.assignedOperatorName || "").trim(),
+      operatorEmail: String(profile.assignedOperatorEmail || "").trim(),
     });
   }
   return map;

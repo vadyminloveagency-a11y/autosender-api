@@ -27,6 +27,15 @@ import {
   listMailingDailyByProfile,
   listMailingDailyMonthTotals,
 } from "../mailingDailyStore.js";
+import {
+  ensureAgencyFinanceTables,
+  getAgencyFinanceCredentials,
+  upsertAgencyFinanceCredentials,
+} from "../agencyFinanceStore.js";
+import {
+  clearAgencyFinanceCaches,
+  fetchBonusesByGirl,
+} from "../dreamAgencyFinance.js";
 
 const router = express.Router();
 
@@ -594,30 +603,48 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
     ]);
 
+    let bonusRows = [];
+    let balanceError = "";
+    let balanceConfigured = false;
+    try {
+      const creds = await getAgencyFinanceCredentials();
+      balanceConfigured = Boolean(creds.configured);
+      if (creds.configured) {
+        bonusRows = await fetchBonusesByGirl(date);
+      }
+    } catch (error) {
+      balanceError = error?.message || String(error);
+    }
+
     const byProfile = new Map();
+    const ensureEntry = (key, metaExtra = {}) => {
+      let entry = byProfile.get(key);
+      if (entry) return entry;
+      const idNum = Number(key) || 0;
+      const meta = idNum ? profileMap.get(idNum) : null;
+      entry = {
+        profileId: key,
+        displayName: meta?.displayName || metaExtra.name || "",
+        dreamUsername: meta?.dreamUsername || "",
+        photoUrl:
+          meta?.photoUrl ||
+          (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+        operatorName: meta?.operatorName || "",
+        operatorEmail: meta?.operatorEmail || "",
+        letterbot: 0,
+        read: 0,
+        online: 0,
+        total: 0,
+        balanceUsd: null,
+      };
+      byProfile.set(key, entry);
+      return entry;
+    };
+
     for (const row of rows) {
       const key = String(row.profileId || "");
       if (!key) continue;
-      let entry = byProfile.get(key);
-      if (!entry) {
-        const idNum = Number(key) || 0;
-        const meta = idNum ? profileMap.get(idNum) : null;
-        entry = {
-          profileId: key,
-          displayName: meta?.displayName || "",
-          dreamUsername: meta?.dreamUsername || "",
-          photoUrl:
-            meta?.photoUrl ||
-            (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
-          operatorName: "",
-          operatorEmail: "",
-          letterbot: 0,
-          read: 0,
-          online: 0,
-          total: 0,
-        };
-        byProfile.set(key, entry);
-      }
+      const entry = ensureEntry(key);
       if (row.product === "online") entry.online += row.letters;
       else if (row.product === "read") entry.read += row.letters;
       else entry.letterbot += row.letters;
@@ -628,7 +655,18 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       }
     }
 
+    for (const bonus of bonusRows) {
+      const key = String(bonus.profileId || "");
+      if (!key) continue;
+      const entry = ensureEntry(key, { name: bonus.name });
+      entry.balanceUsd = Number(bonus.amount) || 0;
+      if (!entry.displayName && bonus.name) entry.displayName = bonus.name;
+    }
+
     const profiles = [...byProfile.values()].sort((a, b) => {
+      const balA = Number(a.balanceUsd) || 0;
+      const balB = Number(b.balanceUsd) || 0;
+      if (balB !== balA) return balB - balA;
       if (b.total !== a.total) return b.total - a.total;
       return String(a.displayName || a.profileId).localeCompare(
         String(b.displayName || b.profileId),
@@ -644,6 +682,8 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       today,
       monthDays,
       profiles,
+      balanceConfigured,
+      balanceError: balanceError || null,
     });
   } catch (error) {
     return res.status(500).json({
@@ -652,6 +692,34 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       profiles: [],
       monthDays: [],
     });
+  }
+});
+
+router.get("/admin/agency-finance-credentials", adminMiddleware, async (_req, res) => {
+  try {
+    await ensureAgencyFinanceTables();
+    const creds = await getAgencyFinanceCredentials();
+    return res.json({
+      ok: true,
+      configured: Boolean(creds.configured),
+      usernameMasked: creds.usernameMasked || "",
+      source: creds.source || "",
+      updatedAt: creds.updatedAt || null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
+  }
+});
+
+router.post("/admin/agency-finance-credentials", adminMiddleware, async (req, res) => {
+  try {
+    const username = String(req.body?.username || "").trim();
+    const password = String(req.body?.password || "");
+    const saved = await upsertAgencyFinanceCredentials({ username, password });
+    clearAgencyFinanceCaches();
+    return res.json({ ok: true, ...saved });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error?.message || String(error) });
   }
 });
 

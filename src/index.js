@@ -14,6 +14,7 @@ import senderReadsRoutes, { restoreRunningSenderReadsJobs } from "./routes/sende
 import { ensureLetterBotTables } from "./letterbotStore.js";
 import { ensureSenderReadsTables } from "./senderReadsStore.js";
 import { ensureMailingDailyTables } from "./mailingDailyStore.js";
+import { ensureAgencyFinanceTables } from "./agencyFinanceStore.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -53,6 +54,7 @@ async function start() {
   await ensureAgencyProfileTables();
   await ensureSenderReadsTables();
   await ensureMailingDailyTables();
+  await ensureAgencyFinanceTables();
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port}`);
   });
