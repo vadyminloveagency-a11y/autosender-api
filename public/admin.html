@@ -760,10 +760,11 @@
     .linked-edit svg { width: 14px; height: 14px; fill: currentColor; }
 
     .operators-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      display: flex;
+      flex-direction: column;
       gap: 12px;
-      align-content: start;
+      align-content: stretch;
+      width: 100%;
     }
     .operator-card {
       border: 1px solid var(--line);
@@ -772,7 +773,8 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      min-height: 180px;
+      width: 100%;
+      min-height: 120px;
       transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
       box-shadow: 0 4px 14px rgba(35, 55, 90, 0.05);
     }
@@ -837,19 +839,14 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 7px 8px;
+      padding: 10px 12px;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
       cursor: grab;
     }
     .linked-account:active { cursor: grabbing; }
-    .linked-account .account-avatar {
-      width: 32px;
-      height: 32px;
-      flex-basis: 32px;
-    }
-    .linked-account .account-name { font-size: 12px; }
+    .linked-account .account-name { font-size: 13px; }
     .linked-unassign {
       width: 26px;
       height: 26px;
@@ -1371,7 +1368,6 @@
                   draggable="true"
                   data-profile-id="${profile.id}"
                   data-drag-source="operator">
-                  ${avatarHtml(profile)}
                   <div class="account-meta">
                     <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
                     <p class="account-sub">${escapeHtml(profile.dreamUsername || "Dream")}</p>
