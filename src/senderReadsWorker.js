@@ -158,27 +158,19 @@ function parseReadTarget(message) {
   return { maleProfileId, linkMemberId };
 }
 
-function isMessageOnlineFlag(message) {
+  function isMessageOnlineFlag(message) {
   const v = message?.online ?? message?.is_online ?? message?.isOnline;
   if (v === true || v === 1) return true;
   if (v === false || v === 0 || v == null || v === "") return false;
   const s = String(v).trim().toLowerCase();
   if (s === "1" || s === "true" || s === "yes" || s === "online" || s === "on") return true;
   if (s === "0" || s === "false" || s === "no" || s === "offline" || s === "off") return false;
-  return false;
+  return Boolean(s);
 }
 
-/** Real online for Read·Online = live men-online set (same as Online tab).
- *  Readers JSON `online` is only a fallback — UI green can be live-updated and
- *  disagree with a stale returnJson snapshot. */
-function isReadOnlineEligible(message, onlineOnly, onlineSet = null) {
+/** Readers “I'M ONLINE” badge = message.online in returnJson (DreamAuto: !onlineOnly || A.online). */
+function isReadOnlineEligible(message, onlineOnly) {
   if (!onlineOnly) return true;
-  const id = Number(message?.sender_pid) || 0;
-  if (onlineSet instanceof Set && onlineSet.size > 0) {
-    if (id > 0 && onlineSet.has(id)) return true;
-    // Set is loaded: trust it over a stale/missing JSON flag.
-    return false;
-  }
   return isMessageOnlineFlag(message);
 }
 
@@ -1170,56 +1162,11 @@ export class SenderReadsWorker {
       const skipSummary = () =>
         `offline ${skipOffline}, fav ${skipFav}, dupe ${skipDupe}, notToday ${skipOld}, bad ${skipBad}, seen ${skipSeen}`;
 
-      let onlineSet = null;
-      let onlineSetLoadedAt = 0;
-      let onlineSetPromise = null;
-
-      const ensureOnlineSet = async ({ force = false } = {}) => {
-        if (!filters.onlineOnly) return null;
-        const freshEnough =
-          onlineSet instanceof Set &&
-          onlineSet.size > 0 &&
-          !force &&
-          Date.now() - onlineSetLoadedAt < 3 * 60_000;
-        if (freshEnough) return onlineSet;
-        if (onlineSetPromise) return onlineSetPromise;
-        onlineSetPromise = (async () => {
-          try {
-            this.emit({ statusMessage: "Loading online men…" });
-            // Same WS men-online source as Online mailing — keep pages modest for speed.
-            const next = await this.collectOnlineIdSet({ maxPages: 15 });
-            if (next instanceof Set) {
-              onlineSet = next;
-              onlineSetLoadedAt = Date.now();
-            }
-            this.emit({
-              statusMessage: `Online men loaded: ${onlineSet?.size || 0}`,
-            });
-            return onlineSet;
-          } catch (error) {
-            this.emit({
-              statusMessage: `Online list failed — using Readers flag (${error?.message || error})`,
-            });
-            return onlineSet;
-          } finally {
-            onlineSetPromise = null;
-          }
-        })();
-        return onlineSetPromise;
-      };
-
-      // Must await once so Online men = real men-online ∩ readers (not stale JSON).
-      await ensureOnlineSet({ force: true });
-
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
         if (this.state.stopRequested || token !== this.runToken) break;
         if (filters.excludeFavorites) {
           favorites = this.favoritesExcludeSet();
-        }
-
-        if (filters.onlineOnly && page === 1 && this.state.cycle > 1) {
-          await ensureOnlineSet({ force: false });
         }
 
         this.emit({
@@ -1297,7 +1244,7 @@ export class SenderReadsWorker {
             skipOld += 1;
             continue;
           }
-          if (!isReadOnlineEligible(message, filters.onlineOnly, onlineSet)) {
+          if (!isReadOnlineEligible(message, filters.onlineOnly)) {
             this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             pageOnline += 1;
             skipOffline += 1;
