@@ -613,15 +613,18 @@ export class SenderReadsWorker {
   }
 
   async fetchReadPage(page, { fromDate = "" } = {}) {
-    // DreamAuto fetchReadMessages: NO fd= — page all Readers, filter "today" in code.
-    // Passing fd=/td= often returns empty/"no data" while the UI still shows readers.
+    // Readers today: Dream UI Search filter fd=MM/DD/YYYY (+ empty td=), not row timestamps.
     const params = new URLSearchParams({
       mode: "sent",
       page: String(Math.max(1, Number(page) || 1)),
       returnJson: "1",
       view: "read",
     });
-    void fromDate;
+    const fd = String(fromDate || "").trim();
+    if (fd) {
+      params.set("fd", fd);
+      params.set("td", "");
+    }
     const url = `${READS_URL}?${params.toString()}`;
     const response = await this.dreamFetch(url);
     if (response.status === 401 || response.status === 403) {
@@ -1268,11 +1271,7 @@ export class SenderReadsWorker {
             skipSeen += 1;
             continue;
           }
-          if (filters.todayOnly && readsFromDate && !isReadOnFdDay(message, readsFromDate)) {
-            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
-            skipOld += 1;
-            continue;
-          }
+          // todayOnly: Dream already filtered via fd= on fetch — do not re-filter message.date.
           if (!isReadOnlineEligible(message, filters.onlineOnly)) {
             this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             pageOnline += 1;
@@ -1459,12 +1458,8 @@ export class SenderReadsWorker {
           break;
         }
 
-        const reachedTodayCutoff =
-          filters.todayOnly &&
-          readsFromDate &&
-          readPageHasOlderThanFd(messages, readsFromDate);
-
-        if (endOfPages || reachedTodayCutoff) {
+        // With Dream fd= fetch, list is already day-scoped — no message.date cutoff.
+        if (endOfPages) {
           if (filters.enableCycling) {
             const ok = await restartCycle();
             if (!ok) return;
