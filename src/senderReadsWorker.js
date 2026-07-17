@@ -927,11 +927,9 @@ export class SenderReadsWorker {
 
   async start(selection = {}) {
     if (this.state.running && !this.state.stopRequested) {
-      return {
-        ok: false,
-        error: this.channel === "online" ? "Online already running" : "Reads already running",
-        state: this.getState(),
-      };
+      // Allow Stop+Start / restart while a previous cloud loop is still winding down.
+      this.runToken += 1;
+      this.closeOnlineWs();
     }
 
     const channel = normalizeChannel(selection.channel || selection.direction || this.channel);
@@ -1078,51 +1076,68 @@ export class SenderReadsWorker {
             : "Starting cloud Reads…",
       readsFromDate: this._readsFromDate || "",
     });
-
-    try {
-      this.emit({ statusMessage: "Preparing Dream session…" });
-      await this.ensureSession();
-    } catch (error) {
-      const msg = error?.message || String(error);
-      this.emit({
-        ...this.idleState(msg),
-        lastError: msg,
-        preset: this.state.preset,
-        galleryId: photoId,
-        channel,
-        direction: channel,
-      });
-      await this.persist(false);
-      return { ok: false, error: msg, state: this.getState(), useLocal: true };
-    }
-
-    this.emit({
-      statusMessage:
-        channel === "online"
-          ? "Starting Online list…"
-          : filters.excludeFavorites
-            ? "Loading Favorites table…"
-            : `Cycle ${this.state.cycle || 1} · Reads page 1…`,
-    });
     await this.persist(true);
 
-    const runJob = () =>
-      channel === "online"
-        ? this.runOnlineLoop(token, plain, filters, photoId, delayMs)
-        : this.runLoop(token, plain, filters, photoId, delayMs, maxPages);
-
-    // Do not queue behind a zombie Read loop on dreamGate — Stop+Start must begin
-    // immediately (old loop exits on runToken mismatch after its current fetch).
-    void runJob().catch((error) => {
-      if (token !== this.runToken) return;
-      const msg = error?.message || String(error);
+    const runJob = async () => {
+      if (this.state.stopRequested || token !== this.runToken) {
+        this.emit(this.idleState("Stopped"));
+        await this.persist(false);
+        return;
+      }
+      this.emit({ statusMessage: "Preparing Dream session…" });
+      await this.persist(true);
+      try {
+        await this.ensureSession();
+      } catch (error) {
+        if (token !== this.runToken) return;
+        const msg = error?.message || String(error);
+        this.emit({
+          ...this.idleState(msg),
+          lastError: msg,
+          preset: this.state.preset,
+          galleryId: photoId,
+          channel,
+          direction: channel,
+        });
+        await this.persist(false);
+        return;
+      }
+      if (this.state.stopRequested || token !== this.runToken) {
+        this.emit(this.idleState("Stopped"));
+        await this.persist(false);
+        return;
+      }
       this.emit({
-        ...this.idleState(msg || "Reads failed"),
-        ...this.keepRunStats(),
-        lastError: msg,
+        statusMessage:
+          channel === "online"
+            ? "Starting Online list…"
+            : filters.excludeFavorites
+              ? "Loading Favorites table…"
+              : `Cycle ${this.state.cycle || 1} · Reads page 1…`,
       });
-      void this.persist(false);
-    });
+      await this.persist(true);
+
+      try {
+        if (channel === "online") {
+          await this.runOnlineLoop(token, plain, filters, photoId, delayMs);
+        } else {
+          await this.runLoop(token, plain, filters, photoId, delayMs, maxPages);
+        }
+      } catch (error) {
+        if (token !== this.runToken) return;
+        const msg = error?.message || String(error);
+        this.emit({
+          ...this.idleState(msg || "Reads failed"),
+          ...this.keepRunStats(),
+          lastError: msg,
+        });
+        await this.persist(false);
+      }
+    };
+
+    // Return immediately — session + favorites + pages run in background.
+    // Old loop exits on runToken mismatch after its current fetch.
+    void runJob();
 
     return { ok: true, state: this.getState() };
   }
@@ -1134,7 +1149,7 @@ export class SenderReadsWorker {
         await this.persist(false);
         return;
       }
-      // Session already prepared in start(); refresh only if lost mid-run.
+      // Session prepared in background runJob before runLoop.
       let favorites = new Set();
       if (filters.excludeFavorites) {
         if (this.state.stopRequested || token !== this.runToken) {
