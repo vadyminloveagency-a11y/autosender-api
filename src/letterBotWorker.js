@@ -122,11 +122,67 @@ class LetterBotWorker {
       profileId: this.profileId,
       daySent: 0,
       sendDayKey: "",
+      dailyTotal: null,
+      dailyTotalAt: 0,
+      dailyTotalDayKey: "",
     };
   }
 
   getState() {
     return { ...this.state };
+  }
+
+  normalizeDailyTotalValue(value) {
+    const match = String(value || "").replace(/\s+/g, "").match(/([\d,]+)/);
+    return match ? match[1] : "";
+  }
+
+  extractDailyTotalFromBotHtml(html) {
+    const raw = String(html || "");
+    if (!raw) return null;
+    const patterns = [
+      /Daily\s*Total\s*<\/t[hd]>\s*<t[hd][^>]*>\s*([\d,\s]+)/i,
+      /Daily\s*Total\s*:?\s*(?:<[^>]+>\s*){0,8}([\d]{1,3}(?:,\d{3})+|\d+)/i,
+      /Total\s*Day\s*:?\s*(?:<[^>]+>\s*){0,8}([\d]{1,3}(?:,\d{3})+|\d+)/i,
+      /id=["']dailyTotal["'][^>]*>\s*([\d,\s]+)/i,
+      /["']dailyTotal["']\s*[:=]\s*["']?([\d,]+)/i,
+      /Daily\s*Total\s*:?\s*([\d,\s]+)/i,
+      /Today's\s*Total\s*:?\s*([\d,\s]+)/i,
+    ];
+    for (const pattern of patterns) {
+      const match = raw.match(pattern);
+      if (match?.[1]) {
+        const normalized = this.normalizeDailyTotalValue(match[1]);
+        if (normalized) return normalized;
+      }
+    }
+    const plain = raw
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ");
+    const plainMatch = plain.match(/(?:Daily\s*Total|Total\s*Day|Today's\s*Total)\s*:?\s*([\d,]+)/i);
+    return this.normalizeDailyTotalValue(plainMatch?.[1]) || null;
+  }
+
+  applyDailyTotal(raw) {
+    const normalized = this.normalizeDailyTotalValue(raw);
+    if (!normalized) return false;
+    const num = Number(normalized.replace(/,/g, ""));
+    if (!Number.isFinite(num) || num < 0) return false;
+    const day = this.kyivDayKey();
+    if (this.state.dailyTotalDayKey !== day) {
+      this.state.dailyTotalDayKey = day;
+    } else {
+      const prev = Number(this.state.dailyTotal);
+      // Mid-day Dream total should not drop; ignore small parse regressions.
+      if (Number.isFinite(prev) && num < prev && prev - num < 200) return false;
+    }
+    if (this.state.dailyTotal === num) return false;
+    this.state.dailyTotal = num;
+    this.state.dailyTotalAt = Date.now();
+    return true;
   }
 
   kyivDayKey(date = new Date()) {
@@ -146,13 +202,14 @@ class LetterBotWorker {
     }
     const prev = Number(prevSent);
     const next = Number(nextSent);
-    if (!Number.isFinite(next)) return;
+    if (!Number.isFinite(next) || next < 0) return;
+    // Only count positive deltas of real bot sends — never re-add full counters on reconnect.
     if (Number.isFinite(prev) && next > prev) {
       this.state.daySent = (Number(this.state.daySent) || 0) + (next - prev);
       return;
     }
-    if (!Number.isFinite(prev) && next > 0 && next < 50) {
-      // First progress tick in a fresh mailing usually starts near 0.
+    // First tick of a new run (no previous progress): count only a small initial step.
+    if (!Number.isFinite(prev) && next > 0 && next <= 5) {
       this.state.daySent = (Number(this.state.daySent) || 0) + next;
     }
   }
@@ -338,6 +395,9 @@ class LetterBotWorker {
     }
     if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
     const html = await response.text();
+    if (this.applyDailyTotal(this.extractDailyTotalFromBotHtml(html))) {
+      this.emitState();
+    }
     const match =
       html.match(/const\s+jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
       html.match(/jwtKey\s*=\s*['"]([^'"]+)['"]/) ||
@@ -470,6 +530,9 @@ class LetterBotWorker {
         const percentNum = Number(percentRaw);
         const nextSent = msg.sent ?? prev.sent ?? null;
         this.bumpDaySent(prev.sent, nextSent);
+        this.applyDailyTotal(
+          msg.dailyTotal ?? msg.daily_total ?? msg.totalDay ?? msg.total_day ?? null,
+        );
         this.state.progress = {
           to: msg.to ?? prev.to ?? null,
           total: msg.total ?? prev.total ?? null,

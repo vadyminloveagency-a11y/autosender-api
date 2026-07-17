@@ -382,6 +382,7 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
     pct = (sent / total) * 100;
   }
   const daySent = Number.isFinite(Number(state?.daySent)) ? Number(state.daySent) : null;
+  const dailyTotal = Number.isFinite(Number(state?.dailyTotal)) ? Number(state.dailyTotal) : null;
   return {
     userId: Number(userId),
     profileId: String(profileId || "default"),
@@ -394,6 +395,7 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
     sent,
     total,
     daySent,
+    dailyTotal,
     statusMessage: String(state?.statusMessage || ""),
     updatedAt: state?.updatedAt || null,
   };
@@ -661,9 +663,25 @@ export async function restoreRunningLetterBotJobs() {
         worker.state.isPaused = true;
         worker.state.progress = prev.progress || null;
         worker.state.filter = prev.filter || worker.state.filter;
+        worker.state.daySent = Number.isFinite(Number(prev.daySent)) ? Number(prev.daySent) : 0;
+        worker.state.sendDayKey = String(prev.sendDayKey || "");
+        if (Number.isFinite(Number(prev.dailyTotal))) {
+          worker.state.dailyTotal = Number(prev.dailyTotal);
+          worker.state.dailyTotalAt = Number(prev.dailyTotalAt) || Date.now();
+          worker.state.dailyTotalDayKey = String(prev.dailyTotalDayKey || "");
+        }
         worker.state.statusMessage = "Paused";
         worker.emitState();
         continue;
+      }
+      if (Number.isFinite(Number(prev.dailyTotal))) {
+        worker.state.dailyTotal = Number(prev.dailyTotal);
+        worker.state.dailyTotalAt = Number(prev.dailyTotalAt) || 0;
+        worker.state.dailyTotalDayKey = String(prev.dailyTotalDayKey || "");
+      }
+      if (Number.isFinite(Number(prev.daySent))) {
+        worker.state.daySent = Number(prev.daySent);
+        worker.state.sendDayKey = String(prev.sendDayKey || "");
       }
       await ensureWorkerSession(worker, { cookieHeader: row.cookie_header || "" });
       await worker.start(selection);

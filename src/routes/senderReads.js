@@ -415,6 +415,7 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
   let pct = null;
   if (total > 0 && sent != null) pct = (sent / total) * 100;
   const daySent = Number.isFinite(Number(state?.daySent)) ? Number(state.daySent) : sent;
+  const dailyTotal = Number.isFinite(Number(state?.dailyTotal)) ? Number(state.dailyTotal) : null;
   return {
     product: "sender",
     channel,
@@ -431,6 +432,7 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
     total,
     failed: Number.isFinite(Number(state?.failed)) ? Number(state.failed) : null,
     daySent,
+    dailyTotal,
     statusMessage: String(state?.statusMessage || ""),
     updatedAt: state?.updatedAt || null,
   };

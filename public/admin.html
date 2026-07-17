@@ -537,6 +537,7 @@
     }
     .data-table td { color: var(--text); }
     .data-table tr:last-child td { border-bottom: 0; }
+    /* Never put display:flex on <td> — it breaks table borders (short stray lines). */
     .action-cell {
       display: flex;
       flex-wrap: wrap;
@@ -550,6 +551,76 @@
       padding: 0 10px;
       border-radius: 8px;
       font: 600 11px/1 var(--font);
+    }
+    .mail-progress {
+      min-width: 140px;
+      max-width: 220px;
+    }
+    .mail-progress-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .mail-progress-meta .mail-progress-sent {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 11px;
+    }
+    .mail-progress-track {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(78, 98, 108, 0.35);
+      overflow: hidden;
+    }
+    .mail-progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #1aa86a, var(--accent-strong));
+      min-width: 0;
+      transition: width 0.25s ease;
+    }
+    .mail-progress-fail {
+      margin-top: 4px;
+      color: #ff8a95;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .mailings-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      align-items: baseline;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid rgba(4, 242, 160, 0.18);
+      border-radius: 10px;
+      background: rgba(8, 14, 18, 0.55);
+      font-size: 13px;
+      color: var(--text-soft);
+    }
+    .mailings-summary strong {
+      color: var(--accent-strong);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .mail-today {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .mail-today-sub {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
     }
     .scan-btn {
       border: 1px solid rgba(4, 242, 160, 0.45);
@@ -1165,7 +1236,7 @@
 
           <section id="section-mailings" class="admin-section">
             <h2 class="admin-main-title">Mailings</h2>
-            <p class="admin-main-lead">Live LetterBot and Sender jobs across operators.</p>
+            <p class="admin-main-lead">Live LetterBot / Read / Online jobs — letters sent (not men), with progress and today totals.</p>
             <div class="panel-card">
               <div class="card-head">
                 <h3>Active mailings</h3>
@@ -1173,6 +1244,7 @@
               </div>
               <div id="mailings-empty" class="empty-state hidden">No active mailings right now.</div>
               <div id="mailings-wrap" class="hidden">
+                <div id="mailings-summary" class="mailings-summary" hidden></div>
                 <div class="table-scroll">
                   <table class="data-table">
                     <thead>
@@ -1182,7 +1254,7 @@
                         <th>Questionnaire</th>
                         <th>Filter</th>
                         <th>Progress</th>
-                        <th>Today</th>
+                        <th>Letters today</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -1905,24 +1977,44 @@
 
     function formatProgress(job) {
       const pct = formatPercent(job);
-      const sent = job.sent != null ? Number(job.sent) : null;
-      const total = job.total != null ? Number(job.total) : null;
-      const failed = job.failed != null && Number(job.failed) > 0 ? Number(job.failed) : 0;
-      const lines = [];
-      if (pct) lines.push(pct);
-      if (sent != null && total != null && total > 0) {
-        lines.push(`Sent ${sent} / ${total}`);
-      } else if (sent != null) {
-        lines.push(`Sent ${sent}`);
-      }
-      if (failed) lines.push(`Fail ${failed}`);
-      return lines.length ? lines.map((line, i) => (i === 0 ? line : `<br>${line}`)).join("") : "—";
+      const sent = job.sent != null && Number.isFinite(Number(job.sent)) ? Math.trunc(Number(job.sent)) : null;
+      const total = job.total != null && Number.isFinite(Number(job.total)) ? Math.trunc(Number(job.total)) : null;
+      const failed = job.failed != null && Number(job.failed) > 0 ? Math.trunc(Number(job.failed)) : 0;
+      const pctNum = job.percent != null && Number.isFinite(Number(job.percent)) ? Number(job.percent) : null;
+      let width = 0;
+      if (Number.isFinite(pctNum)) width = Math.max(0, Math.min(100, pctNum));
+      else if (sent != null && total > 0) width = Math.max(0, Math.min(100, (sent / total) * 100));
+
+      const sentLabel =
+        sent != null && total != null && total > 0
+          ? `${sent.toLocaleString("en-US")} / ${total.toLocaleString("en-US")} letters`
+          : sent != null
+            ? `${sent.toLocaleString("en-US")} letters`
+            : "—";
+
+      return `
+        <div class="mail-progress">
+          <div class="mail-progress-meta">
+            <span>${pct || (width ? `${Math.round(width * 10) / 10}%` : "—")}</span>
+            <span class="mail-progress-sent">${sentLabel}</span>
+          </div>
+          <div class="mail-progress-track" aria-hidden="true">
+            <div class="mail-progress-fill" style="width:${width}%"></div>
+          </div>
+          ${failed ? `<div class="mail-progress-fail">Fail ${failed}</div>` : ""}
+        </div>`;
     }
 
     function formatToday(job) {
-      const daySent = job.daySent != null ? Number(job.daySent) : null;
-      if (!Number.isFinite(daySent)) return "—";
-      return String(Math.trunc(daySent));
+      // Real letters sent today via this AutoSender mailing (not Dream men / not TOTAL DAY).
+      const daySent =
+        job.daySent != null && Number.isFinite(Number(job.daySent))
+          ? Math.trunc(Number(job.daySent))
+          : null;
+      if (daySent == null) {
+        return `<span class="mail-today">—</span>`;
+      }
+      return `<span class="mail-today">${daySent.toLocaleString("en-US")}<span class="mail-today-sub">letters</span></span>`;
     }
 
     function mailingSortKey(job) {
@@ -1946,6 +2038,45 @@
       if (job.isPaused) return '<span class="badge badge-paused">Paused</span>';
       if (job.sessionActive) return '<span class="badge badge-running">Sending</span>';
       return '<span class="badge">Unknown</span>';
+    }
+
+    function renderMailingsSummary(jobs) {
+      const summaryEl = document.getElementById("mailings-summary");
+      if (!summaryEl) return;
+      if (!jobs.length) {
+        summaryEl.hidden = true;
+        summaryEl.innerHTML = "";
+        return;
+      }
+      let lettersToday = 0;
+      let lettersRun = 0;
+      let byProduct = { letterbot: 0, read: 0, online: 0 };
+      for (const job of jobs) {
+        const day =
+          job.daySent != null && Number.isFinite(Number(job.daySent))
+            ? Math.trunc(Number(job.daySent))
+            : 0;
+        const sent =
+          job.sent != null && Number.isFinite(Number(job.sent)) ? Math.trunc(Number(job.sent)) : 0;
+        lettersToday += Math.max(0, day);
+        lettersRun += Math.max(0, sent);
+        const product = String(job.product || "letterbot").toLowerCase();
+        if (product === "sender") {
+          const ch = String(job.channel || "read").toLowerCase();
+          if (ch === "online") byProduct.online += Math.max(0, day);
+          else byProduct.read += Math.max(0, day);
+        } else {
+          byProduct.letterbot += Math.max(0, day);
+        }
+      }
+      summaryEl.hidden = false;
+      summaryEl.innerHTML = `
+        <span>Letters today (active jobs): <strong>${lettersToday.toLocaleString("en-US")}</strong></span>
+        <span>LetterBot <strong>${byProduct.letterbot.toLocaleString("en-US")}</strong></span>
+        <span>Read <strong>${byProduct.read.toLocaleString("en-US")}</strong></span>
+        <span>Online <strong>${byProduct.online.toLocaleString("en-US")}</strong></span>
+        <span>This run <strong>${lettersRun.toLocaleString("en-US")}</strong></span>
+      `;
     }
 
     async function refreshMailings({ quiet = false } = {}) {
@@ -1972,9 +2103,11 @@
         if (!jobs.length) {
           emptyEl.classList.remove("hidden");
           wrapEl.classList.add("hidden");
+          renderMailingsSummary([]);
         } else {
           emptyEl.classList.add("hidden");
           wrapEl.classList.remove("hidden");
+          renderMailingsSummary(jobs);
           for (const job of jobs) {
             const product = String(job.product || "letterbot").toLowerCase();
             const channel = String(job.channel || "").toLowerCase();
@@ -1985,16 +2118,18 @@
               <td>${formatQuestionnaire(job)}</td>
               <td>${escapeHtml(job.filter || "—")}</td>
               <td>${formatProgress(job)}</td>
-              <td style="font-weight:700;white-space:nowrap">${formatToday(job)}</td>
-              <td class="action-cell">
-                <button type="button" class="stop-btn"
-                  data-product="${product}"
-                  data-channel="${channel}"
-                  data-user-id="${job.userId}"
-                  data-profile-id="${job.profileId}">Stop</button>
-                <button type="button" class="logout-profile-btn"
-                  data-user-id="${job.userId}"
-                  data-profile-id="${job.profileId}">Logout profile</button>
+              <td>${formatToday(job)}</td>
+              <td>
+                <div class="action-cell">
+                  <button type="button" class="stop-btn"
+                    data-product="${product}"
+                    data-channel="${channel}"
+                    data-user-id="${job.userId}"
+                    data-profile-id="${job.profileId}">Stop</button>
+                  <button type="button" class="logout-profile-btn"
+                    data-user-id="${job.userId}"
+                    data-profile-id="${job.profileId}">Logout profile</button>
+                </div>
               </td>
             `;
             bodyEl.appendChild(tr);
