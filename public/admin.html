@@ -496,10 +496,10 @@
     }
     .am-board {
       display: grid;
-      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-      gap: 16px;
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+      gap: 18px;
       align-items: start;
-      min-height: calc(100vh - 180px);
+      min-height: calc(100vh - 140px);
     }
     .am-col {
       border: 1px solid var(--line);
@@ -760,10 +760,10 @@
     .linked-edit svg { width: 14px; height: 14px; fill: currentColor; }
 
     .operators-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      align-content: stretch;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+      align-content: start;
       width: 100%;
     }
     .operator-card {
@@ -774,7 +774,7 @@
       display: flex;
       flex-direction: column;
       width: 100%;
-      min-height: 120px;
+      min-height: 180px;
       transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
       box-shadow: 0 4px 14px rgba(35, 55, 90, 0.05);
     }
@@ -795,14 +795,18 @@
     .operator-icon {
       width: 34px;
       height: 34px;
-      border-radius: 10px;
+      border-radius: 50%;
       background: var(--accent-soft);
       color: var(--accent);
       display: flex;
       align-items: center;
       justify-content: center;
-      font: 700 13px/1 var(--font);
       flex: 0 0 34px;
+    }
+    .operator-icon svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
     }
     .operator-meta { flex: 1 1 auto; min-width: 0; }
     .operator-name {
@@ -839,14 +843,19 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 12px;
+      padding: 7px 8px;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
       cursor: grab;
     }
     .linked-account:active { cursor: grabbing; }
-    .linked-account .account-name { font-size: 13px; }
+    .linked-account .account-avatar {
+      width: 32px;
+      height: 32px;
+      flex-basis: 32px;
+    }
+    .linked-account .account-name { font-size: 12px; }
     .linked-unassign {
       width: 26px;
       height: 26px;
@@ -1110,7 +1119,9 @@
   <div id="operator-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="operator-edit-title">
     <div class="modal-card">
       <div class="modal-head">
-        <div id="operator-edit-avatar" class="operator-icon" style="width:48px;height:48px;border-radius:12px;font-size:15px"></div>
+        <div id="operator-edit-avatar" class="operator-icon" style="width:48px;height:48px" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.25c-4.2 0-7.5 2.1-7.5 4.5V21h15v-2.25c0-2.4-3.3-4.5-7.5-4.5z"/></svg>
+        </div>
         <div class="modal-head-meta">
           <h3 class="modal-title" id="operator-edit-title">Operator settings</h3>
           <p class="modal-sub" id="operator-edit-sub"></p>
@@ -1368,6 +1379,7 @@
                   draggable="true"
                   data-profile-id="${profile.id}"
                   data-drag-source="operator">
+                  ${avatarHtml(profile)}
                   <div class="account-meta">
                     <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
                     <p class="account-sub">${escapeHtml(profile.dreamUsername || "Dream")}</p>
@@ -1381,7 +1393,9 @@
           return `
             <div class="operator-card" data-operator-id="${operator.id}" data-drop="operator">
               <div class="operator-card-head">
-                <div class="operator-icon">${escapeHtml(initials(operator.name || operator.email))}</div>
+                <div class="operator-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.25c-4.2 0-7.5 2.1-7.5 4.5V21h15v-2.25c0-2.4-3.3-4.5-7.5-4.5z"/></svg>
+                </div>
                 <div class="operator-meta">
                   <p class="operator-name">${escapeHtml(operator.name || operator.email)}</p>
                   <p class="operator-login">${escapeHtml(operator.email || "")}</p>
@@ -1574,7 +1588,6 @@
       document.getElementById("operator-edit-title").textContent = operator.name || operator.email || "Operator";
       document.getElementById("operator-edit-sub").textContent =
         `${linkedCount} linked account${linkedCount === 1 ? "" : "s"}`;
-      document.getElementById("operator-edit-avatar").textContent = initials(operator.name || operator.email);
       document.getElementById("operator-edit-name").value = operator.name || "";
       document.getElementById("operator-edit-login").value = operator.email || "";
       document.getElementById("operator-edit-password").value = operator.password || "";
