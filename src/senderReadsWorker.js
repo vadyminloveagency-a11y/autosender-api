@@ -1358,21 +1358,14 @@ export class SenderReadsWorker {
 
         const restartCycle = async () => {
           const emptyCycle = this.state.sent === sentAtCycleStart;
-          // Readers today (all day): empty pass → wait and re-scan from page 1 for
-          // new readers / newly online men. List grows as LetterBot keeps mailing.
-          if (emptyCycle && !filters.todayOnly) {
+          // Empty pass while cycling (All readers · Online, Readers today · …):
+          // wait and re-scan from page 1 for newly online / new readers — same
+          // as Readers today · Online. Do not stop just because this pass sent 0.
+          if (emptyCycle) {
             this.emit({
-              ...this.idleState(
-                `No new sends after cycle ${this.state.cycle}. Sent ${this.state.sent}, skipped ${this.state.skipped} (${skipSummary()}).`,
-              ),
-              ...this.keepRunStats(),
-            });
-            await this.persist(false);
-            return false;
-          }
-          if (emptyCycle && filters.todayOnly) {
-            this.emit({
-              statusMessage: `Cycle ${this.state.cycle}: waiting for new online readers…`,
+              statusMessage: filters.onlineOnly
+                ? `Cycle ${this.state.cycle}: waiting for new online readers…`
+                : `Cycle ${this.state.cycle}: waiting for new readers…`,
             });
             await new Promise((r) => setTimeout(r, 20000));
             if (this.state.stopRequested || token !== this.runToken) return false;
@@ -1394,7 +1387,7 @@ export class SenderReadsWorker {
           });
           page = 1;
           await new Promise((r) =>
-            setTimeout(r, emptyCycle && filters.todayOnly ? 500 : 3000),
+            setTimeout(r, emptyCycle ? 500 : 3000),
           );
           return true;
         };
