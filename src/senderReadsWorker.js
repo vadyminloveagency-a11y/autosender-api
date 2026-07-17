@@ -168,15 +168,18 @@ function isMessageOnlineFlag(message) {
   return false;
 }
 
-/** Prefer live Online Users set; also accept Dream row `online` (same signal as UI green). */
+/** Real online for Read·Online = live men-online set (same as Online tab).
+ *  Readers JSON `online` is only a fallback — UI green can be live-updated and
+ *  disagree with a stale returnJson snapshot. */
 function isReadOnlineEligible(message, onlineOnly, onlineSet = null) {
   if (!onlineOnly) return true;
-  if (isMessageOnlineFlag(message)) return true;
   const id = Number(message?.sender_pid) || 0;
   if (onlineSet instanceof Set && onlineSet.size > 0) {
-    return id > 0 && onlineSet.has(id);
+    if (id > 0 && onlineSet.has(id)) return true;
+    // Set is loaded: trust it over a stale/missing JSON flag.
+    return false;
   }
-  return false;
+  return isMessageOnlineFlag(message);
 }
 
 function normalizeChannel(value) {
@@ -1182,18 +1185,21 @@ export class SenderReadsWorker {
         if (onlineSetPromise) return onlineSetPromise;
         onlineSetPromise = (async () => {
           try {
-            // Soft refresh — do not block Reads paging (UI green uses row.online too).
-            this.emit({ statusMessage: "Refreshing online men…" });
-            const next = await this.collectOnlineIdSet({ maxPages: 12 });
-            if (next instanceof Set && next.size > 0) {
+            this.emit({ statusMessage: "Loading online men…" });
+            // Same WS men-online source as Online mailing — keep pages modest for speed.
+            const next = await this.collectOnlineIdSet({ maxPages: 15 });
+            if (next instanceof Set) {
               onlineSet = next;
               onlineSetLoadedAt = Date.now();
-              this.emit({
-                statusMessage: `Online men loaded: ${onlineSet.size}`,
-              });
             }
+            this.emit({
+              statusMessage: `Online men loaded: ${onlineSet?.size || 0}`,
+            });
             return onlineSet;
-          } catch (_) {
+          } catch (error) {
+            this.emit({
+              statusMessage: `Online list failed — using Readers flag (${error?.message || error})`,
+            });
             return onlineSet;
           } finally {
             onlineSetPromise = null;
@@ -1202,11 +1208,8 @@ export class SenderReadsWorker {
         return onlineSetPromise;
       };
 
-      // Do NOT await a full men-online crawl before page 1 — that made each cycle
-      // feel like ~10s/page while Online mailing already saturates Dream/WS.
-      if (filters.onlineOnly) {
-        void ensureOnlineSet({ force: true });
-      }
+      // Must await once so Online men = real men-online ∩ readers (not stale JSON).
+      await ensureOnlineSet({ force: true });
 
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
@@ -1216,7 +1219,7 @@ export class SenderReadsWorker {
         }
 
         if (filters.onlineOnly && page === 1 && this.state.cycle > 1) {
-          void ensureOnlineSet({ force: false });
+          await ensureOnlineSet({ force: false });
         }
 
         this.emit({
