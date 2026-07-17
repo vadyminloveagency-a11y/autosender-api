@@ -623,47 +623,50 @@
       text-transform: uppercase;
     }
     .mail-calendar-layout {
-      display: grid;
-      grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
-      gap: 16px;
-      margin-bottom: 18px;
-      align-items: start;
-    }
-    @media (max-width: 980px) {
-      .mail-calendar-layout { grid-template-columns: 1fr; }
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px 18px;
+      margin-bottom: 14px;
+      align-items: flex-start;
     }
     .mail-cal {
+      flex: 0 0 auto;
+      width: 196px;
       border: 1px solid rgba(4, 242, 160, 0.18);
-      border-radius: 12px;
+      border-radius: 10px;
       background: rgba(8, 14, 18, 0.55);
-      padding: 12px;
+      padding: 8px;
+    }
+    .mail-day-panel {
+      flex: 1 1 280px;
+      min-width: 0;
     }
     .mail-cal-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: 6px;
+      margin-bottom: 6px;
     }
     .mail-cal-head h4 {
       margin: 0;
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 700;
       color: var(--text);
     }
     .mail-cal-nav {
       display: flex;
-      gap: 6px;
+      gap: 4px;
     }
     .mail-cal-nav button {
-      min-width: 32px;
-      min-height: 30px;
-      padding: 0 8px;
+      min-width: 24px;
+      min-height: 24px;
+      padding: 0 6px;
       border: 1px solid rgba(78, 98, 108, 0.55);
-      border-radius: 7px;
+      border-radius: 6px;
       background: #12171c;
       color: var(--text);
-      font: 700 13px/1 var(--font);
+      font: 700 12px/1 var(--font);
       cursor: pointer;
     }
     .mail-cal-nav button:hover {
@@ -674,54 +677,45 @@
     .mail-cal-grid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
+      gap: 2px;
     }
     .mail-cal-weekdays span {
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--muted);
-      padding: 2px 0 6px;
+      padding: 0 0 4px;
     }
     .mail-cal-day {
-      aspect-ratio: 1;
-      min-height: 34px;
+      height: 22px;
       border: 1px solid transparent;
-      border-radius: 8px;
-      background: rgba(18, 23, 28, 0.8);
+      border-radius: 5px;
+      background: transparent;
       color: var(--text-soft);
-      font: 600 12px/1.1 var(--font);
+      font: 600 11px/1 var(--font);
       cursor: pointer;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 2px;
-      padding: 2px;
+      padding: 0;
     }
     .mail-cal-day:disabled {
-      opacity: 0.28;
+      opacity: 0.2;
       cursor: default;
     }
     .mail-cal-day.has-letters {
-      border-color: rgba(4, 242, 160, 0.28);
-      background: rgba(4, 242, 160, 0.08);
+      border-color: rgba(4, 242, 160, 0.22);
+      background: rgba(4, 242, 160, 0.07);
     }
     .mail-cal-day.selected {
       border-color: rgba(4, 242, 160, 0.7);
-      box-shadow: 0 0 0 1px rgba(4, 242, 160, 0.25);
       color: var(--accent-strong);
+      background: rgba(4, 242, 160, 0.12);
     }
     .mail-cal-day.today:not(.selected) {
-      border-color: rgba(255, 176, 46, 0.45);
-    }
-    .mail-cal-day .cal-count {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--accent-strong);
-      font-variant-numeric: tabular-nums;
+      border-color: rgba(255, 176, 46, 0.4);
     }
     .mail-day-panel h4 {
       margin: 0 0 10px;
@@ -1348,7 +1342,7 @@
 
           <section id="section-mailings" class="admin-section">
             <h2 class="admin-main-title">Mailings</h2>
-            <p class="admin-main-lead">Letters per questionnaire (LetterBot / Read / Online). Pick a day in the calendar to review history.</p>
+            <p class="admin-main-lead">Letters for each questionnaire (LetterBot / Read / Online). Compact date picker — no agency totals.</p>
 
             <div class="panel-card" style="margin-bottom:16px">
               <div class="card-head">
@@ -1382,7 +1376,6 @@
                           <th>LetterBot</th>
                           <th>Read</th>
                           <th>Online</th>
-                          <th>Total</th>
                         </tr>
                       </thead>
                       <tbody id="mail-day-body"></tbody>
@@ -2263,17 +2256,14 @@
       }
       for (let day = 1; day <= daysInMonth; day += 1) {
         const date = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        const count = Number(mailCalState.monthDays[date]) || 0;
+        const hasData = (Number(mailCalState.monthDays[date]) || 0) > 0;
         const classes = ["mail-cal-day"];
-        if (count > 0) classes.push("has-letters");
+        if (hasData) classes.push("has-letters");
         if (date === mailCalState.selectedDate) classes.push("selected");
         if (date === mailCalState.today) classes.push("today");
-        const countHtml =
-          count > 0
-            ? `<span class="cal-count">${count > 9999 ? `${Math.round(count / 1000)}k` : count}</span>`
-            : "";
+        // Date picker only — never show sum-of-all-questionnaires on the day cell.
         cells.push(
-          `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span>${countHtml}</button>`,
+          `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span></button>`,
         );
       }
       grid.innerHTML = cells.join("");
@@ -2309,7 +2299,6 @@
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.letterbot) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.read) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.online) || 0).toLocaleString("en-US")}</td>
-          <td style="font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-strong)">${(Number(row.total) || 0).toLocaleString("en-US")}</td>
         `;
         bodyEl.appendChild(tr);
       }
@@ -2323,22 +2312,102 @@
         mailCalState.year = y;
         mailCalState.month = m;
       }
+      const lookingAtToday =
+        mailCalState.selectedDate === mailCalState.today ||
+        mailCalState.selectedDate === kyivTodayLocal();
       if (!quiet) setStatus("Loading questionnaire letters...");
       try {
-        const data = await api(
-          `/letterbot/admin/letters-by-profile?date=${encodeURIComponent(mailCalState.selectedDate)}&year=${mailCalState.year}&month=${mailCalState.month}`,
-        );
+        const [data, lbData, senderData] = await Promise.all([
+          api(
+            `/letterbot/admin/letters-by-profile?date=${encodeURIComponent(mailCalState.selectedDate)}&year=${mailCalState.year}&month=${mailCalState.month}`,
+          ),
+          lookingAtToday
+            ? api("/letterbot/admin/running").catch(() => ({ jobs: [] }))
+            : Promise.resolve({ jobs: [] }),
+          lookingAtToday
+            ? api("/sender-reads/admin/running").catch(() => ({ jobs: [] }))
+            : Promise.resolve({ jobs: [] }),
+        ]);
         if (data.today) mailCalState.today = String(data.today).slice(0, 10);
         mailCalState.monthDays = {};
         for (const item of Array.isArray(data.monthDays) ? data.monthDays : []) {
+          // Only mark days that have data — never show the agency-wide sum in the UI.
           mailCalState.monthDays[String(item.day).slice(0, 10)] = Number(item.letters) || 0;
         }
+
+        let profiles = Array.isArray(data.profiles) ? [...data.profiles] : [];
+        // For today: prefer live daySent per questionnaire so calendar matches Active mailings.
+        if (mailCalState.selectedDate === mailCalState.today) {
+          profiles = mergeLiveDaySentIntoProfiles(profiles, lbData?.jobs || [], senderData?.jobs || []);
+          if (profiles.some((p) => (Number(p.letterbot) || 0) + (Number(p.read) || 0) + (Number(p.online) || 0) > 0)) {
+            mailCalState.monthDays[mailCalState.today] = 1;
+          }
+        }
+
         renderMailCalendarGrid();
-        renderMailDayProfiles(data.profiles || [], mailCalState.selectedDate);
+        renderMailDayProfiles(profiles, mailCalState.selectedDate);
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
       }
+    }
+
+    function mergeLiveDaySentIntoProfiles(profiles, lbJobs, senderJobs) {
+      const byId = new Map();
+      for (const row of profiles) {
+        byId.set(String(row.profileId), { ...row });
+      }
+      const ensure = (job) => {
+        const id = String(job.profileId || "");
+        if (!id || id === "default") return null;
+        if (!byId.has(id)) {
+          byId.set(id, {
+            profileId: id,
+            displayName: job.displayName || "",
+            dreamUsername: job.dreamUsername || "",
+            photoUrl: job.photoUrl || "",
+            operatorName: job.operatorName || "",
+            operatorEmail: job.operatorEmail || "",
+            letterbot: 0,
+            read: 0,
+            online: 0,
+            total: 0,
+          });
+        }
+        const row = byId.get(id);
+        if (job.operatorName || job.operatorEmail) {
+          row.operatorName = job.operatorName || row.operatorName;
+          row.operatorEmail = job.operatorEmail || row.operatorEmail;
+        }
+        if (job.displayName) row.displayName = job.displayName;
+        if (job.photoUrl) row.photoUrl = job.photoUrl;
+        return row;
+      };
+      for (const job of lbJobs) {
+        const row = ensure(job);
+        if (!row) continue;
+        const day = Number(job.daySent);
+        if (Number.isFinite(day) && day > (Number(row.letterbot) || 0)) row.letterbot = Math.trunc(day);
+      }
+      for (const job of senderJobs) {
+        const row = ensure(job);
+        if (!row) continue;
+        const day = Number(job.daySent);
+        if (!Number.isFinite(day)) continue;
+        const ch = String(job.channel || "read").toLowerCase();
+        if (ch === "online") {
+          if (day > (Number(row.online) || 0)) row.online = Math.trunc(day);
+        } else if (day > (Number(row.read) || 0)) {
+          row.read = Math.trunc(day);
+        }
+      }
+      return [...byId.values()]
+        .map((row) => ({
+          ...row,
+          total: (Number(row.letterbot) || 0) + (Number(row.read) || 0) + (Number(row.online) || 0),
+        }))
+        .filter((row) => row.total > 0)
+        .sort((a, b) => b.total - a.total || String(a.displayName || a.profileId).localeCompare(String(b.displayName || b.profileId), "en"));
     }
 
     async function refreshMailings({ quiet = false } = {}) {
