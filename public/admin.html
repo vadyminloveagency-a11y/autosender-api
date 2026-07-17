@@ -546,19 +546,31 @@
       font: 600 11px/1 var(--font);
     }
     .scan-btn {
-      border: 1px solid rgba(4, 242, 160, 0.3);
-      background: var(--ok-soft);
-      color: var(--accent-strong);
+      border: 1px solid rgba(4, 242, 160, 0.45);
+      border-radius: 7px;
+      background: #101816;
+      color: #04f2a0;
+      font: 800 12px/1 Arial, sans-serif;
+      min-height: 30px;
+      padding: 0 12px;
     }
     .delete-btn, .stop-btn {
-      border: 1px solid rgba(255, 91, 104, 0.3);
-      background: var(--danger-soft);
-      color: #ff8a96;
+      border: 1px solid rgba(255, 91, 104, 0.45);
+      border-radius: 7px;
+      background: #1a1012;
+      color: #ff8a95;
+      font: 800 12px/1 Arial, sans-serif;
+      min-height: 30px;
+      padding: 0 12px;
     }
     .logout-profile-btn {
-      border: 1px solid rgba(255, 176, 46, 0.3);
-      background: rgba(255, 176, 46, 0.1);
-      color: #ffc35a;
+      border: 1px solid rgba(255, 176, 46, 0.45);
+      border-radius: 7px;
+      background: #1a1510;
+      color: #ffb02e;
+      font: 800 12px/1 Arial, sans-serif;
+      min-height: 30px;
+      padding: 0 12px;
     }
     .badge {
       display: inline-block;
@@ -807,21 +819,21 @@
     .modal-actions-row .scan-btn,
     .modal-actions-row .delete-btn {
       width: auto;
-      min-height: 36px;
+      min-height: 30px;
       margin: 0;
-      padding: 0 14px;
-      border-radius: 9px;
-      font: 600 12px/1 var(--font);
+      padding: 0 12px;
+      border-radius: 7px;
+      font: 800 12px/1 Arial, sans-serif;
     }
     .modal-actions-row .scan-btn {
-      border: 1px solid rgba(4, 242, 160, 0.3);
-      background: var(--ok-soft);
-      color: var(--accent-strong);
+      border: 1px solid rgba(4, 242, 160, 0.45);
+      background: #101816;
+      color: #04f2a0;
     }
     .modal-actions-row .delete-btn {
-      border: 1px solid rgba(255, 91, 104, 0.3);
-      background: var(--danger-soft);
-      color: #ff8a96;
+      border: 1px solid rgba(255, 91, 104, 0.45);
+      background: #1a1012;
+      color: #ff8a95;
       margin-left: auto;
     }
     .modal-footer {
@@ -829,6 +841,7 @@
       gap: 8px;
       margin-top: 18px;
       flex-wrap: wrap;
+      justify-content: flex-end;
     }
     .modal-card.create-modal {
       max-width: 420px;
@@ -936,22 +949,6 @@
       border-bottom: 1px solid var(--line);
     }
     .operator-card-head .account-edit-btn { margin-left: auto; }
-    .operator-icon {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background: var(--accent-soft);
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 34px;
-    }
-    .operator-icon svg {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-    }
     .operator-meta { flex: 1 1 auto; min-width: 0; }
     .operator-name {
       margin: 0;
@@ -1275,7 +1272,6 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" id="profile-edit-cancel" class="btn-ghost">Cancel</button>
         <button type="button" id="profile-edit-save" class="btn-primary">Save changes</button>
       </div>
     </div>
@@ -1283,14 +1279,8 @@
 
   <div id="operator-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="operator-edit-title">
     <div class="modal-card">
-      <div class="modal-head">
-        <div id="operator-edit-avatar" class="operator-icon" style="width:48px;height:48px" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.25c-4.2 0-7.5 2.1-7.5 4.5V21h15v-2.25c0-2.4-3.3-4.5-7.5-4.5z"/></svg>
-        </div>
-        <div class="modal-head-meta">
-          <h3 class="modal-title" id="operator-edit-title">Operator settings</h3>
-          <p class="modal-sub" id="operator-edit-sub"></p>
-        </div>
+      <div class="create-modal-head">
+        <h3 class="modal-title" id="operator-edit-title">Operator settings</h3>
         <button type="button" id="operator-edit-close" class="modal-close" aria-label="Close">×</button>
       </div>
 
@@ -1312,14 +1302,12 @@
       </div>
 
       <div class="modal-section">
-        <div class="modal-section-title">Danger zone</div>
         <div class="modal-actions-row">
           <button type="button" id="operator-edit-delete" class="delete-btn">Delete operator</button>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" id="operator-edit-cancel" class="btn-ghost">Cancel</button>
         <button type="button" id="operator-edit-save" class="btn-primary">Save changes</button>
       </div>
     </div>
@@ -1571,9 +1559,6 @@
           return `
             <div class="operator-card" data-operator-id="${operator.id}" data-drop="operator">
               <div class="operator-card-head">
-                <div class="operator-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2.25c-4.2 0-7.5 2.1-7.5 4.5V21h15v-2.25c0-2.4-3.3-4.5-7.5-4.5z"/></svg>
-                </div>
                 <div class="operator-meta">
                   <p class="operator-name">${escapeHtml(operator.name || operator.email)}</p>
                   <p class="operator-login">${escapeHtml(operator.email || "")}</p>
@@ -1777,13 +1762,8 @@
     function openOperatorEditModal(operatorId) {
       const operator = cachedOperators.find((op) => String(op.id) === String(operatorId));
       if (!operator) return;
-      const linkedCount = cachedProfiles.filter(
-        (p) => String(p.assignedUserId || "") === String(operator.id),
-      ).length;
       document.getElementById("operator-edit-id").value = String(operator.id);
-      document.getElementById("operator-edit-title").textContent = operator.name || operator.email || "Operator";
-      document.getElementById("operator-edit-sub").textContent =
-        `${linkedCount} linked account${linkedCount === 1 ? "" : "s"}`;
+      document.getElementById("operator-edit-title").textContent = "Operator settings";
       document.getElementById("operator-edit-name").value = operator.name || "";
       document.getElementById("operator-edit-login").value = operator.email || "";
       document.getElementById("operator-edit-password").value = operator.password || "";
@@ -2187,7 +2167,6 @@
     });
 
     document.getElementById("profile-edit-close").addEventListener("click", closeProfileEditModal);
-    document.getElementById("profile-edit-cancel").addEventListener("click", closeProfileEditModal);
     document.getElementById("profile-edit-modal").addEventListener("click", (event) => {
       if (event.target.id === "profile-edit-modal") closeProfileEditModal();
     });
@@ -2221,7 +2200,6 @@
     });
 
     document.getElementById("operator-edit-close").addEventListener("click", closeOperatorEditModal);
-    document.getElementById("operator-edit-cancel").addEventListener("click", closeOperatorEditModal);
     document.getElementById("operator-edit-modal").addEventListener("click", (event) => {
       if (event.target.id === "operator-edit-modal") closeOperatorEditModal();
     });
