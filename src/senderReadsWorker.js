@@ -68,13 +68,19 @@ function resolveFilters(preset, overrides = {}) {
   return base;
 }
 
-/** Dream UI fd=MM/DD/YYYY — calendar day at Start (server local / UTC day of start). */
+/** Dream calendar day for Readers today — agency TZ (not Render UTC). */
+const DREAM_DAY_TZ = "Europe/Kyiv";
+
+/** Dream UI fd=MM/DD/YYYY — calendar day in agency timezone. */
 function formatDreamFdDate(nowMs = Date.now()) {
-  const d = new Date(nowMs);
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yyyy = String(d.getUTCFullYear());
-  return `${mm}/${dd}/${yyyy}`;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: DREAM_DAY_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(nowMs));
+  const get = (type) => parts.find((p) => p.type === type)?.value || "";
+  return `${get("month")}/${get("day")}/${get("year")}`;
 }
 
 function dayKeyFromFd(fd) {
@@ -85,6 +91,17 @@ function dayKeyFromFd(fd) {
   return `${m[3]}-${mm}-${dd}`;
 }
 
+function dayKeyInAgencyTz(ms) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DREAM_DAY_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(ms));
+  const get = (type) => parts.find((p) => p.type === type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 function parseReadMessageDate(message) {
   const raw = String(message?.date || "").trim();
   if (!raw) return null;
@@ -93,16 +110,12 @@ function parseReadMessageDate(message) {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function utcDayKey(ms) {
-  return new Date(ms).toISOString().split("T")[0];
-}
-
 function isReadOnFdDay(message, fd) {
   const want = dayKeyFromFd(fd);
   if (!want) return true;
   const readAt = parseReadMessageDate(message);
   if (readAt == null) return true;
-  return utcDayKey(readAt) === want;
+  return dayKeyInAgencyTz(readAt) === want;
 }
 
 function readPageHasOlderThanFd(messages, fd) {
@@ -110,7 +123,7 @@ function readPageHasOlderThanFd(messages, fd) {
   if (!want) return false;
   return (messages || []).some((message) => {
     const readAt = parseReadMessageDate(message);
-    return readAt != null && utcDayKey(readAt) < want;
+    return readAt != null && dayKeyInAgencyTz(readAt) < want;
   });
 }
 
@@ -155,14 +168,15 @@ function isMessageOnlineFlag(message) {
   return false;
 }
 
-/** Prefer live Online Users set — Reads JSON `online` is unreliable. */
+/** Prefer live Online Users set; also accept Dream row `online` (same signal as UI green). */
 function isReadOnlineEligible(message, onlineOnly, onlineSet = null) {
   if (!onlineOnly) return true;
+  if (isMessageOnlineFlag(message)) return true;
   const id = Number(message?.sender_pid) || 0;
   if (onlineSet instanceof Set && onlineSet.size > 0) {
     return id > 0 && onlineSet.has(id);
   }
-  return isMessageOnlineFlag(message);
+  return false;
 }
 
 function normalizeChannel(value) {
@@ -605,17 +619,15 @@ export class SenderReadsWorker {
   }
 
   async fetchReadPage(page, { fromDate = "" } = {}) {
+    // DreamAuto fetchReadMessages: NO fd= — page all Readers, filter "today" in code.
+    // Passing fd=/td= often returns empty/"no data" while the UI still shows readers.
     const params = new URLSearchParams({
       mode: "sent",
       page: String(Math.max(1, Number(page) || 1)),
       returnJson: "1",
       view: "read",
     });
-    const fd = String(fromDate || "").trim();
-    if (fd) {
-      params.set("fd", fd);
-      params.set("td", "");
-    }
+    void fromDate;
     const url = `${READS_URL}?${params.toString()}`;
     const response = await this.dreamFetch(url);
     if (response.status === 401 || response.status === 403) {
@@ -1167,7 +1179,7 @@ export class SenderReadsWorker {
           Date.now() - onlineSetLoadedAt < 3 * 60_000;
         if (freshEnough) return onlineSet;
         this.emit({ statusMessage: "Loading online men…" });
-        onlineSet = await this.collectOnlineIdSet({ maxPages: 40 });
+        onlineSet = await this.collectOnlineIdSet({ maxPages: 20 });
         onlineSetLoadedAt = Date.now();
         this.emit({
           statusMessage: `Online men loaded: ${onlineSet.size}`,
@@ -1186,9 +1198,9 @@ export class SenderReadsWorker {
         }
 
         if (filters.onlineOnly && page === 1) {
-          await ensureOnlineSet({
-            force: filters.enableCycling && this.state.cycle > 1,
-          });
+          // Reuse cached online set (~3 min) — do not reload 40 WS pages every cycle
+          // while Online mailing is also running (that made Read look "stuck").
+          await ensureOnlineSet({ force: false });
         }
 
         this.emit({
@@ -1656,7 +1668,7 @@ export class SenderReadsWorker {
   }
 
   /** Build profile-id set from WS men-online (same source as Online channel). */
-  async collectOnlineIdSet({ maxPages = 40 } = {}) {
+  async collectOnlineIdSet({ maxPages = 20 } = {}) {
     const ids = new Set();
     for (let page = 1; page <= maxPages; page += 1) {
       if (this.state.stopRequested) break;
