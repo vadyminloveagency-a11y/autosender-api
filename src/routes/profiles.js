@@ -242,7 +242,6 @@ router.post("/connect", authMiddleware, async (req, res) => {
     let femaleProfileId = Number(row.female_profile_id) || 0;
     let displayName = String(secrets.displayName || row.display_name || "").trim();
 
-    // Operator extension logs into Dream in Chrome — skip server login here (no 2captcha on Render).
     if (!femaleProfileId) {
       const verified = await verifyAndResolveDreamProfile({
         username: dreamUsername,
