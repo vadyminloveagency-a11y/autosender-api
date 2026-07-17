@@ -253,6 +253,9 @@ router.post("/start", authMiddleware, async (req, res) => {
       favoritesExcludeIds: Array.isArray(req.body?.favoritesExcludeIds)
         ? req.body.favoritesExcludeIds
         : undefined,
+      manualBlacklistIds: Array.isArray(req.body?.manualBlacklistIds)
+        ? req.body.manualBlacklistIds
+        : undefined,
       channel,
       direction: channel,
       dupes: Array.isArray(existing?.dupes) ? existing.dupes : [],
@@ -264,6 +267,27 @@ router.post("/start", authMiddleware, async (req, res) => {
       error: error?.message || String(error),
       useLocal: true,
     });
+  }
+});
+
+router.post("/blacklist", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  const channel = requireChannel(req, res);
+  if (!channel) return;
+  try {
+    const worker = getWorker(req, profileId, channel);
+    const ids = worker.setManualBlacklistIds(req.body?.manualBlacklistIds);
+    try {
+      await worker.persist?.(Boolean(worker.getState().running));
+    } catch (_) {}
+    return res.json({
+      ok: true,
+      channel,
+      manualBlacklistIds: ids,
+      state: worker.getState(),
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
   }
 });
 

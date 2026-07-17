@@ -207,8 +207,18 @@ export class SenderReadsWorker {
     this.runToken = 0;
     this.seenMemberIds = new Set();
     this.dupeList = [];
+    this._manualBlacklistIds = new Set();
 
     this.state = this.idleState("Idle");
+  }
+
+  setManualBlacklistIds(ids) {
+    this._manualBlacklistIds = new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map(Number)
+        .filter((id) => id >= 1000),
+    );
+    return [...this._manualBlacklistIds];
   }
 
   setCredentialsProvider(fn) {
@@ -364,6 +374,7 @@ export class SenderReadsWorker {
           excludeFavorites: this.state.excludeFavorites !== false,
           checkDuplicates: this.state.checkDuplicates !== false,
           favoritesExcludeIds: this._favoritesExcludeIds,
+          manualBlacklistIds: [...(this._manualBlacklistIds || [])],
         },
         state: this.getState(),
         dupes: safeDupes,
@@ -920,6 +931,7 @@ export class SenderReadsWorker {
           ),
         ]
       : [];
+    this.setManualBlacklistIds(selection.manualBlacklistIds);
     // Dream fd= fixed at Start (UTC calendar day on server clock).
     const resumeFrom =
       selection.resumeFrom && typeof selection.resumeFrom === "object"
@@ -1161,6 +1173,12 @@ export class SenderReadsWorker {
             });
             pageFav += 1;
             skipFav += 1;
+            continue;
+          }
+          if (this._manualBlacklistIds?.has(Number(target.maleProfileId) || 0)) {
+            this.seenMemberIds.add(String(target.maleProfileId));
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
+            skipSeen += 1;
             continue;
           }
           if (filters.todayOnly && readsFromDate && !isReadOnFdDay(message, readsFromDate)) {
@@ -1690,6 +1708,12 @@ export class SenderReadsWorker {
             });
             continue;
           }
+          if (this._manualBlacklistIds?.has(Number(maleProfileId) || 0)) {
+            this.seenMemberIds.add(String(maleProfileId));
+            skipSeen += 1;
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
+            continue;
+          }
 
           const hash = messageHash(maleProfileId, plain);
           if (filters.checkDuplicates && dupeSet.has(hash)) {
@@ -1918,6 +1942,7 @@ export class SenderReadsWorker {
       excludeFavorites: selection.excludeFavorites,
       checkDuplicates: selection.checkDuplicates,
       favoritesExcludeIds: selection.favoritesExcludeIds,
+      manualBlacklistIds: selection.manualBlacklistIds,
       dupes: this.dupeList,
       resumeFrom: state,
     });
