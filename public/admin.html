@@ -169,15 +169,20 @@
       width: 100%;
       min-height: 36px;
       margin-top: 4px;
-      border: 1px solid #23d18b;
+      border: 1px solid rgba(4, 242, 160, 0.45);
       border-radius: 7px;
-      background: #23d18b;
-      color: #0a0e12;
+      background: #101816;
+      color: #04f2a0;
       font: 800 13px/1 Arial, sans-serif;
       cursor: pointer;
       box-shadow: none;
     }
-    .auth-submit:hover:not(:disabled) { filter: none; background: #2adf96; border-color: #2adf96; }
+    .auth-submit:hover:not(:disabled) {
+      filter: none;
+      background: #14201a;
+      border-color: rgba(4, 242, 160, 0.7);
+      color: #6ff5c0;
+    }
     .auth-submit:disabled { opacity: 0.45; cursor: wait; }
     .auth-save-credentials {
       width: 100%;
@@ -256,10 +261,10 @@
       min-height: 30px;
       min-width: 72px;
       padding: 0 12px;
-      border: 1px solid #23d18b;
+      border: 1px solid rgba(4, 242, 160, 0.45);
       border-radius: 7px;
-      background: #23d18b;
-      color: #0a0e12;
+      background: #101816;
+      color: #04f2a0;
       font: 800 12px/1 Arial, sans-serif;
       box-shadow: none;
       transform: none;
@@ -270,8 +275,9 @@
     }
     .btn-primary:hover:not(:disabled) {
       filter: none;
-      background: #2adf96;
-      border-color: #2adf96;
+      background: #14201a;
+      border-color: rgba(4, 242, 160, 0.7);
+      color: #6ff5c0;
     }
     .btn-ghost {
       width: auto;
@@ -840,7 +846,8 @@
       display: flex;
       gap: 8px;
       margin-top: 18px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      align-items: center;
       justify-content: flex-end;
     }
     .modal-card.create-modal {
@@ -876,10 +883,10 @@
     .create-modal .btn-submit {
       width: 100%;
       min-height: 34px;
-      border: 1px solid #23d18b;
+      border: 1px solid rgba(4, 242, 160, 0.45);
       border-radius: 7px;
-      background: #23d18b;
-      color: #0a0e12;
+      background: #101816;
+      color: #04f2a0;
       font: 800 13px/1 Arial, sans-serif;
       box-shadow: none;
       display: inline-flex;
@@ -888,13 +895,18 @@
     }
     .create-modal .btn-submit:hover:not(:disabled) {
       filter: none;
-      background: #2adf96;
-      border-color: #2adf96;
+      background: #14201a;
+      border-color: rgba(4, 242, 160, 0.7);
+      color: #6ff5c0;
     }
     .modal-footer .btn-primary {
       flex: 1 1 auto;
       min-width: 120px;
       border-radius: 7px;
+    }
+    .modal-footer .delete-btn {
+      flex: 0 0 auto;
+      margin: 0;
     }
     .linked-edit {
       width: 26px;
@@ -1301,13 +1313,8 @@
         </div>
       </div>
 
-      <div class="modal-section">
-        <div class="modal-actions-row">
-          <button type="button" id="operator-edit-delete" class="delete-btn">Delete operator</button>
-        </div>
-      </div>
-
       <div class="modal-footer">
+        <button type="button" id="operator-edit-delete" class="delete-btn">Delete operator</button>
         <button type="button" id="operator-edit-save" class="btn-primary">Save changes</button>
       </div>
     </div>
