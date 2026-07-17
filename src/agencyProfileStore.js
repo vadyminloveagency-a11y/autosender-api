@@ -26,6 +26,143 @@ export async function ensureAgencyProfileTables() {
     CREATE INDEX IF NOT EXISTS agency_profiles_female_idx
     ON agency_profiles (female_profile_id)
   `);
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS agency_profile_assignments (
+      id BIGSERIAL PRIMARY KEY,
+      agency_profile_id INTEGER REFERENCES agency_profiles(id) ON DELETE SET NULL,
+      female_profile_id BIGINT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      unassigned_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS agency_profile_assignments_user_idx
+    ON agency_profile_assignments (user_id, assigned_at, unassigned_at)
+  `);
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS agency_profile_assignments_open_idx
+    ON agency_profile_assignments (agency_profile_id)
+    WHERE agency_profile_id IS NOT NULL AND unassigned_at IS NULL
+  `);
+  // Existing assignments predate this history table. Seed the current operator
+  // from the start of today (Kyiv) so today's finance data is immediately visible
+  // without claiming we know older assignment history.
+  await db.query(`
+    INSERT INTO agency_profile_assignments (
+      agency_profile_id, female_profile_id, display_name, user_id, assigned_at
+    )
+    SELECT
+      ap.id,
+      ap.female_profile_id,
+      ap.display_name,
+      ap.assigned_user_id,
+      (date_trunc('day', NOW() AT TIME ZONE 'Europe/Kyiv') AT TIME ZONE 'Europe/Kyiv')
+    FROM agency_profiles ap
+    WHERE ap.assigned_user_id IS NOT NULL
+      AND ap.female_profile_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM agency_profile_assignments h
+        WHERE h.agency_profile_id = ap.id
+          AND h.unassigned_at IS NULL
+      )
+    ON CONFLICT DO NOTHING
+  `);
+}
+
+async function recordAssignmentChange(db, profile, previousUserId, nextUserId) {
+  const profileId = Number(profile?.id) || 0;
+  const femaleProfileId = Number(profile?.female_profile_id) || 0;
+  const oldUserId = Number(previousUserId) || null;
+  const newUserId = Number(nextUserId) || null;
+  if (!profileId || !femaleProfileId || oldUserId === newUserId) return;
+
+  await db.query(
+    `UPDATE agency_profile_assignments
+     SET unassigned_at = NOW()
+     WHERE agency_profile_id = $1
+       AND unassigned_at IS NULL`,
+    [profileId],
+  );
+  if (newUserId) {
+    await db.query(
+      `INSERT INTO agency_profile_assignments (
+         agency_profile_id, female_profile_id, display_name, user_id, assigned_at
+       ) VALUES ($1, $2, $3, $4, NOW())`,
+      [
+        profileId,
+        femaleProfileId,
+        String(profile.display_name || ""),
+        newUserId,
+      ],
+    );
+  }
+}
+
+export async function listProfileAssignmentHistoryForUser(userId) {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT
+       h.id,
+       h.agency_profile_id,
+       h.female_profile_id,
+       h.display_name,
+       h.assigned_at,
+       h.unassigned_at,
+       ap.dream_username
+     FROM agency_profile_assignments h
+     LEFT JOIN agency_profiles ap ON ap.id = h.agency_profile_id
+     WHERE h.user_id = $1
+     ORDER BY h.assigned_at DESC, h.id DESC`,
+    [Number(userId)],
+  );
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    agencyProfileId: row.agency_profile_id ? Number(row.agency_profile_id) : null,
+    femaleProfileId: Number(row.female_profile_id),
+    displayName: String(row.display_name || ""),
+    dreamUsername: String(row.dream_username || ""),
+    assignedAt: row.assigned_at,
+    unassignedAt: row.unassigned_at || null,
+    photoUrl: `https://profile-photos-cdn.dream-singles.com/im${Number(row.female_profile_id)}_small.jpg`,
+  }));
+}
+
+export async function listProfileAssignmentsForUserDay(userId, dayKey) {
+  const day = String(dayKey || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const db = getPool();
+  const result = await db.query(
+    `SELECT DISTINCT ON (h.female_profile_id)
+       h.agency_profile_id,
+       h.female_profile_id,
+       h.display_name,
+       h.assigned_at,
+       h.unassigned_at,
+       ap.dream_username
+     FROM agency_profile_assignments h
+     LEFT JOIN agency_profiles ap ON ap.id = h.agency_profile_id
+     WHERE h.user_id = $1
+       AND h.assigned_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv')
+       AND (
+         h.unassigned_at IS NULL
+         OR h.unassigned_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Kyiv')
+       )
+     ORDER BY h.female_profile_id, h.assigned_at DESC`,
+    [Number(userId), day],
+  );
+  return result.rows.map((row) => ({
+    agencyProfileId: row.agency_profile_id ? Number(row.agency_profile_id) : null,
+    femaleProfileId: Number(row.female_profile_id),
+    displayName: String(row.display_name || ""),
+    dreamUsername: String(row.dream_username || ""),
+    assignedAt: row.assigned_at,
+    unassignedAt: row.unassigned_at || null,
+    photoUrl: `https://profile-photos-cdn.dream-singles.com/im${Number(row.female_profile_id)}_small.jpg`,
+  }));
 }
 
 function mapAgencyProfileRow(row, extras = {}) {
@@ -185,7 +322,11 @@ export async function createAgencyProfile({ username, password, displayName, ass
       assignedUserId ? Number(assignedUserId) : null,
     ],
   );
-  return result.rows[0];
+  const row = result.rows[0];
+  if (row?.assigned_user_id) {
+    await recordAssignmentChange(db, row, null, row.assigned_user_id);
+  }
+  return row;
 }
 
 export async function updateAgencyProfile(id, patch = {}) {
@@ -237,7 +378,16 @@ export async function updateAgencyProfile(id, patch = {}) {
           : null,
     ],
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row && Number(existing.assignedUserId || 0) !== Number(row.assigned_user_id || 0)) {
+    await recordAssignmentChange(
+      db,
+      row,
+      existing.assignedUserId,
+      row.assigned_user_id,
+    );
+  }
+  return row;
 }
 
 async function getAgencyProfileRowRaw(id) {

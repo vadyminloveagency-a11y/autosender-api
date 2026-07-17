@@ -8,6 +8,8 @@ import {
   getAgencyProfileById,
   getAgencyProfileSecrets,
   listAgencyProfiles,
+  listProfileAssignmentsForUserDay,
+  listProfileAssignmentHistoryForUser,
   updateAgencyProfile,
   verifyAndResolveDreamProfile,
 } from "../agencyProfileStore.js";
@@ -16,6 +18,7 @@ import { scrapeDreamInboxCloud } from "../inboxCloudScraper.js";
 import { syncInboxMenItems } from "../inboxSync.js";
 import { upsertDreamCredentials } from "../letterbotStore.js";
 import { getPool } from "../db.js";
+import { fetchBonusActions } from "../dreamAgencyFinance.js";
 
 const router = express.Router();
 
@@ -203,6 +206,120 @@ router.get("/mine", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ ok: false, error: error?.message || "Failed to load profile", profiles: [] });
+  }
+});
+
+function agencyActionTimestampMs(value) {
+  const match = String(value || "").match(
+    /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/,
+  );
+  if (!match) return NaN;
+  const [, month, day, year, hour, minute, second] = match;
+  // Agency reports use the office calendar. Approximate as Kyiv local time;
+  // the one-hour DST correction is derived for the action's month.
+  const utcGuess = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Kyiv",
+    timeZoneName: "longOffset",
+  }).formatToParts(new Date(utcGuess));
+  const offsetText =
+    parts.find((part) => part.type === "timeZoneName")?.value || "GMT+00:00";
+  const offsetMatch = offsetText.match(/GMT([+-])(\d{2}):?(\d{2})?/);
+  const sign = offsetMatch?.[1] === "-" ? -1 : 1;
+  const offsetMinutes = offsetMatch
+    ? sign * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
+    : 0;
+  return utcGuess - offsetMinutes * 60_000;
+}
+
+function actionFallsInAssignment(action, assignment) {
+  const at = agencyActionTimestampMs(action.occurredAt);
+  if (!Number.isFinite(at)) return true;
+  const start = new Date(assignment.assignedAt).getTime();
+  const end = assignment.unassignedAt
+    ? new Date(assignment.unassignedAt).getTime()
+    : Infinity;
+  return at >= start && at <= end;
+}
+
+router.get("/balances", authMiddleware, async (req, res) => {
+  try {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    let date = String(req.query?.date || today).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+
+    const [assignments, history, agencyActions] = await Promise.all([
+      listProfileAssignmentsForUserDay(req.user.id, date),
+      listProfileAssignmentHistoryForUser(req.user.id),
+      fetchBonusActions(date),
+    ]);
+    const byProfile = new Map();
+    for (const assignment of assignments) {
+      const key = String(assignment.femaleProfileId);
+      if (!byProfile.has(key)) {
+        byProfile.set(key, {
+          profileId: key,
+          agencyProfileId: assignment.agencyProfileId,
+          displayName: assignment.displayName || `Profile ${key}`,
+          dreamUsername: assignment.dreamUsername || "",
+          photoUrl: assignment.photoUrl || "",
+          balanceUsd: 0,
+          actions: [],
+          assignment,
+        });
+      }
+    }
+
+    for (const action of agencyActions) {
+      const entry = byProfile.get(String(action.femaleProfileId));
+      if (!entry || !actionFallsInAssignment(action, entry.assignment)) continue;
+      entry.actions.push(action);
+      entry.balanceUsd += Number(action.amountUsd) || 0;
+    }
+
+    const profiles = [...byProfile.values()]
+      .map(({ assignment, ...entry }) => ({
+        ...entry,
+        balanceUsd: Number(entry.balanceUsd.toFixed(2)),
+        actions: entry.actions.sort((a, b) =>
+          String(b.occurredAt).localeCompare(String(a.occurredAt)),
+        ),
+      }))
+      .sort((a, b) => {
+        if (b.balanceUsd !== a.balanceUsd) return b.balanceUsd - a.balanceUsd;
+        return String(a.displayName).localeCompare(String(b.displayName), "en");
+      });
+
+    return res.json({
+      ok: true,
+      date,
+      today,
+      totalUsd: Number(
+        profiles.reduce((sum, profile) => sum + profile.balanceUsd, 0).toFixed(2),
+      ),
+      profiles,
+      history,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+      profiles: [],
+      history: [],
+      totalUsd: 0,
+    });
   }
 });
 

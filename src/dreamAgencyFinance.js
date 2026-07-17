@@ -11,6 +11,8 @@ const BONUSES_URL = `${ORIGIN}/finances/bonuses`;
 let sessionCache = null;
 /** @type {Map<string, { at: number, rows: Array<{ profileId: string, name: string, amount: number }> }>} */
 const dayCache = new Map();
+/** @type {Map<string, { at: number, actions: Array<object> }>} */
+const detailCache = new Map();
 const SESSION_TTL_MS = 45 * 60_000;
 const DAY_CACHE_TTL_MS = 3 * 60_000;
 
@@ -100,6 +102,54 @@ export function parseBonusesGroupedByGirl(html) {
     });
   }
   return rows;
+}
+
+/** Parse regular bonuses table: action, man, questionnaire, time and amount. */
+export function parseBonusActions(html) {
+  const actions = [];
+  for (const tr of String(html || "").matchAll(/<tr[\s\S]*?<\/tr>/gi)) {
+    const cells = [...tr[0].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) =>
+      stripTags(m[1]),
+    );
+    if (cells.length !== 5) continue;
+    if (/^Type of Bonus$/i.test(cells[0]) || /Total$/i.test(cells[0])) continue;
+
+    const manMatch = cells[1].match(/^(\d{5,})\s*(.*)$/);
+    const womanMatch = cells[2].match(/^\[(\d{5,})\]\s*(.*)$/);
+    const amount = parseMoney(cells[4]);
+    if (!womanMatch || !Number.isFinite(amount)) continue;
+
+    actions.push({
+      type: cells[0],
+      maleProfileId: manMatch?.[1] || "",
+      maleName: String(manMatch?.[2] || "").trim(),
+      femaleProfileId: womanMatch[1],
+      femaleName: String(womanMatch[2] || "").trim(),
+      occurredAt: cells[3],
+      amountUsd: amount,
+    });
+  }
+  return actions;
+}
+
+function bonusesUrl(day, groupBy, page = 1) {
+  const url = new URL(BONUSES_URL);
+  url.searchParams.set("form[startDate]", day);
+  url.searchParams.set("form[endDate]", day);
+  url.searchParams.set("form[type]", "0");
+  url.searchParams.set("form[profileId]", "0");
+  url.searchParams.set("form[groupBy]", String(groupBy));
+  url.searchParams.set("form[extra]", "");
+  if (page > 1) url.searchParams.set("page", String(page));
+  return url;
+}
+
+function maxPaginationPage(html) {
+  let max = 1;
+  for (const match of String(html || "").matchAll(/[?&]page=(\d+)/gi)) {
+    max = Math.max(max, Number(match[1]) || 1);
+  }
+  return Math.min(max, 100);
 }
 
 async function fetchWithCookies(url, { method = "GET", headers = {}, body, jar, maxRedirects = 8 } = {}) {
@@ -214,13 +264,7 @@ export async function fetchBonusesByGirl(dayKey, { force = false } = {}) {
     return cached.rows;
   }
 
-  const url = new URL(BONUSES_URL);
-  url.searchParams.set("form[startDate]", day);
-  url.searchParams.set("form[endDate]", day);
-  url.searchParams.set("form[type]", "0");
-  url.searchParams.set("form[profileId]", "0");
-  url.searchParams.set("form[groupBy]", "2"); // Group By Girl
-  url.searchParams.set("form[extra]", "");
+  const url = bonusesUrl(day, 2); // Group By Girl
 
   const jar = cookieMapFromHeader(await getCookieHeader());
   let result = await fetchWithCookies(url.toString(), {
@@ -263,7 +307,86 @@ export async function fetchBonusesByGirl(dayKey, { force = false } = {}) {
   return rows;
 }
 
+export async function fetchBonusActions(dayKey, { force = false } = {}) {
+  const day = String(dayKey || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new Error("Invalid day key");
+  }
+  const cached = detailCache.get(day);
+  if (!force && cached && Date.now() - cached.at < DAY_CACHE_TTL_MS) {
+    return cached.actions;
+  }
+
+  let cookieHeader = await getCookieHeader();
+  let jar = cookieMapFromHeader(cookieHeader);
+  const headers = {
+    Accept: "text/html,application/xhtml+xml",
+    Referer: BONUSES_URL,
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  };
+
+  let first = await fetchWithCookies(bonusesUrl(day, 1).toString(), {
+    method: "GET",
+    jar,
+    headers,
+  });
+  if (/id="_username"/i.test(first.html) && /name="_password"/i.test(first.html)) {
+    cookieHeader = await getCookieHeader({ force: true });
+    jar = cookieMapFromHeader(cookieHeader);
+    first = await fetchWithCookies(bonusesUrl(day, 1).toString(), {
+      method: "GET",
+      jar,
+      headers,
+    });
+  }
+  if (!first.response.ok) {
+    throw new Error(`Agency bonuses HTTP ${first.response.status}`);
+  }
+
+  const pages = maxPaginationPage(first.html);
+  const htmlPages = [first.html];
+  // Keep batches small so the agency site is not flooded.
+  for (let start = 2; start <= pages; start += 5) {
+    const pageNumbers = Array.from(
+      { length: Math.min(5, pages - start + 1) },
+      (_, index) => start + index,
+    );
+    const results = await Promise.all(
+      pageNumbers.map((page) =>
+        fetchWithCookies(bonusesUrl(day, 1, page).toString(), {
+          method: "GET",
+          jar: cookieMapFromHeader(cookieHeaderFromJar(first.jar)),
+          headers,
+        }),
+      ),
+    );
+    for (const result of results) {
+      if (result.response.ok) htmlPages.push(result.html);
+    }
+  }
+
+  const seen = new Set();
+  const actions = htmlPages
+    .flatMap((html) => parseBonusActions(html))
+    .filter((action) => {
+      const key = [
+        action.type,
+        action.maleProfileId,
+        action.femaleProfileId,
+        action.occurredAt,
+        action.amountUsd,
+      ].join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  detailCache.set(day, { at: Date.now(), actions });
+  return actions;
+}
+
 export function clearAgencyFinanceCaches() {
   sessionCache = null;
   dayCache.clear();
+  detailCache.clear();
 }
