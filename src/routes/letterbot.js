@@ -603,48 +603,30 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
     ]);
 
-    let bonusRows = [];
-    let balanceError = "";
-    let balanceConfigured = false;
-    try {
-      const creds = await getAgencyFinanceCredentials();
-      balanceConfigured = Boolean(creds.configured);
-      if (creds.configured) {
-        bonusRows = await fetchBonusesByGirl(date);
-      }
-    } catch (error) {
-      balanceError = error?.message || String(error);
-    }
-
     const byProfile = new Map();
-    const ensureEntry = (key, metaExtra = {}) => {
-      let entry = byProfile.get(key);
-      if (entry) return entry;
-      const idNum = Number(key) || 0;
-      const meta = idNum ? profileMap.get(idNum) : null;
-      entry = {
-        profileId: key,
-        displayName: meta?.displayName || metaExtra.name || "",
-        dreamUsername: meta?.dreamUsername || "",
-        photoUrl:
-          meta?.photoUrl ||
-          (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
-        operatorName: meta?.operatorName || "",
-        operatorEmail: meta?.operatorEmail || "",
-        letterbot: 0,
-        read: 0,
-        online: 0,
-        total: 0,
-        balanceUsd: null,
-      };
-      byProfile.set(key, entry);
-      return entry;
-    };
-
     for (const row of rows) {
       const key = String(row.profileId || "");
       if (!key) continue;
-      const entry = ensureEntry(key);
+      let entry = byProfile.get(key);
+      if (!entry) {
+        const idNum = Number(key) || 0;
+        const meta = idNum ? profileMap.get(idNum) : null;
+        entry = {
+          profileId: key,
+          displayName: meta?.displayName || "",
+          dreamUsername: meta?.dreamUsername || "",
+          photoUrl:
+            meta?.photoUrl ||
+            (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+          operatorName: meta?.operatorName || "",
+          operatorEmail: meta?.operatorEmail || "",
+          letterbot: 0,
+          read: 0,
+          online: 0,
+          total: 0,
+        };
+        byProfile.set(key, entry);
+      }
       if (row.product === "online") entry.online += row.letters;
       else if (row.product === "read") entry.read += row.letters;
       else entry.letterbot += row.letters;
@@ -655,18 +637,7 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       }
     }
 
-    for (const bonus of bonusRows) {
-      const key = String(bonus.profileId || "");
-      if (!key) continue;
-      const entry = ensureEntry(key, { name: bonus.name });
-      entry.balanceUsd = Number(bonus.amount) || 0;
-      if (!entry.displayName && bonus.name) entry.displayName = bonus.name;
-    }
-
     const profiles = [...byProfile.values()].sort((a, b) => {
-      const balA = Number(a.balanceUsd) || 0;
-      const balB = Number(b.balanceUsd) || 0;
-      if (balB !== balA) return balB - balA;
       if (b.total !== a.total) return b.total - a.total;
       return String(a.displayName || a.profileId).localeCompare(
         String(b.displayName || b.profileId),
@@ -682,8 +653,6 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       today,
       monthDays,
       profiles,
-      balanceConfigured,
-      balanceError: balanceError || null,
     });
   } catch (error) {
     return res.status(500).json({
@@ -691,6 +660,71 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       error: error?.message || String(error),
       profiles: [],
       monthDays: [],
+    });
+  }
+});
+
+/** Director cabinet — Dream agency bonuses (Group By Girl) for a day. */
+router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
+  try {
+    const today = kyivDayKey();
+    let date = String(req.query?.date || today).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.json({
+        ok: true,
+        date,
+        today,
+        configured: false,
+        profiles: [],
+        error: "Save agency login in Balances section",
+      });
+    }
+
+    const [bonusRows, profileMap] = await Promise.all([
+      fetchBonusesByGirl(date, { force: Boolean(req.query?.force) }),
+      mapAgencyProfilesByFemaleId().catch(() => new Map()),
+    ]);
+
+    const profiles = bonusRows.map((bonus) => {
+      const idNum = Number(bonus.profileId) || 0;
+      const meta = idNum ? profileMap.get(idNum) : null;
+      return {
+        profileId: String(bonus.profileId),
+        displayName: meta?.displayName || bonus.name || "",
+        dreamUsername: meta?.dreamUsername || "",
+        photoUrl:
+          meta?.photoUrl ||
+          (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+        operatorName: meta?.operatorName || "",
+        operatorEmail: meta?.operatorEmail || "",
+        balanceUsd: Number(bonus.amount) || 0,
+      };
+    }).sort((a, b) => {
+      if (b.balanceUsd !== a.balanceUsd) return b.balanceUsd - a.balanceUsd;
+      return String(a.displayName || a.profileId).localeCompare(
+        String(b.displayName || b.profileId),
+        "en",
+      );
+    });
+
+    return res.json({
+      ok: true,
+      date,
+      today,
+      configured: true,
+      profiles,
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      date: String(req.query?.date || ""),
+      configured: true,
+      profiles: [],
+      error: error?.message || String(error),
     });
   }
 });

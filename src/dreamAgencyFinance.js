@@ -14,36 +14,41 @@ const dayCache = new Map();
 const SESSION_TTL_MS = 45 * 60_000;
 const DAY_CACHE_TTL_MS = 3 * 60_000;
 
-function parseSetCookieHeaders(response) {
-  const raw =
-    typeof response.headers.getSetCookie === "function"
-      ? response.headers.getSetCookie()
-      : [];
-  const list = Array.isArray(raw) && raw.length ? raw : [];
-  if (!list.length) {
-    const single = response.headers.get("set-cookie");
-    if (single) list.push(single);
-  }
+function cookieMapFromHeader(header) {
   const jar = new Map();
-  for (const line of list) {
-    const part = String(line || "").split(";")[0];
-    const eq = part.indexOf("=");
-    if (eq <= 0) continue;
-    jar.set(part.slice(0, eq).trim(), part.slice(eq + 1).trim());
-  }
-  return jar;
-}
-
-function mergeCookieHeader(existing, response) {
-  const jar = new Map();
-  for (const part of String(existing || "")
+  for (const part of String(header || "")
     .split(";")
     .map((s) => s.trim())
     .filter(Boolean)) {
     const eq = part.indexOf("=");
     if (eq > 0) jar.set(part.slice(0, eq), part.slice(eq + 1));
   }
-  for (const [k, v] of parseSetCookieHeaders(response)) jar.set(k, v);
+  return jar;
+}
+
+function parseSetCookieHeaders(response) {
+  const list =
+    typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [];
+  const out = Array.isArray(list) ? [...list] : [];
+  if (!out.length) {
+    const single = response.headers.get("set-cookie");
+    if (single) out.push(single);
+  }
+  return out;
+}
+
+function applySetCookies(jar, response) {
+  for (const line of parseSetCookieHeaders(response)) {
+    const part = String(line || "").split(";")[0];
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    jar.set(part.slice(0, eq).trim(), part.slice(eq + 1).trim());
+  }
+}
+
+function cookieHeaderFromJar(jar) {
   return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
@@ -97,26 +102,63 @@ export function parseBonusesGroupedByGirl(html) {
   return rows;
 }
 
+async function fetchWithCookies(url, { method = "GET", headers = {}, body, jar, maxRedirects = 8 } = {}) {
+  let current = String(url);
+  let currentMethod = method;
+  let currentBody = body;
+  for (let i = 0; i <= maxRedirects; i += 1) {
+    const response = await fetch(current, {
+      method: currentMethod,
+      redirect: "manual",
+      signal: AbortSignal.timeout(25000),
+      headers: {
+        ...headers,
+        Cookie: cookieHeaderFromJar(jar),
+      },
+      body: currentBody,
+    });
+    applySetCookies(jar, response);
+    const status = response.status;
+    if (status >= 300 && status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        return { response, html: await response.text(), jar };
+      }
+      current = new URL(location, current).toString();
+      // POST login_check → GET home
+      currentMethod = "GET";
+      currentBody = undefined;
+      // Drain body before following.
+      try {
+        await response.arrayBuffer();
+      } catch (_) {}
+      continue;
+    }
+    const html = await response.text();
+    return { response, html, jar };
+  }
+  throw new Error("Agency login: too many redirects");
+}
+
 async function loginAgency() {
   const creds = await getAgencyFinanceCredentials();
   if (!creds.configured) {
     throw new Error(
-      "Agency finance login not configured — set credentials in Mailings or DREAM_AGENCY_USERNAME/PASSWORD",
+      "Agency finance login not configured — save login in Balances section",
     );
   }
 
-  const loginPage = await fetch(LOGIN_URL, {
+  const jar = new Map();
+  const loginPage = await fetchWithCookies(LOGIN_URL, {
     method: "GET",
-    redirect: "follow",
-    signal: AbortSignal.timeout(20000),
+    jar,
     headers: {
-      Accept: "text/html",
+      Accept: "text/html,application/xhtml+xml",
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
-  let cookieHeader = mergeCookieHeader("", loginPage);
-  const csrf = extractCsrf(await loginPage.text());
+  const csrf = extractCsrf(loginPage.html);
   if (!csrf) throw new Error("Agency login CSRF not found");
 
   const body = new URLSearchParams({
@@ -126,14 +168,12 @@ async function loginAgency() {
     _remember_me: "on",
   });
 
-  const response = await fetch(LOGIN_CHECK_URL, {
+  const after = await fetchWithCookies(LOGIN_CHECK_URL, {
     method: "POST",
-    redirect: "follow",
-    signal: AbortSignal.timeout(20000),
+    jar,
     headers: {
-      Accept: "text/html",
+      Accept: "text/html,application/xhtml+xml",
       "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: cookieHeader,
       Origin: ORIGIN,
       Referer: LOGIN_URL,
       "User-Agent":
@@ -141,13 +181,15 @@ async function loginAgency() {
     },
     body,
   });
-  cookieHeader = mergeCookieHeader(cookieHeader, response);
-  const html = await response.text();
-  if (/\/login_check|id="_username"|Invalid credentials/i.test(html) && /name="_password"/i.test(html)) {
+
+  const cookieHeader = cookieHeaderFromJar(jar);
+  const loggedIn =
+    /logout/i.test(after.html) ||
+    /DSAGPHPSESSION|REMEMBERME_AGENCY/i.test(cookieHeader);
+  const stillLogin =
+    /id="_username"/i.test(after.html) && /name="_password"/i.test(after.html);
+  if (!loggedIn || stillLogin) {
     throw new Error("Agency login failed — check username/password");
-  }
-  if (!/DSAGPHPSESSION|REMEMBERME_AGENCY/i.test(cookieHeader) && !/logout/i.test(html)) {
-    throw new Error("Agency login failed — no session cookie");
   }
 
   sessionCache = { cookieHeader, expAt: Date.now() + SESSION_TTL_MS };
@@ -180,42 +222,43 @@ export async function fetchBonusesByGirl(dayKey, { force = false } = {}) {
   url.searchParams.set("form[groupBy]", "2"); // Group By Girl
   url.searchParams.set("form[extra]", "");
 
-  let cookieHeader = await getCookieHeader();
-  let response = await fetch(url, {
+  const jar = cookieMapFromHeader(await getCookieHeader());
+  let result = await fetchWithCookies(url.toString(), {
     method: "GET",
-    redirect: "follow",
-    signal: AbortSignal.timeout(30000),
+    jar,
     headers: {
-      Accept: "text/html",
-      Cookie: cookieHeader,
+      Accept: "text/html,application/xhtml+xml",
       Referer: BONUSES_URL,
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
-  cookieHeader = mergeCookieHeader(cookieHeader, response);
-  if (sessionCache) sessionCache.cookieHeader = cookieHeader;
 
-  let html = await response.text();
-  if (response.status === 401 || response.status === 403 || /id="_username"/i.test(html)) {
-    cookieHeader = await getCookieHeader({ force: true });
-    response = await fetch(url, {
+  if (/id="_username"/i.test(result.html) && /name="_password"/i.test(result.html)) {
+    const fresh = cookieMapFromHeader(await getCookieHeader({ force: true }));
+    result = await fetchWithCookies(url.toString(), {
       method: "GET",
-      redirect: "follow",
-      signal: AbortSignal.timeout(30000),
+      jar: fresh,
       headers: {
-        Accept: "text/html",
-        Cookie: cookieHeader,
+        Accept: "text/html,application/xhtml+xml",
         Referer: BONUSES_URL,
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
-    html = await response.text();
   }
-  if (!response.ok) throw new Error(`Agency bonuses HTTP ${response.status}`);
 
-  const rows = parseBonusesGroupedByGirl(html);
+  if (!result.response.ok) {
+    throw new Error(`Agency bonuses HTTP ${result.response.status}`);
+  }
+
+  const cookieHeader = cookieHeaderFromJar(result.jar);
+  if (sessionCache) {
+    sessionCache.cookieHeader = cookieHeader;
+    sessionCache.expAt = Date.now() + SESSION_TTL_MS;
+  }
+
+  const rows = parseBonusesGroupedByGirl(result.html);
   dayCache.set(day, { at: Date.now(), rows });
   return rows;
 }

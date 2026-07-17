@@ -1336,6 +1336,7 @@
         <div class="sidebar-section-title">Control</div>
         <nav class="sidebar-nav" aria-label="Control">
           <button type="button" class="sidebar-nav-btn" data-section="mailings">Mailings</button>
+          <button type="button" class="sidebar-nav-btn" data-section="balances">Balances</button>
         </nav>
 
         <div class="sidebar-spacer"></div>
@@ -1376,7 +1377,7 @@
 
           <section id="section-mailings" class="admin-section">
             <h2 class="admin-main-title">Mailings</h2>
-            <p class="admin-main-lead">Letters for each questionnaire (LetterBot / Read / Online). Compact date picker — no agency totals.</p>
+            <p class="admin-main-lead">Letters for each questionnaire (LetterBot / Read / Online).</p>
 
             <div class="panel-card" style="margin-bottom:16px">
               <div class="card-head">
@@ -1400,15 +1401,6 @@
                 </div>
                 <div class="mail-day-panel">
                   <h4 id="mail-day-title">Selected day</h4>
-                  <div id="mail-balance-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
-                  <div id="agency-finance-creds" class="mail-agency-creds">
-                    <div class="mail-agency-creds-row">
-                      <input id="agency-finance-user" type="text" placeholder="Agency login" autocomplete="username">
-                      <input id="agency-finance-pass" type="password" placeholder="Agency password" autocomplete="current-password">
-                      <button type="button" id="agency-finance-save" class="btn-ghost">Save agency login</button>
-                    </div>
-                    <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
-                  </div>
                   <div id="mail-day-empty" class="mail-day-empty">No letters recorded for this day yet.</div>
                   <div id="mail-day-wrap" class="table-scroll hidden">
                     <table class="data-table">
@@ -1419,7 +1411,6 @@
                           <th>LetterBot</th>
                           <th>Read</th>
                           <th>Online</th>
-                          <th>Balance</th>
                         </tr>
                       </thead>
                       <tbody id="mail-day-body"></tbody>
@@ -1451,6 +1442,61 @@
                     </thead>
                     <tbody id="mailings-body"></tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-balances" class="admin-section">
+            <h2 class="admin-main-title">Balances</h2>
+            <p class="admin-main-lead">Dream agency bonuses per questionnaire for the selected day (Group By Girl).</p>
+
+            <div class="panel-card">
+              <div class="card-head">
+                <h3>By questionnaire</h3>
+                <button type="button" id="refresh-balances-btn" class="btn-ghost">Refresh</button>
+              </div>
+
+              <div id="agency-finance-creds" class="mail-agency-creds">
+                <div class="mail-agency-creds-row">
+                  <input id="agency-finance-user" type="text" placeholder="Agency login" autocomplete="username">
+                  <input id="agency-finance-pass" type="password" placeholder="Agency password" autocomplete="current-password">
+                  <button type="button" id="agency-finance-save" class="btn-ghost">Save agency login</button>
+                </div>
+                <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
+              </div>
+
+              <div class="mail-calendar-layout" style="margin-top:12px">
+                <div class="mail-cal">
+                  <div class="mail-cal-head">
+                    <h4 id="bal-cal-title">—</h4>
+                    <div class="mail-cal-nav">
+                      <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
+                      <button type="button" id="bal-cal-today" title="Today">●</button>
+                      <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
+                    </div>
+                  </div>
+                  <div class="mail-cal-weekdays">
+                    <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                  </div>
+                  <div id="bal-cal-grid" class="mail-cal-grid"></div>
+                </div>
+                <div class="mail-day-panel">
+                  <h4 id="bal-day-title">Selected day</h4>
+                  <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
+                  <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
+                  <div id="bal-day-wrap" class="table-scroll hidden">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th>Questionnaire</th>
+                          <th>Operator</th>
+                          <th>Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody id="bal-day-body"></tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1718,6 +1764,7 @@
       const sections = {
         accounts: document.getElementById("section-accounts"),
         mailings: document.getElementById("section-mailings"),
+        balances: document.getElementById("section-balances"),
       };
       Object.entries(sections).forEach(([key, el]) => {
         if (el) el.classList.toggle("is-active", key === sectionId);
@@ -1728,6 +1775,10 @@
       if (sectionId === "mailings") {
         void refreshMailCalendar({ quiet: true });
         void refreshMailings({ quiet: true });
+      }
+      if (sectionId === "balances") {
+        void refreshAgencyFinanceCredsHint();
+        void refreshBalances({ quiet: true });
       }
     }
 
@@ -2321,32 +2372,19 @@
       })}`;
     }
 
-    function renderMailDayProfiles(profiles, date, meta = {}) {
+    function renderMailDayProfiles(profiles, date) {
       const emptyEl = document.getElementById("mail-day-empty");
       const wrapEl = document.getElementById("mail-day-wrap");
       const bodyEl = document.getElementById("mail-day-body");
       const titleEl = document.getElementById("mail-day-title");
-      const statusEl = document.getElementById("mail-balance-status");
       if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
       titleEl.textContent = `Questionnaires · ${date}`;
       bodyEl.innerHTML = "";
-      if (statusEl) {
-        if (meta.balanceError) {
-          statusEl.style.display = "block";
-          statusEl.textContent = `Balance: ${meta.balanceError}`;
-        } else if (meta.balanceConfigured === false) {
-          statusEl.style.display = "block";
-          statusEl.textContent = "Balance: save agency login below to load $ per questionnaire.";
-        } else {
-          statusEl.style.display = "none";
-          statusEl.textContent = "";
-        }
-      }
       const list = Array.isArray(profiles) ? profiles : [];
       if (!list.length) {
         emptyEl.classList.remove("hidden");
         wrapEl.classList.add("hidden");
-        emptyEl.textContent = "No letters or bonuses for this day yet.";
+        emptyEl.textContent = "No letters recorded for this day yet.";
         return;
       }
       emptyEl.classList.add("hidden");
@@ -2364,9 +2402,139 @@
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.letterbot) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.read) || 0).toLocaleString("en-US")}</td>
           <td style="font-variant-numeric:tabular-nums;font-weight:600">${(Number(row.online) || 0).toLocaleString("en-US")}</td>
+        `;
+        bodyEl.appendChild(tr);
+      }
+    }
+
+    const balCalState = {
+      year: null,
+      month: null,
+      selectedDate: null,
+      today: null,
+    };
+
+    function shiftBalCalMonth(delta) {
+      let y = balCalState.year;
+      let m = balCalState.month + delta;
+      if (m < 1) {
+        m = 12;
+        y -= 1;
+      } else if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+      balCalState.year = y;
+      balCalState.month = m;
+      const stillInMonth =
+        balCalState.selectedDate &&
+        balCalState.selectedDate.startsWith(`${y}-${String(m).padStart(2, "0")}-`);
+      if (!stillInMonth) {
+        balCalState.selectedDate = `${y}-${String(m).padStart(2, "0")}-01`;
+      }
+      void refreshBalances({ quiet: true });
+    }
+
+    function renderBalCalendarGrid() {
+      const grid = document.getElementById("bal-cal-grid");
+      const title = document.getElementById("bal-cal-title");
+      if (!grid || !title) return;
+      const y = balCalState.year;
+      const m = balCalState.month;
+      title.textContent = new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+      const first = new Date(Date.UTC(y, m - 1, 1));
+      const startPad = (first.getUTCDay() + 6) % 7;
+      const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const cells = [];
+      for (let i = 0; i < startPad; i += 1) {
+        cells.push(`<button type="button" class="mail-cal-day" disabled></button>`);
+      }
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const classes = ["mail-cal-day"];
+        if (date === balCalState.selectedDate) classes.push("selected");
+        if (date === balCalState.today) classes.push("today");
+        cells.push(
+          `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span></button>`,
+        );
+      }
+      grid.innerHTML = cells.join("");
+    }
+
+    function renderBalanceProfiles(profiles, date, meta = {}) {
+      const emptyEl = document.getElementById("bal-day-empty");
+      const wrapEl = document.getElementById("bal-day-wrap");
+      const bodyEl = document.getElementById("bal-day-body");
+      const titleEl = document.getElementById("bal-day-title");
+      const statusEl = document.getElementById("bal-status");
+      if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
+      titleEl.textContent = `Balances · ${date}`;
+      bodyEl.innerHTML = "";
+      if (statusEl) {
+        if (meta.error) {
+          statusEl.style.display = "block";
+          statusEl.textContent = meta.error;
+        } else if (meta.configured === false) {
+          statusEl.style.display = "block";
+          statusEl.textContent = "Save agency login above to load balances.";
+        } else {
+          statusEl.style.display = "none";
+          statusEl.textContent = "";
+        }
+      }
+      const list = Array.isArray(profiles) ? profiles : [];
+      if (!list.length) {
+        emptyEl.classList.remove("hidden");
+        wrapEl.classList.add("hidden");
+        emptyEl.textContent = "No bonuses for this day.";
+        return;
+      }
+      emptyEl.classList.add("hidden");
+      wrapEl.classList.remove("hidden");
+      for (const row of list) {
+        const tr = document.createElement("tr");
+        const opName = String(row.operatorName || "").trim();
+        const opEmail = String(row.operatorEmail || "").trim();
+        const opHtml = opName || opEmail
+          ? `${escapeHtml(opName || opEmail)}${opName && opEmail ? `<br><span style="color:var(--muted)">${escapeHtml(opEmail)}</span>` : ""}`
+          : "—";
+        tr.innerHTML = `
+          <td>${formatQuestionnaire(row)}</td>
+          <td>${opHtml}</td>
           <td class="mail-balance">${formatBalanceUsd(row.balanceUsd)}</td>
         `;
         bodyEl.appendChild(tr);
+      }
+    }
+
+    async function refreshBalances({ quiet = false } = {}) {
+      if (!balCalState.today) balCalState.today = kyivTodayLocal();
+      if (!balCalState.selectedDate) balCalState.selectedDate = balCalState.today;
+      if (!balCalState.year || !balCalState.month) {
+        const [y, m] = balCalState.selectedDate.split("-").map(Number);
+        balCalState.year = y;
+        balCalState.month = m;
+      }
+      renderBalCalendarGrid();
+      if (!quiet) setStatus("Loading balances...");
+      try {
+        const data = await api(
+          `/letterbot/admin/balances-by-profile?date=${encodeURIComponent(balCalState.selectedDate)}&force=1`,
+        );
+        if (data.today) balCalState.today = String(data.today).slice(0, 10);
+        renderBalCalendarGrid();
+        renderBalanceProfiles(data.profiles || [], balCalState.selectedDate, {
+          configured: data.configured,
+          error: data.error,
+        });
+        if (!quiet) setStatus("");
+      } catch (error) {
+        renderBalanceProfiles([], balCalState.selectedDate, { error: error.message });
+        if (!quiet) setStatus(error.message, "error");
       }
     }
 
@@ -2405,22 +2573,13 @@
         // For today: prefer live daySent per questionnaire so calendar matches Active mailings.
         if (mailCalState.selectedDate === mailCalState.today) {
           profiles = mergeLiveDaySentIntoProfiles(profiles, lbData?.jobs || [], senderData?.jobs || []);
-          if (
-            profiles.some(
-              (p) =>
-                (Number(p.letterbot) || 0) + (Number(p.read) || 0) + (Number(p.online) || 0) > 0 ||
-                (Number(p.balanceUsd) || 0) > 0,
-            )
-          ) {
+          if (profiles.some((p) => (Number(p.letterbot) || 0) + (Number(p.read) || 0) + (Number(p.online) || 0) > 0)) {
             mailCalState.monthDays[mailCalState.today] = 1;
           }
         }
 
         renderMailCalendarGrid();
-        renderMailDayProfiles(profiles, mailCalState.selectedDate, {
-          balanceConfigured: data.balanceConfigured,
-          balanceError: data.balanceError,
-        });
+        renderMailDayProfiles(profiles, mailCalState.selectedDate);
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
@@ -2482,15 +2641,8 @@
           ...row,
           total: (Number(row.letterbot) || 0) + (Number(row.read) || 0) + (Number(row.online) || 0),
         }))
-        .filter(
-          (row) =>
-            row.total > 0 ||
-            (row.balanceUsd != null && Number.isFinite(Number(row.balanceUsd))),
-        )
+        .filter((row) => row.total > 0)
         .sort((a, b) => {
-          const balA = Number(a.balanceUsd) || 0;
-          const balB = Number(b.balanceUsd) || 0;
-          if (balB !== balA) return balB - balA;
           return (
             b.total - a.total ||
             String(a.displayName || a.profileId).localeCompare(String(b.displayName || b.profileId), "en")
@@ -2774,7 +2926,7 @@
         if (data.configured) {
           hint.textContent = `Agency login saved (${data.usernameMasked || "••••"})${data.source === "env" ? " · from env" : ""}`;
         } else {
-          hint.textContent = "Not configured — needed for Balance $ column.";
+          hint.textContent = "Not configured — needed to load balances.";
         }
       } catch (_) {
         hint.textContent = "";
@@ -2797,12 +2949,31 @@
         document.getElementById("agency-finance-pass").value = "";
         setStatus("Agency login saved", "ok");
         await refreshAgencyFinanceCredsHint();
-        await refreshMailCalendar({ quiet: true });
+        await refreshBalances({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       }
     });
-    void refreshAgencyFinanceCredsHint();
+
+    document.getElementById("refresh-balances-btn")?.addEventListener("click", () => {
+      void refreshBalances();
+    });
+    document.getElementById("bal-cal-prev")?.addEventListener("click", () => shiftBalCalMonth(-1));
+    document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
+    document.getElementById("bal-cal-today")?.addEventListener("click", () => {
+      balCalState.today = kyivTodayLocal();
+      balCalState.selectedDate = balCalState.today;
+      const [y, m] = balCalState.selectedDate.split("-").map(Number);
+      balCalState.year = y;
+      balCalState.month = m;
+      void refreshBalances();
+    });
+    document.getElementById("bal-cal-grid")?.addEventListener("click", (event) => {
+      const btn = event.target.closest(".mail-cal-day[data-date]");
+      if (!btn || btn.disabled) return;
+      balCalState.selectedDate = btn.getAttribute("data-date");
+      void refreshBalances({ quiet: true });
+    });
 
     document.getElementById("accounts-list").addEventListener("click", (event) => {
       const editBtn = event.target.closest(".profile-edit-btn");
