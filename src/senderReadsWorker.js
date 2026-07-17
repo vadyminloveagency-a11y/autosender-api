@@ -1169,6 +1169,7 @@ export class SenderReadsWorker {
 
       let onlineSet = null;
       let onlineSetLoadedAt = 0;
+      let onlineSetPromise = null;
 
       const ensureOnlineSet = async ({ force = false } = {}) => {
         if (!filters.onlineOnly) return null;
@@ -1178,17 +1179,34 @@ export class SenderReadsWorker {
           !force &&
           Date.now() - onlineSetLoadedAt < 3 * 60_000;
         if (freshEnough) return onlineSet;
-        this.emit({ statusMessage: "Loading online men…" });
-        onlineSet = await this.collectOnlineIdSet({ maxPages: 20 });
-        onlineSetLoadedAt = Date.now();
-        this.emit({
-          statusMessage: `Online men loaded: ${onlineSet.size}`,
-        });
-        return onlineSet;
+        if (onlineSetPromise) return onlineSetPromise;
+        onlineSetPromise = (async () => {
+          try {
+            // Soft refresh — do not block Reads paging (UI green uses row.online too).
+            this.emit({ statusMessage: "Refreshing online men…" });
+            const next = await this.collectOnlineIdSet({ maxPages: 12 });
+            if (next instanceof Set && next.size > 0) {
+              onlineSet = next;
+              onlineSetLoadedAt = Date.now();
+              this.emit({
+                statusMessage: `Online men loaded: ${onlineSet.size}`,
+              });
+            }
+            return onlineSet;
+          } catch (_) {
+            return onlineSet;
+          } finally {
+            onlineSetPromise = null;
+          }
+        })();
+        return onlineSetPromise;
       };
 
-      // Online men = Readers ∩ live men-online (do not trust Reads JSON `online`).
-      await ensureOnlineSet({ force: true });
+      // Do NOT await a full men-online crawl before page 1 — that made each cycle
+      // feel like ~10s/page while Online mailing already saturates Dream/WS.
+      if (filters.onlineOnly) {
+        void ensureOnlineSet({ force: true });
+      }
 
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
@@ -1197,10 +1215,8 @@ export class SenderReadsWorker {
           favorites = this.favoritesExcludeSet();
         }
 
-        if (filters.onlineOnly && page === 1) {
-          // Reuse cached online set (~3 min) — do not reload 40 WS pages every cycle
-          // while Online mailing is also running (that made Read look "stuck").
-          await ensureOnlineSet({ force: false });
+        if (filters.onlineOnly && page === 1 && this.state.cycle > 1) {
+          void ensureOnlineSet({ force: false });
         }
 
         this.emit({
@@ -1430,7 +1446,7 @@ export class SenderReadsWorker {
             skipBad = 0;
             skipSeen = 0;
             skipOld = 0;
-            await new Promise((r) => setTimeout(r, 20000));
+            await new Promise((r) => setTimeout(r, 8000));
             if (this.state.stopRequested || token !== this.runToken) return false;
           }
           if (filters.todayOnly) {
@@ -1479,7 +1495,7 @@ export class SenderReadsWorker {
         }
 
         page += 1;
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 150));
       }
 
       if (token === this.runToken) {
