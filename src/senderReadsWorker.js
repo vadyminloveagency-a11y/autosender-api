@@ -145,8 +145,24 @@ function parseReadTarget(message) {
   return { maleProfileId, linkMemberId };
 }
 
-function isReadOnlineEligible(message, onlineOnly) {
-  return !onlineOnly || Boolean(message?.online);
+function isMessageOnlineFlag(message) {
+  const v = message?.online ?? message?.is_online ?? message?.isOnline;
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0 || v == null || v === "") return false;
+  const s = String(v).trim().toLowerCase();
+  if (s === "1" || s === "true" || s === "yes" || s === "online" || s === "on") return true;
+  if (s === "0" || s === "false" || s === "no" || s === "offline" || s === "off") return false;
+  return false;
+}
+
+/** Prefer live Online Users set — Reads JSON `online` is unreliable. */
+function isReadOnlineEligible(message, onlineOnly, onlineSet = null) {
+  if (!onlineOnly) return true;
+  const id = Number(message?.sender_pid) || 0;
+  if (onlineSet instanceof Set && onlineSet.size > 0) {
+    return id > 0 && onlineSet.has(id);
+  }
+  return isMessageOnlineFlag(message);
 }
 
 function normalizeChannel(value) {
@@ -1139,11 +1155,40 @@ export class SenderReadsWorker {
       const skipSummary = () =>
         `offline ${skipOffline}, fav ${skipFav}, dupe ${skipDupe}, notToday ${skipOld}, bad ${skipBad}, seen ${skipSeen}`;
 
+      let onlineSet = null;
+      let onlineSetLoadedAt = 0;
+
+      const ensureOnlineSet = async ({ force = false } = {}) => {
+        if (!filters.onlineOnly) return null;
+        const freshEnough =
+          onlineSet instanceof Set &&
+          onlineSet.size > 0 &&
+          !force &&
+          Date.now() - onlineSetLoadedAt < 3 * 60_000;
+        if (freshEnough) return onlineSet;
+        this.emit({ statusMessage: "Loading online men…" });
+        onlineSet = await this.collectOnlineIdSet({ maxPages: 40 });
+        onlineSetLoadedAt = Date.now();
+        this.emit({
+          statusMessage: `Online men loaded: ${onlineSet.size}`,
+        });
+        return onlineSet;
+      };
+
+      // Online men = Readers ∩ live men-online (do not trust Reads JSON `online`).
+      await ensureOnlineSet({ force: true });
+
       while (!this.state.stopRequested && token === this.runToken) {
         await this.waitWhilePaused(token);
         if (this.state.stopRequested || token !== this.runToken) break;
         if (filters.excludeFavorites) {
           favorites = this.favoritesExcludeSet();
+        }
+
+        if (filters.onlineOnly && page === 1) {
+          await ensureOnlineSet({
+            force: filters.enableCycling && this.state.cycle > 1,
+          });
         }
 
         this.emit({
@@ -1221,7 +1266,7 @@ export class SenderReadsWorker {
             skipOld += 1;
             continue;
           }
-          if (!isReadOnlineEligible(message, filters.onlineOnly)) {
+          if (!isReadOnlineEligible(message, filters.onlineOnly, onlineSet)) {
             this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             pageOnline += 1;
             skipOffline += 1;
@@ -1364,9 +1409,15 @@ export class SenderReadsWorker {
           if (emptyCycle) {
             this.emit({
               statusMessage: filters.onlineOnly
-                ? `Cycle ${this.state.cycle}: waiting for new online readers…`
-                : `Cycle ${this.state.cycle}: waiting for new readers…`,
+                ? `Cycle ${this.state.cycle}: waiting for new online readers… (${skipSummary()})`
+                : `Cycle ${this.state.cycle}: waiting for new readers… (${skipSummary()})`,
             });
+            skipOffline = 0;
+            skipFav = 0;
+            skipDupe = 0;
+            skipBad = 0;
+            skipSeen = 0;
+            skipOld = 0;
             await new Promise((r) => setTimeout(r, 20000));
             if (this.state.stopRequested || token !== this.runToken) return false;
           }
@@ -1602,6 +1653,29 @@ export class SenderReadsWorker {
   async fetchOnlineUsersPageSmart(page) {
     const rows = await this.fetchOnlineUsersPageViaWs(page);
     return { rows: Array.isArray(rows) ? rows : [], source: "ws" };
+  }
+
+  /** Build profile-id set from WS men-online (same source as Online channel). */
+  async collectOnlineIdSet({ maxPages = 40 } = {}) {
+    const ids = new Set();
+    for (let page = 1; page <= maxPages; page += 1) {
+      if (this.state.stopRequested) break;
+      let rows = [];
+      try {
+        const fetched = await this.fetchOnlineUsersPageSmart(page);
+        rows = Array.isArray(fetched?.rows) ? fetched.rows : [];
+      } catch (error) {
+        if (page === 1) throw error;
+        break;
+      }
+      if (!rows.length) break;
+      for (const row of rows) {
+        const id = Number(row?.id) || 0;
+        if (id) ids.add(id);
+      }
+      if (rows.length < 12) break;
+    }
+    return ids;
   }
 
   async runOnlineLoop(token, plain, filters, photoId, delayMs) {
