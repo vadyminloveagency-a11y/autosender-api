@@ -613,17 +613,13 @@ export class SenderReadsWorker {
   }
 
   async fetchReadPage(page, { fromDate = "" } = {}) {
-    // Full Readers list (empty fd= like Dream UI). "Today" = filter message.date in code.
+    // Same as DreamAuto / browser Readers JSON. Empty fd in HTML UI ≠ these params on returnJson.
+    // "Today" = filter by letter row date (message.date) in code.
     const params = new URLSearchParams({
       mode: "sent",
-      folder: "-1",
       page: String(Math.max(1, Number(page) || 1)),
       returnJson: "1",
       view: "read",
-      fq: "",
-      q: "",
-      fd: "",
-      td: "",
     });
     void fromDate;
     const url = `${READS_URL}?${params.toString()}`;
@@ -1464,8 +1460,13 @@ export class SenderReadsWorker {
           break;
         }
 
-        // With Dream fd= fetch, list is already day-scoped — no message.date cutoff.
-        if (endOfPages) {
+        // Stop paging when list reaches letters older than Start day (newest-first).
+        const reachedTodayCutoff =
+          filters.todayOnly &&
+          readsFromDate &&
+          readPageHasOlderThanFd(messages, readsFromDate);
+
+        if (endOfPages || reachedTodayCutoff) {
           if (filters.enableCycling) {
             const ok = await restartCycle();
             if (!ok) return;
