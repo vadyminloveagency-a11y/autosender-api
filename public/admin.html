@@ -138,10 +138,10 @@
       min-height: 46px;
       margin-top: 4px;
       border: 0;
-      border-radius: 10px;
-      background: linear-gradient(180deg, #4a8bff 0%, #2f6fed 100%);
+      border-radius: 999px;
+      background: #2f6fed;
       color: #fff;
-      font: 600 15px/1 var(--font);
+      font: 700 15px/1 var(--font);
       cursor: pointer;
       box-shadow: 0 8px 20px rgba(47, 111, 237, 0.22);
     }
@@ -221,23 +221,23 @@
     button:disabled { opacity: 0.6; cursor: wait; }
     .btn-primary {
       width: auto;
-      min-height: 38px;
-      padding: 0 16px;
+      min-height: 40px;
+      padding: 0 20px;
       border: 0;
-      border-radius: 10px;
-      background: linear-gradient(180deg, #4a8bff 0%, #2f6fed 100%);
+      border-radius: 999px;
+      background: #2f6fed;
       color: #fff;
-      font: 600 13px/1 var(--font);
-      box-shadow: 0 6px 16px rgba(47, 111, 237, 0.2);
+      font: 700 13px/1 var(--font);
+      box-shadow: 0 8px 18px rgba(47, 111, 237, 0.22);
     }
-    .btn-primary:hover:not(:disabled) { filter: brightness(1.04); }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
     .btn-ghost {
       width: auto;
       min-height: 34px;
       margin: 0;
-      padding: 0 12px;
+      padding: 0 14px;
       border: 1px solid var(--line-strong);
-      border-radius: 8px;
+      border-radius: 999px;
       background: #fff;
       color: var(--text-soft);
       font: 600 12px/1 var(--font);
@@ -758,7 +758,48 @@
       margin-top: 18px;
       flex-wrap: wrap;
     }
-    .modal-footer .btn-primary { flex: 1 1 auto; min-width: 120px; }
+    .modal-card.create-modal {
+      max-width: 420px;
+      padding: 28px 26px 24px;
+    }
+    .create-modal-head {
+      position: relative;
+      margin: 0 0 22px;
+      text-align: center;
+    }
+    .create-modal-head .modal-title {
+      margin: 0;
+      padding: 0 36px;
+      font: 700 20px/1.25 var(--font);
+      letter-spacing: -0.02em;
+    }
+    .create-modal-head .modal-close {
+      position: absolute;
+      top: -4px;
+      right: 0;
+    }
+    .create-modal .form-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .create-modal .field input {
+      min-height: 48px;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .create-modal .btn-submit {
+      width: 100%;
+      min-height: 48px;
+      border: 0;
+      border-radius: 999px;
+      background: #2f6fed;
+      color: #fff;
+      font: 700 15px/1 var(--font);
+      box-shadow: 0 10px 22px rgba(47, 111, 237, 0.25);
+    }
+    .create-modal .btn-submit:hover:not(:disabled) { filter: brightness(1.05); }
+    .modal-footer .btn-primary { flex: 1 1 auto; min-width: 120px; border-radius: 999px; }
     .linked-edit {
       width: 26px;
       height: 26px;
@@ -1004,26 +1045,6 @@
                   <h3>Accounts <span class="count" id="accounts-count">(0)</span></h3>
                   <button type="button" id="toggle-add-account" class="btn-primary">Add Account</button>
                 </div>
-                <div id="add-account-panel" class="am-add-panel hidden">
-                  <div class="form-grid">
-                    <div class="field">
-                      <input id="profile-dream-login" type="text" placeholder=" ">
-                      <label for="profile-dream-login">Dream login</label>
-                    </div>
-                    <div class="field">
-                      <input id="profile-dream-password" type="password" placeholder=" ">
-                      <label for="profile-dream-password">Dream password</label>
-                    </div>
-                    <div class="field">
-                      <input id="profile-display-name" type="text" placeholder=" ">
-                      <label for="profile-display-name">Name (optional)</label>
-                    </div>
-                  </div>
-                  <div class="form-actions">
-                    <button type="button" id="create-profile-btn" class="btn-primary">Save profile</button>
-                    <button type="button" id="cancel-add-account" class="btn-ghost">Cancel</button>
-                  </div>
-                </div>
                 <div class="am-col-body" id="accounts-list"></div>
               </div>
 
@@ -1031,26 +1052,6 @@
                 <div class="am-col-head">
                   <h3>Operators <span class="count" id="operators-count">(0)</span></h3>
                   <button type="button" id="toggle-add-operator" class="btn-primary">Add Operator</button>
-                </div>
-                <div id="add-operator-panel" class="am-add-panel hidden">
-                  <div class="form-grid">
-                    <div class="field">
-                      <input id="operator-email" type="text" placeholder=" ">
-                      <label for="operator-email">Login</label>
-                    </div>
-                    <div class="field">
-                      <input id="operator-password" type="password" placeholder=" ">
-                      <label for="operator-password">Password</label>
-                    </div>
-                    <div class="field">
-                      <input id="operator-name" type="text" placeholder=" ">
-                      <label for="operator-name">Name</label>
-                    </div>
-                  </div>
-                  <div class="form-actions">
-                    <button type="button" id="create-operator-btn" class="btn-primary">Save operator</button>
-                    <button type="button" id="cancel-add-operator" class="btn-ghost">Cancel</button>
-                  </div>
                 </div>
                 <div class="am-col-body">
                   <div id="operators-empty" class="empty-state hidden">No operators yet. Add one to start assigning.</div>
@@ -1092,6 +1093,54 @@
 
         <p id="status" class="status" aria-live="polite"></p>
       </main>
+    </div>
+  </div>
+
+  <div id="create-account-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
+    <div class="modal-card create-modal">
+      <div class="create-modal-head">
+        <h3 class="modal-title" id="create-account-title">Create Account</h3>
+        <button type="button" id="create-account-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <input id="profile-display-name" type="text" placeholder=" ">
+          <label for="profile-display-name">Name (optional)</label>
+        </div>
+        <div class="field">
+          <input id="profile-dream-login" type="text" placeholder=" " autocomplete="off">
+          <label for="profile-dream-login">Dream login</label>
+        </div>
+        <div class="field">
+          <input id="profile-dream-password" type="password" placeholder=" " autocomplete="new-password">
+          <label for="profile-dream-password">Dream password</label>
+        </div>
+      </div>
+      <button type="button" id="create-profile-btn" class="btn-submit">Submit</button>
+    </div>
+  </div>
+
+  <div id="create-operator-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="create-operator-title">
+    <div class="modal-card create-modal">
+      <div class="create-modal-head">
+        <h3 class="modal-title" id="create-operator-title">Create Operator</h3>
+        <button type="button" id="create-operator-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <input id="operator-name" type="text" placeholder=" ">
+          <label for="operator-name">Name</label>
+        </div>
+        <div class="field">
+          <input id="operator-email" type="text" placeholder=" " autocomplete="off">
+          <label for="operator-email">Login</label>
+        </div>
+        <div class="field">
+          <input id="operator-password" type="password" placeholder=" " autocomplete="new-password">
+          <label for="operator-password">Password</label>
+        </div>
+      </div>
+      <button type="button" id="create-operator-btn" class="btn-submit">Submit</button>
     </div>
   </div>
 
@@ -1570,12 +1619,30 @@
         document.getElementById("profile-dream-login").value = "";
         document.getElementById("profile-dream-password").value = "";
         document.getElementById("profile-display-name").value = "";
-        document.getElementById("add-account-panel").classList.add("hidden");
+        closeCreateAccountModal();
         setStatus("Profile added", "ok");
         await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       }
+    }
+
+    function openCreateAccountModal() {
+      document.getElementById("create-account-modal").classList.remove("hidden");
+      document.getElementById("profile-dream-login")?.focus();
+    }
+
+    function closeCreateAccountModal() {
+      document.getElementById("create-account-modal").classList.add("hidden");
+    }
+
+    function openCreateOperatorModal() {
+      document.getElementById("create-operator-modal").classList.remove("hidden");
+      document.getElementById("operator-name")?.focus();
+    }
+
+    function closeCreateOperatorModal() {
+      document.getElementById("create-operator-modal").classList.add("hidden");
     }
 
     function openProfileEditModal(profileId) {
@@ -1929,7 +1996,7 @@
         document.getElementById("operator-email").value = "";
         document.getElementById("operator-password").value = "";
         document.getElementById("operator-name").value = "";
-        document.getElementById("add-operator-panel").classList.add("hidden");
+        closeCreateOperatorModal();
         await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
@@ -1959,16 +2026,18 @@
     });
 
     document.getElementById("toggle-add-account").addEventListener("click", () => {
-      document.getElementById("add-account-panel").classList.toggle("hidden");
-    });
-    document.getElementById("cancel-add-account").addEventListener("click", () => {
-      document.getElementById("add-account-panel").classList.add("hidden");
+      openCreateAccountModal();
     });
     document.getElementById("toggle-add-operator").addEventListener("click", () => {
-      document.getElementById("add-operator-panel").classList.toggle("hidden");
+      openCreateOperatorModal();
     });
-    document.getElementById("cancel-add-operator").addEventListener("click", () => {
-      document.getElementById("add-operator-panel").classList.add("hidden");
+    document.getElementById("create-account-close").addEventListener("click", closeCreateAccountModal);
+    document.getElementById("create-operator-close").addEventListener("click", closeCreateOperatorModal);
+    document.getElementById("create-account-modal").addEventListener("click", (event) => {
+      if (event.target.id === "create-account-modal") closeCreateAccountModal();
+    });
+    document.getElementById("create-operator-modal").addEventListener("click", (event) => {
+      if (event.target.id === "create-operator-modal") closeCreateOperatorModal();
     });
 
     document.getElementById("refresh-accounts-btn").addEventListener("click", () => {
@@ -2071,6 +2140,8 @@
 
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
+      closeCreateAccountModal();
+      closeCreateOperatorModal();
       closeProfileEditModal();
       closeOperatorEditModal();
     });
