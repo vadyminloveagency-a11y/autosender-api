@@ -783,6 +783,9 @@
       background: linear-gradient(180deg, rgba(61, 139, 253, 0.18), rgba(61, 139, 253, 0.06));
       border-bottom: 1px solid var(--line);
     }
+    .operator-card-head .account-edit-btn {
+      margin-left: auto;
+    }
     .operator-icon {
       width: 34px;
       height: 34px;
@@ -1124,6 +1127,48 @@
     </div>
   </div>
 
+  <div id="operator-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="operator-edit-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div id="operator-edit-avatar" class="operator-icon" style="width:48px;height:48px;border-radius:12px;font-size:15px"></div>
+        <div class="modal-head-meta">
+          <h3 class="modal-title" id="operator-edit-title">Operator settings</h3>
+          <p class="modal-sub" id="operator-edit-sub"></p>
+        </div>
+        <button type="button" id="operator-edit-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+
+      <input type="hidden" id="operator-edit-id" value="">
+
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <input id="operator-edit-name" type="text" placeholder=" ">
+          <label for="operator-edit-name">Name</label>
+        </div>
+        <div class="field">
+          <input id="operator-edit-login" type="text" placeholder=" " autocomplete="off">
+          <label for="operator-edit-login">Login</label>
+        </div>
+        <div class="field">
+          <input id="operator-edit-password" type="text" placeholder=" " autocomplete="off">
+          <label for="operator-edit-password">Password</label>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Danger zone</div>
+        <div class="modal-actions-row">
+          <button type="button" id="operator-edit-delete" class="delete-btn">Delete operator</button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="operator-edit-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="operator-edit-save" class="btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API = window.location.origin;
     let token = localStorage.getItem("autosenderAdminToken") || "";
@@ -1362,8 +1407,11 @@
                 <div class="operator-icon">${escapeHtml(initials(operator.name || operator.email))}</div>
                 <div class="operator-meta">
                   <p class="operator-name">${escapeHtml(operator.name || operator.email)}</p>
-                  <p class="operator-login">${escapeHtml(operator.email || "")}${operator.password ? ` · ${escapeHtml(operator.password)}` : ""}</p>
+                  <p class="operator-login">${escapeHtml(operator.email || "")}</p>
                 </div>
+                <button type="button" class="account-edit-btn operator-edit-btn" data-operator-id="${operator.id}" title="Edit operator" aria-label="Edit operator">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66z"/></svg>
+                </button>
               </div>
               <div class="operator-body">${linkedHtml}</div>
             </div>`;
@@ -1533,6 +1581,57 @@
     function closeProfileEditModal() {
       document.getElementById("profile-edit-modal").classList.add("hidden");
       document.getElementById("profile-edit-id").value = "";
+    }
+
+    function openOperatorEditModal(operatorId) {
+      const operator = cachedOperators.find((op) => String(op.id) === String(operatorId));
+      if (!operator) return;
+      const linkedCount = cachedProfiles.filter(
+        (p) => String(p.assignedUserId || "") === String(operator.id),
+      ).length;
+      document.getElementById("operator-edit-id").value = String(operator.id);
+      document.getElementById("operator-edit-title").textContent = operator.name || operator.email || "Operator";
+      document.getElementById("operator-edit-sub").textContent =
+        `${linkedCount} linked account${linkedCount === 1 ? "" : "s"}`;
+      document.getElementById("operator-edit-avatar").textContent = initials(operator.name || operator.email);
+      document.getElementById("operator-edit-name").value = operator.name || "";
+      document.getElementById("operator-edit-login").value = operator.email || "";
+      document.getElementById("operator-edit-password").value = operator.password || "";
+      document.getElementById("operator-edit-modal").classList.remove("hidden");
+    }
+
+    function closeOperatorEditModal() {
+      document.getElementById("operator-edit-modal").classList.add("hidden");
+      document.getElementById("operator-edit-id").value = "";
+    }
+
+    async function saveOperatorEdit() {
+      const operatorId = document.getElementById("operator-edit-id").value;
+      if (!operatorId) return;
+      const operator = cachedOperators.find((op) => String(op.id) === String(operatorId));
+      const name = String(document.getElementById("operator-edit-name").value || "").trim();
+      const login = String(document.getElementById("operator-edit-login").value || "").trim().toLowerCase();
+      const password = String(document.getElementById("operator-edit-password").value || "");
+      if (!login) {
+        setStatus("Operator login is required", "error");
+        return;
+      }
+      setStatus("Saving operator...");
+      try {
+        const body = { name, email: login };
+        if (password && password !== String(operator?.password || "")) {
+          body.password = password;
+        }
+        await api(`/auth/operators/${operatorId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        setStatus("Operator saved", "ok");
+        closeOperatorEditModal();
+        await refreshAccountManager({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
     }
 
     async function saveProfileEdit() {
@@ -1874,6 +1973,13 @@
     });
 
     document.getElementById("operators-grid").addEventListener("click", (event) => {
+      const operatorEditBtn = event.target.closest(".operator-edit-btn");
+      if (operatorEditBtn) {
+        event.stopPropagation();
+        const operatorId = operatorEditBtn.getAttribute("data-operator-id");
+        if (operatorId) openOperatorEditModal(operatorId);
+        return;
+      }
       const editBtn = event.target.closest(".profile-edit-btn");
       if (editBtn) {
         event.stopPropagation();
@@ -1921,8 +2027,35 @@
         }
       })();
     });
+
+    document.getElementById("operator-edit-close").addEventListener("click", closeOperatorEditModal);
+    document.getElementById("operator-edit-cancel").addEventListener("click", closeOperatorEditModal);
+    document.getElementById("operator-edit-modal").addEventListener("click", (event) => {
+      if (event.target.id === "operator-edit-modal") closeOperatorEditModal();
+    });
+    document.getElementById("operator-edit-save").addEventListener("click", () => {
+      void saveOperatorEdit();
+    });
+    document.getElementById("operator-edit-delete").addEventListener("click", () => {
+      const operatorId = document.getElementById("operator-edit-id").value;
+      if (!operatorId) return;
+      if (!window.confirm("Delete this operator? Linked profiles will become unassigned.")) return;
+      void (async () => {
+        try {
+          await api(`/auth/operators/${operatorId}`, { method: "DELETE" });
+          setStatus("Operator deleted", "ok");
+          closeOperatorEditModal();
+          await refreshAccountManager({ quiet: true });
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      })();
+    });
+
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeProfileEditModal();
+      if (event.key !== "Escape") return;
+      closeProfileEditModal();
+      closeOperatorEditModal();
     });
 
     document.getElementById("mailings-body").addEventListener("click", (event) => {

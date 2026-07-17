@@ -124,6 +124,106 @@ router.get("/operators", adminMiddleware, async (req, res) => {
   }
 });
 
+router.patch("/operators/:id", adminMiddleware, async (req, res) => {
+  try {
+    const operatorId = Number(req.params.id);
+    if (!operatorId) {
+      return res.status(400).json({ ok: false, error: "Invalid operator id" });
+    }
+
+    const db = getPool();
+    const existing = await db.query(
+      `SELECT id, email, name, role, password_enc
+       FROM users
+       WHERE id = $1 AND role = 'operator'
+       LIMIT 1`,
+      [operatorId],
+    );
+    const row = existing.rows[0];
+    if (!row) {
+      return res.status(404).json({ ok: false, error: "Operator not found" });
+    }
+
+    const nextEmail =
+      req.body?.email != null
+        ? String(req.body.email || "").trim().toLowerCase()
+        : String(row.email || "").trim().toLowerCase();
+    const nextName =
+      req.body?.name != null ? String(req.body.name || "").trim() : String(row.name || "").trim();
+    const nextPassword =
+      req.body?.password != null ? String(req.body.password || "") : "";
+
+    if (!nextEmail) {
+      return res.status(400).json({ ok: false, error: "Login is required" });
+    }
+    if (req.body?.password != null && nextPassword && nextPassword.length < 6) {
+      return res.status(400).json({ ok: false, error: "Password must be at least 6 characters" });
+    }
+
+    let passwordHash = null;
+    let passwordEnc = null;
+    if (nextPassword) {
+      passwordHash = await hashPassword(nextPassword);
+      passwordEnc = encryptSecret(nextPassword);
+    }
+
+    const result = await db.query(
+      `UPDATE users
+       SET email = $2,
+           name = $3,
+           password_hash = COALESCE($4, password_hash),
+           password_enc = COALESCE($5, password_enc)
+       WHERE id = $1 AND role = 'operator'
+       RETURNING id, email, name, role, created_at, password_enc`,
+      [operatorId, nextEmail, nextName || nextEmail, passwordHash, passwordEnc],
+    );
+    const updated = result.rows[0];
+    let password = nextPassword || "";
+    if (!password && updated.password_enc) {
+      try {
+        password = decryptSecret(updated.password_enc);
+      } catch (_) {
+        password = "";
+      }
+    }
+
+    return res.json({
+      ok: true,
+      user: { ...userPayload(updated), password: password || null },
+    });
+  } catch (error) {
+    if (error.code === "23505") {
+      return res.status(409).json({ ok: false, error: "Email already registered" });
+    }
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Failed to update operator" });
+  }
+});
+
+router.delete("/operators/:id", adminMiddleware, async (req, res) => {
+  try {
+    const operatorId = Number(req.params.id);
+    if (!operatorId) {
+      return res.status(400).json({ ok: false, error: "Invalid operator id" });
+    }
+
+    const db = getPool();
+    const result = await db.query(
+      `DELETE FROM users
+       WHERE id = $1 AND role = 'operator'
+       RETURNING id`,
+      [operatorId],
+    );
+    if (!result.rowCount) {
+      return res.status(404).json({ ok: false, error: "Operator not found" });
+    }
+    return res.json({ ok: true, deleted: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, error: "Failed to delete operator" });
+  }
+});
+
 router.post("/login", async (req, res) => {
   try {
     const email = String(req.body?.email || "").trim().toLowerCase();
