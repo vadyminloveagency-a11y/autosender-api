@@ -512,6 +512,11 @@
       max-height: calc(100vh - 160px);
       box-shadow: var(--shadow);
     }
+    .am-col.is-drop-target {
+      border-color: rgba(197, 138, 18, 0.55);
+      box-shadow: 0 0 0 3px rgba(197, 138, 18, 0.12);
+      background: rgba(197, 138, 18, 0.06);
+    }
     .am-col-head {
       display: flex;
       align-items: center;
@@ -860,22 +865,6 @@
       background: var(--danger-soft);
       color: var(--danger);
     }
-    .am-unassigned-zone {
-      margin: 0 12px 12px;
-      padding: 12px;
-      border: 1px dashed var(--line-strong);
-      border-radius: 10px;
-      color: var(--muted);
-      font-size: 12px;
-      text-align: center;
-      background: #fff;
-      transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-    }
-    .am-unassigned-zone.is-drop-target {
-      border-color: rgba(197, 138, 18, 0.55);
-      background: rgba(197, 138, 18, 0.08);
-      color: #9a6d0e;
-    }
     .drag-ghost {
       position: fixed;
       pointer-events: none;
@@ -976,15 +965,12 @@
             <div class="am-toolbar">
               <div>
                 <h2 class="admin-main-title">Account Manager</h2>
-                <p class="admin-main-lead" style="margin-bottom:0">
-                  Drag a profile from Accounts onto an operator card to assign it. Drop on “Unassign” to clear.
-                </p>
               </div>
               <button type="button" id="refresh-accounts-btn" class="btn-ghost">Refresh</button>
             </div>
 
             <div class="am-board">
-              <div class="am-col" id="accounts-col">
+              <div class="am-col" id="accounts-col" data-drop="unassign">
                 <div class="am-col-head">
                   <h3>Accounts <span class="count" id="accounts-count">(0)</span></h3>
                   <button type="button" id="toggle-add-account" class="btn-primary">Add Account</button>
@@ -1010,9 +996,6 @@
                   </div>
                 </div>
                 <div class="am-col-body" id="accounts-list"></div>
-                <div class="am-unassigned-zone" id="unassign-zone" data-drop="unassign">
-                  Drop here to unassign
-                </div>
               </div>
 
               <div class="am-col">
@@ -1345,21 +1328,19 @@
       const listEl = document.getElementById("accounts-list");
       const gridEl = document.getElementById("operators-grid");
       const emptyOps = document.getElementById("operators-empty");
-      document.getElementById("accounts-count").textContent = `(${cachedProfiles.length})`;
+      const unassigned = cachedProfiles.filter((p) => !p.assignedUserId);
+      document.getElementById("accounts-count").textContent = `(${unassigned.length})`;
       document.getElementById("operators-count").textContent = `(${cachedOperators.length})`;
 
       if (!cachedProfiles.length) {
         listEl.innerHTML = `<div class="empty-state">No accounts yet. Add a Dream profile.</div>`;
+      } else if (!unassigned.length) {
+        listEl.innerHTML = `<div class="empty-state">All accounts are assigned. Drag here from an operator to unassign.</div>`;
       } else {
-        listEl.innerHTML = cachedProfiles.map((profile) => {
-          const assigned = profile.assignedUserId
-            ? cachedOperators.find((op) => String(op.id) === String(profile.assignedUserId))
-            : null;
-          const sub = assigned
-            ? `Assigned · ${assigned.name || assigned.email}`
-            : `${profile.dreamUsername || "Dream"} · ${profile.inboxMenCount || 0} in DB`;
+        listEl.innerHTML = unassigned.map((profile) => {
+          const sub = `${profile.dreamUsername || "Dream"} · ${profile.inboxMenCount || 0} in DB`;
           return `
-            <div class="account-card${assigned ? " is-assigned" : ""}"
+            <div class="account-card"
               draggable="true"
               data-profile-id="${profile.id}"
               data-drag-source="list">
@@ -1451,9 +1432,11 @@
       });
 
       board.addEventListener("dragover", (event) => {
-        const dropEl =
-          event.target.closest("[data-drop='operator']") ||
-          event.target.closest("[data-drop='unassign']");
+        const operatorDrop = event.target.closest("[data-drop='operator']");
+        const unassignDrop = !operatorDrop
+          ? event.target.closest("[data-drop='unassign']")
+          : null;
+        const dropEl = operatorDrop || unassignDrop;
         if (!dropEl) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
@@ -1470,9 +1453,11 @@
       });
 
       board.addEventListener("drop", (event) => {
-        const dropEl =
-          event.target.closest("[data-drop='operator']") ||
-          event.target.closest("[data-drop='unassign']");
+        const operatorDrop = event.target.closest("[data-drop='operator']");
+        const unassignDrop = !operatorDrop
+          ? event.target.closest("[data-drop='unassign']")
+          : null;
+        const dropEl = operatorDrop || unassignDrop;
         if (!dropEl) return;
         event.preventDefault();
         dropEl.classList.remove("is-drop-target");
