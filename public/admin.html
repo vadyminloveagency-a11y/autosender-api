@@ -1182,6 +1182,7 @@
                         <th>Questionnaire</th>
                         <th>Filter</th>
                         <th>Progress</th>
+                        <th>Today</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -1906,7 +1907,6 @@
       const pct = formatPercent(job);
       const sent = job.sent != null ? Number(job.sent) : null;
       const total = job.total != null ? Number(job.total) : null;
-      const daySent = job.daySent != null ? Number(job.daySent) : null;
       const failed = job.failed != null && Number(job.failed) > 0 ? Number(job.failed) : 0;
       const lines = [];
       if (pct) lines.push(pct);
@@ -1916,8 +1916,21 @@
         lines.push(`Sent ${sent}`);
       }
       if (failed) lines.push(`Fail ${failed}`);
-      if (daySent != null) lines.push(`Today ${daySent}`);
       return lines.length ? lines.map((line, i) => (i === 0 ? line : `<br>${line}`)).join("") : "—";
+    }
+
+    function formatToday(job) {
+      const daySent = job.daySent != null ? Number(job.daySent) : null;
+      if (!Number.isFinite(daySent)) return "—";
+      return String(Math.trunc(daySent));
+    }
+
+    function mailingSortKey(job) {
+      const operator = String(job.operatorName || job.operatorEmail || job.userId || "").toLowerCase();
+      const product = String(job.product || "").toLowerCase();
+      const channel = String(job.channel || "").toLowerCase();
+      const profile = String(job.profileId || "");
+      return `${operator}\0${product}\0${channel}\0${profile}`;
     }
 
     function productLabel(job) {
@@ -1951,11 +1964,10 @@
           channel: "letterbot",
         }));
         const senderJobs = Array.isArray(senderData.jobs) ? senderData.jobs : [];
-        const jobs = [...lbJobs, ...senderJobs].sort((a, b) => {
-          const au = Number(a.updatedAt) || 0;
-          const bu = Number(b.updatedAt) || 0;
-          return bu - au;
-        });
+        // Stable order — do not sort by updatedAt (rows were jumping on every refresh).
+        const jobs = [...lbJobs, ...senderJobs].sort((a, b) =>
+          mailingSortKey(a).localeCompare(mailingSortKey(b), "en"),
+        );
         bodyEl.innerHTML = "";
         if (!jobs.length) {
           emptyEl.classList.remove("hidden");
@@ -1973,6 +1985,7 @@
               <td>${formatQuestionnaire(job)}</td>
               <td>${escapeHtml(job.filter || "—")}</td>
               <td>${formatProgress(job)}</td>
+              <td style="font-weight:700;white-space:nowrap">${formatToday(job)}</td>
               <td class="action-cell">
                 <button type="button" class="stop-btn"
                   data-product="${product}"
