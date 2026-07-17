@@ -283,9 +283,10 @@ export class SenderReadsWorker {
     const list = Array.isArray(this.state.favoritesExcludedIds)
       ? [...this.state.favoritesExcludedIds]
       : [];
+    // Unique men only — Online cycles must not inflate the counter.
     if (n && !list.includes(n)) list.push(n);
     return {
-      favoritesExcluded: (Number(this.state.favoritesExcluded) || 0) + 1,
+      favoritesExcluded: list.length,
       favoritesExcludedIds: list,
     };
   }
