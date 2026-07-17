@@ -1298,12 +1298,12 @@ export class SenderReadsWorker {
 
           const hash = messageHash(target.maleProfileId, plain);
           if (filters.checkDuplicates && dupeSet.has(hash)) {
-            // DreamAuto: pre-send duplicate → Failed, no Dream POST.
+            // Same letter already sent — skip, do not count as Failed (man can still get other texts).
             pageDupe += 1;
             skipDupe += 1;
             this.seenMemberIds.add(String(target.maleProfileId));
             this.emit({
-              ...this.bumpFailed(target.maleProfileId),
+              skipped: this.state.skipped + 1,
               duplicates: (Number(this.state.duplicates) || 0) + 1,
               statusMessage: `Duplicate → ${target.maleProfileId}`,
               lastError: "",
@@ -1373,17 +1373,21 @@ export class SenderReadsWorker {
                 });
               } catch (retryError) {
                 const duped = await rememberDupeFromReject(retryError);
-                this.emit({
-                  ...this.bumpFailed(target.maleProfileId),
-                  duplicates: duped
-                    ? (Number(this.state.duplicates) || 0) + 1
-                    : this.state.duplicates,
-                  lastError: retryError?.message || String(retryError),
-                  statusMessage: duped
-                    ? `Duplicate → ${target.maleProfileId}`
-                    : this.state.statusMessage,
-                  ...this.nextRemaining(),
-                });
+                if (duped) {
+                  this.emit({
+                    skipped: this.state.skipped + 1,
+                    duplicates: (Number(this.state.duplicates) || 0) + 1,
+                    lastError: "",
+                    statusMessage: `Duplicate → ${target.maleProfileId}`,
+                    ...this.nextRemaining(),
+                  });
+                } else {
+                  this.emit({
+                    ...this.bumpFailed(target.maleProfileId),
+                    lastError: retryError?.message || String(retryError),
+                    ...this.nextRemaining(),
+                  });
+                }
               }
             } else if (/session expired/i.test(String(error?.message || ""))) {
               await this.ensureSession();
@@ -1391,17 +1395,21 @@ export class SenderReadsWorker {
               continue;
             } else {
               const duped = await rememberDupeFromReject(error);
-              this.emit({
-                ...this.bumpFailed(target.maleProfileId),
-                duplicates: duped
-                  ? (Number(this.state.duplicates) || 0) + 1
-                  : this.state.duplicates,
-                lastError: error?.message || String(error),
-                statusMessage: duped
-                  ? `Duplicate → ${target.maleProfileId}`
-                  : this.state.statusMessage,
-                ...this.nextRemaining(),
-              });
+              if (duped) {
+                this.emit({
+                  skipped: this.state.skipped + 1,
+                  duplicates: (Number(this.state.duplicates) || 0) + 1,
+                  lastError: "",
+                  statusMessage: `Duplicate → ${target.maleProfileId}`,
+                  ...this.nextRemaining(),
+                });
+              } else {
+                this.emit({
+                  ...this.bumpFailed(target.maleProfileId),
+                  lastError: error?.message || String(error),
+                  ...this.nextRemaining(),
+                });
+              }
             }
             await this.persist(true);
           }
@@ -1919,15 +1927,21 @@ export class SenderReadsWorker {
                 }
               } catch (retryError) {
                 const duped = await rememberDupeFromReject(retryError);
-                this.emit({
-                  ...this.bumpFailed(maleProfileId),
-                  duplicates: duped
-                    ? (Number(this.state.duplicates) || 0) + 1
-                    : this.state.duplicates,
-                  lastError: retryError?.message || String(retryError),
-                  statusMessage: duped ? `Duplicate → ${maleProfileId}` : undefined,
-                  ...this.nextRemaining(),
-                });
+                if (duped) {
+                  this.emit({
+                    skipped: this.state.skipped + 1,
+                    duplicates: (Number(this.state.duplicates) || 0) + 1,
+                    lastError: "",
+                    statusMessage: `Duplicate → ${maleProfileId}`,
+                    ...this.nextRemaining(),
+                  });
+                } else {
+                  this.emit({
+                    ...this.bumpFailed(maleProfileId),
+                    lastError: retryError?.message || String(retryError),
+                    ...this.nextRemaining(),
+                  });
+                }
                 await this.persist(true);
               }
             } else if (/session expired/i.test(String(error?.message || ""))) {
@@ -1937,15 +1951,21 @@ export class SenderReadsWorker {
               continue;
             } else {
               const duped = await rememberDupeFromReject(error);
-              this.emit({
-                ...this.bumpFailed(maleProfileId),
-                duplicates: duped
-                  ? (Number(this.state.duplicates) || 0) + 1
-                  : this.state.duplicates,
-                lastError: error?.message || String(error),
-                statusMessage: duped ? `Duplicate → ${maleProfileId}` : undefined,
-                ...this.nextRemaining(),
-              });
+              if (duped) {
+                this.emit({
+                  skipped: this.state.skipped + 1,
+                  duplicates: (Number(this.state.duplicates) || 0) + 1,
+                  lastError: "",
+                  statusMessage: `Duplicate → ${maleProfileId}`,
+                  ...this.nextRemaining(),
+                });
+              } else {
+                this.emit({
+                  ...this.bumpFailed(maleProfileId),
+                  lastError: error?.message || String(error),
+                  ...this.nextRemaining(),
+                });
+              }
               await this.persist(true);
             }
           }
