@@ -13,6 +13,8 @@
       --bg-1: #0c1526;
       --bg-2: #111c31;
       --bg-3: #162338;
+      --surface: #121c2e;
+      --surface-2: #182438;
       --line: rgba(148, 178, 220, 0.14);
       --line-strong: rgba(148, 178, 220, 0.28);
       --text: #e8effa;
@@ -46,7 +48,6 @@
     }
     .hidden { display: none !important; }
 
-    /* —— Auth —— */
     .app-auth-gate {
       display: flex;
       align-items: center;
@@ -154,9 +155,7 @@
       font: 600 13px/1 var(--font);
       cursor: pointer;
     }
-    .auth-save-credentials:hover:not(:disabled) {
-      background: var(--ok-soft);
-    }
+    .auth-save-credentials:hover:not(:disabled) { background: var(--ok-soft); }
     .auth-status {
       margin: 12px 0 0;
       min-height: 18px;
@@ -188,11 +187,7 @@
     }
     .auth-mode-switch:hover { text-decoration: underline; }
 
-    /* —— Shared controls —— */
-    .field {
-      position: relative;
-      margin: 0;
-    }
+    .field { position: relative; margin: 0; }
     .field input,
     .field select {
       width: 100%;
@@ -204,7 +199,6 @@
       color: var(--text);
       font: 14px/1.2 var(--font);
       outline: none;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .field input:focus,
     .field select:focus {
@@ -216,24 +210,21 @@
       top: -8px;
       left: 12px;
       padding: 0 6px;
-      background: var(--bg-3);
+      background: var(--surface-2);
       color: var(--muted);
       font: 500 12px/1 var(--font);
     }
-    button {
-      font-family: var(--font);
-      cursor: pointer;
-    }
+    button { font-family: var(--font); cursor: pointer; }
     button:disabled { opacity: 0.6; cursor: wait; }
     .btn-primary {
       width: auto;
-      min-height: 42px;
-      padding: 0 18px;
+      min-height: 38px;
+      padding: 0 16px;
       border: 0;
       border-radius: 10px;
       background: linear-gradient(180deg, #4a96ff 0%, #2f78e8 100%);
       color: #fff;
-      font: 600 14px/1 var(--font);
+      font: 600 13px/1 var(--font);
       box-shadow: 0 6px 16px rgba(47, 120, 232, 0.25);
     }
     .btn-primary:hover:not(:disabled) { filter: brightness(1.05); }
@@ -256,7 +247,7 @@
     .status {
       position: sticky;
       bottom: 0;
-      margin: 20px 0 0;
+      margin: 16px 0 0;
       padding: 10px 14px;
       min-height: 18px;
       border-radius: 10px;
@@ -279,7 +270,6 @@
       border-color: rgba(62, 207, 142, 0.28);
     }
 
-    /* —— Panel shell —— */
     .panel-layout {
       display: flex;
       min-height: 100vh;
@@ -325,11 +315,7 @@
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
-    .sidebar-nav {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
     .sidebar-nav-btn {
       width: 100%;
       min-height: 40px;
@@ -370,7 +356,7 @@
     .admin-main {
       flex: 1 1 auto;
       min-width: 0;
-      padding: 28px 32px 36px;
+      padding: 24px 28px 32px;
       overflow: auto;
     }
     .admin-main-title {
@@ -380,8 +366,8 @@
       letter-spacing: -0.02em;
     }
     .admin-main-lead {
-      margin: 0 0 20px;
-      max-width: 640px;
+      margin: 0 0 18px;
+      max-width: 720px;
       color: var(--muted);
       font-size: 13px;
       line-height: 1.5;
@@ -390,13 +376,12 @@
     .admin-section.is-active { display: block; }
 
     .panel-card {
-      padding: 20px;
+      padding: 18px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: linear-gradient(165deg, rgba(17, 28, 48, 0.92), rgba(12, 20, 36, 0.96));
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
     }
-    .panel-card + .panel-card { margin-top: 16px; }
     .card-head {
       display: flex;
       align-items: center;
@@ -409,17 +394,11 @@
       font: 600 15px/1.3 var(--font);
       color: var(--text);
     }
-    .muted-note {
-      margin: 0 0 16px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.5;
-    }
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 12px;
+      margin-bottom: 12px;
     }
     .form-grid .field-span-2 { grid-column: 1 / -1; }
     .form-actions {
@@ -428,36 +407,14 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    .helper-text {
-      margin: 12px 0 0;
+    .empty-state {
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.5;
+      padding: 18px 8px;
+      text-align: center;
     }
-    .helper-text strong { color: #c8d8f0; font-weight: 600; }
-    .steps {
-      margin: 0 0 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: rgba(6, 12, 24, 0.4);
-      color: #b5c6de;
-      font-size: 12px;
-      line-height: 1.55;
-    }
-    .steps strong { color: var(--text); }
-    .steps ol { margin: 8px 0 0; padding-left: 18px; }
-    .section-label {
-      margin: 0 0 12px;
-      color: #a8bad4;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-    }
-
     .table-scroll {
-      margin-top: 14px;
       overflow-x: auto;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -486,37 +443,11 @@
     }
     .data-table td { color: #d7e3f5; }
     .data-table tr:last-child td { border-bottom: 0; }
-    .data-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
-    .data-table code {
-      font-family: "IBM Plex Mono", Consolas, monospace;
-      font-size: 12px;
-      color: #e8effa;
-      word-break: break-all;
-    }
-    .empty-state {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
-      padding: 18px 4px 6px;
-    }
-    .profile-assign-select {
-      width: 100%;
-      min-width: 150px;
-      max-width: 220px;
-      min-height: 34px;
-      padding: 4px 8px;
-      border: 1px solid var(--line-strong);
-      border-radius: 8px;
-      background: rgba(6, 12, 24, 0.85);
-      color: var(--text);
-      font: 12px/1.2 var(--font);
-    }
     .action-cell {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
-      min-width: 0;
     }
     .action-cell button {
       width: auto;
@@ -531,27 +462,16 @@
       background: var(--ok-soft);
       color: #8ef0bf;
     }
-    .scan-btn:hover:not(:disabled) {
-      filter: brightness(1.08);
-    }
-    .delete-btn {
+    .delete-btn, .stop-btn {
       border: 1px solid rgba(240, 113, 120, 0.35);
       background: var(--danger-soft);
       color: #ffb0b6;
     }
-    .delete-btn:hover:not(:disabled) { filter: brightness(1.08); }
-    .stop-btn {
-      border: 1px solid rgba(240, 113, 120, 0.35);
-      background: var(--danger-soft);
-      color: #ffb0b6;
-    }
-    .stop-btn:hover:not(:disabled) { filter: brightness(1.08); }
     .logout-profile-btn {
       border: 1px solid rgba(230, 184, 77, 0.35);
       background: rgba(230, 184, 77, 0.12);
       color: #f0d48a;
     }
-    .logout-profile-btn:hover:not(:disabled) { filter: brightness(1.08); }
     .badge {
       display: inline-block;
       margin-top: 4px;
@@ -563,7 +483,284 @@
     .badge-running { background: var(--ok-soft); color: #8ef0bf; }
     .badge-paused { background: rgba(230, 184, 77, 0.16); color: #f0d48a; }
 
-    @media (max-width: 900px) {
+    /* —— Account Manager board —— */
+    .am-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .am-board {
+      display: grid;
+      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+      min-height: calc(100vh - 180px);
+    }
+    .am-col {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(10, 16, 28, 0.72);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 520px;
+      max-height: calc(100vh - 160px);
+    }
+    .am-col-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.02);
+      flex-shrink: 0;
+    }
+    .am-col-head h3 {
+      margin: 0;
+      font: 600 15px/1.2 var(--font);
+    }
+    .am-col-head .count {
+      margin-left: 8px;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 13px;
+    }
+    .am-col-body {
+      flex: 1 1 auto;
+      overflow: auto;
+      padding: 12px;
+    }
+    .am-add-panel {
+      margin: 0 12px 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.45);
+      flex-shrink: 0;
+    }
+    .am-add-panel .form-grid { margin-bottom: 10px; }
+    .am-add-panel .form-grid { grid-template-columns: 1fr; }
+
+    .account-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 10px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+    }
+    .account-card:active { cursor: grabbing; }
+    .account-card:hover {
+      border-color: rgba(61, 139, 253, 0.4);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    }
+    .account-card.is-dragging {
+      opacity: 0.45;
+    }
+    .account-card.is-assigned {
+      opacity: 0.72;
+    }
+    .account-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #1a2740;
+      flex: 0 0 40px;
+      border: 1px solid var(--line);
+    }
+    .account-avatar.placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font: 600 13px/1 var(--font);
+    }
+    .account-meta { flex: 1 1 auto; min-width: 0; }
+    .account-name {
+      margin: 0;
+      font: 600 13px/1.25 var(--font);
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .account-sub {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .account-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    .account-actions button {
+      width: auto;
+      min-height: 24px;
+      margin: 0;
+      padding: 0 8px;
+      border-radius: 6px;
+      font: 600 10px/1 var(--font);
+      border: 1px solid var(--line-strong);
+      background: rgba(255,255,255,0.03);
+      color: var(--text-soft);
+    }
+    .account-actions .scan-btn {
+      border-color: rgba(62, 207, 142, 0.35);
+      background: var(--ok-soft);
+      color: #8ef0bf;
+    }
+    .account-actions .delete-btn {
+      border-color: rgba(240, 113, 120, 0.35);
+      background: var(--danger-soft);
+      color: #ffb0b6;
+    }
+
+    .operators-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      align-content: start;
+    }
+    .operator-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 180px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .operator-card.is-drop-target {
+      border-color: rgba(61, 139, 253, 0.65);
+      box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.18);
+      background: rgba(61, 139, 253, 0.08);
+    }
+    .operator-card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 12px;
+      background: linear-gradient(180deg, rgba(61, 139, 253, 0.18), rgba(61, 139, 253, 0.06));
+      border-bottom: 1px solid var(--line);
+    }
+    .operator-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: rgba(61, 139, 253, 0.2);
+      color: #b7d6ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font: 700 13px/1 var(--font);
+      flex: 0 0 34px;
+    }
+    .operator-meta { flex: 1 1 auto; min-width: 0; }
+    .operator-name {
+      margin: 0;
+      font: 600 13px/1.25 var(--font);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .operator-login {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .operator-body {
+      flex: 1 1 auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 100px;
+    }
+    .operator-body.is-empty {
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .linked-account {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(6, 12, 24, 0.45);
+      cursor: grab;
+    }
+    .linked-account:active { cursor: grabbing; }
+    .linked-account .account-avatar {
+      width: 32px;
+      height: 32px;
+      flex-basis: 32px;
+    }
+    .linked-account .account-name { font-size: 12px; }
+    .linked-unassign {
+      margin-left: auto;
+      width: 26px;
+      height: 26px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font: 700 14px/1 var(--font);
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .linked-unassign:hover {
+      background: var(--danger-soft);
+      color: #ffb0b6;
+    }
+    .am-unassigned-zone {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .am-unassigned-zone.is-drop-target {
+      border-color: rgba(230, 184, 77, 0.6);
+      background: rgba(230, 184, 77, 0.1);
+      color: #f0d48a;
+    }
+    .drag-ghost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.92;
+      transform: rotate(2deg);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    @media (max-width: 980px) {
+      .am-board { grid-template-columns: 1fr; }
+      .am-col { max-height: none; min-height: 0; }
       .panel-layout { flex-direction: column; }
       .admin-sidebar {
         position: relative;
@@ -574,8 +771,8 @@
         border-bottom: 1px solid var(--line);
       }
       .sidebar-spacer { display: none; }
-      .form-grid { grid-template-columns: 1fr; }
       .admin-main { padding: 20px 16px 28px; }
+      .form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -632,10 +829,9 @@
         <h1 class="sidebar-brand">AutoSender</h1>
         <p class="sidebar-user" id="admin-label"></p>
 
-        <div class="sidebar-section-title">Accounts</div>
-        <nav class="sidebar-nav" aria-label="Account manager">
-          <button type="button" class="sidebar-nav-btn is-active" data-section="ladies">Lady accounts</button>
-          <button type="button" class="sidebar-nav-btn" data-section="operators">Operator accounts</button>
+        <div class="sidebar-section-title">Main</div>
+        <nav class="sidebar-nav" aria-label="Main">
+          <button type="button" class="sidebar-nav-btn is-active" data-section="accounts">Account Manager</button>
         </nav>
 
         <div class="sidebar-section-title">Control</div>
@@ -649,120 +845,77 @@
 
       <main class="admin-main">
         <div id="panel-view">
-          <section id="section-ladies" class="admin-section is-active">
-            <h2 class="admin-main-title">Lady accounts</h2>
-            <p class="admin-main-lead">Add Dream login/password so operators do not need to enter them in the office. Assign an operator when adding a profile or later in the table.</p>
-
-            <div class="panel-card">
-              <div class="card-head">
-                <h3>Dream profiles</h3>
-                <button type="button" id="refresh-profiles-btn" class="btn-ghost">Refresh</button>
-              </div>
-
-              <div class="section-label">New profile</div>
-              <div class="form-grid">
-                <div class="field">
-                  <input id="profile-dream-login" type="text" placeholder=" ">
-                  <label for="profile-dream-login">Dream login</label>
-                </div>
-                <div class="field">
-                  <input id="profile-dream-password" type="password" placeholder=" ">
-                  <label for="profile-dream-password">Dream password</label>
-                </div>
-                <div class="field">
-                  <input id="profile-display-name" type="text" placeholder=" ">
-                  <label for="profile-display-name">Name (optional)</label>
-                </div>
-                <div class="field">
-                  <select id="profile-assigned-operator" class="profile-assign-select" style="width:100%;min-height:46px;padding:12px 14px 8px;max-width:none">
-                    <option value="">— Unassigned —</option>
-                  </select>
-                  <label for="profile-assigned-operator">Operator</label>
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="button" id="create-profile-btn" class="btn-primary">Add profile</button>
-              </div>
-
-              <div id="profiles-empty" class="empty-state hidden">No profiles yet.</div>
-              <div id="profiles-wrap" class="hidden">
-                <p class="helper-text">
-                  An operator only sees a profile if they sign in to the extension with <strong>the same login</strong> (not the director login).
+          <section id="section-accounts" class="admin-section is-active">
+            <div class="am-toolbar">
+              <div>
+                <h2 class="admin-main-title">Account Manager</h2>
+                <p class="admin-main-lead" style="margin-bottom:0">
+                  Drag a profile from Accounts onto an operator card to assign it. Drop on “Unassign” to clear.
                 </p>
-                <div class="table-scroll">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Profile</th>
-                        <th>ID</th>
-                        <th>Dream login</th>
-                        <th>Password</th>
-                        <th>Operator</th>
-                        <th>In DB</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="profiles-body"></tbody>
-                  </table>
-                </div>
               </div>
-            </div>
-          </section>
-
-          <section id="section-operators" class="admin-section">
-            <h2 class="admin-main-title">Operator accounts</h2>
-            <p class="admin-main-lead">Create operator logins for the AutoSender Chrome extension.</p>
-
-            <div class="panel-card">
-              <div class="steps">
-                <strong>Create an operator</strong>
-                <ol>
-                  <li>Enter login and password</li>
-                  <li>Click <strong>Create operator</strong></li>
-                  <li>Operator signs in via the AutoSender extension</li>
-                </ol>
-              </div>
-
-              <div class="section-label">New operator</div>
-              <div class="form-grid">
-                <div class="field">
-                  <input id="operator-email" type="text" placeholder=" ">
-                  <label for="operator-email">Login</label>
-                </div>
-                <div class="field">
-                  <input id="operator-password" type="password" placeholder=" ">
-                  <label for="operator-password">Password</label>
-                </div>
-                <div class="field field-span-2">
-                  <input id="operator-name" type="text" placeholder=" ">
-                  <label for="operator-name">Name</label>
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="button" id="create-operator-btn" class="btn-primary">Create operator</button>
-              </div>
+              <button type="button" id="refresh-accounts-btn" class="btn-ghost">Refresh</button>
             </div>
 
-            <div class="panel-card">
-              <div class="card-head">
-                <h3>Operators</h3>
-                <button type="button" id="refresh-operators-btn" class="btn-ghost">Refresh</button>
+            <div class="am-board">
+              <div class="am-col" id="accounts-col">
+                <div class="am-col-head">
+                  <h3>Accounts <span class="count" id="accounts-count">(0)</span></h3>
+                  <button type="button" id="toggle-add-account" class="btn-primary">Add Account</button>
+                </div>
+                <div id="add-account-panel" class="am-add-panel hidden">
+                  <div class="form-grid">
+                    <div class="field">
+                      <input id="profile-dream-login" type="text" placeholder=" ">
+                      <label for="profile-dream-login">Dream login</label>
+                    </div>
+                    <div class="field">
+                      <input id="profile-dream-password" type="password" placeholder=" ">
+                      <label for="profile-dream-password">Dream password</label>
+                    </div>
+                    <div class="field">
+                      <input id="profile-display-name" type="text" placeholder=" ">
+                      <label for="profile-display-name">Name (optional)</label>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="create-profile-btn" class="btn-primary">Save profile</button>
+                    <button type="button" id="cancel-add-account" class="btn-ghost">Cancel</button>
+                  </div>
+                </div>
+                <div class="am-col-body" id="accounts-list"></div>
+                <div class="am-unassigned-zone" id="unassign-zone" data-drop="unassign">
+                  Drop here to unassign
+                </div>
               </div>
-              <p class="muted-note">Login and password are visible for operators created after this update.</p>
-              <div id="operators-empty" class="empty-state hidden">No operators yet.</div>
-              <div id="operators-wrap" class="hidden">
-                <div class="table-scroll">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Login</th>
-                        <th>Password</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody id="operators-body"></tbody>
-                  </table>
+
+              <div class="am-col">
+                <div class="am-col-head">
+                  <h3>Operators <span class="count" id="operators-count">(0)</span></h3>
+                  <button type="button" id="toggle-add-operator" class="btn-primary">Add Operator</button>
+                </div>
+                <div id="add-operator-panel" class="am-add-panel hidden">
+                  <div class="form-grid">
+                    <div class="field">
+                      <input id="operator-email" type="text" placeholder=" ">
+                      <label for="operator-email">Login</label>
+                    </div>
+                    <div class="field">
+                      <input id="operator-password" type="password" placeholder=" ">
+                      <label for="operator-password">Password</label>
+                    </div>
+                    <div class="field">
+                      <input id="operator-name" type="text" placeholder=" ">
+                      <label for="operator-name">Name</label>
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="create-operator-btn" class="btn-primary">Save operator</button>
+                    <button type="button" id="cancel-add-operator" class="btn-ghost">Cancel</button>
+                  </div>
+                </div>
+                <div class="am-col-body">
+                  <div id="operators-empty" class="empty-state hidden">No operators yet. Add one to start assigning.</div>
+                  <div id="operators-grid" class="operators-grid"></div>
                 </div>
               </div>
             </div>
@@ -771,7 +924,6 @@
           <section id="section-mailings" class="admin-section">
             <h2 class="admin-main-title">Mailings</h2>
             <p class="admin-main-lead">Live LetterBot and Sender jobs across operators.</p>
-
             <div class="panel-card">
               <div class="card-head">
                 <h3>Active mailings</h3>
@@ -809,6 +961,8 @@
     let token = localStorage.getItem("autosenderAdminToken") || "";
     let mailingsTimer = null;
     let cachedOperators = [];
+    let cachedProfiles = [];
+    let dragProfileId = null;
 
     const views = {
       bootstrap: document.getElementById("bootstrap-view"),
@@ -904,12 +1058,12 @@
     function openPanel(user) {
       document.getElementById("admin-label").textContent = user.email || "";
       showView("panel");
-      showAdminSection("ladies");
+      showAdminSection("accounts");
+      setupDragAndDrop();
       setStatus("");
       void (async () => {
-        await refreshOperators({ quiet: true });
-        await refreshProfiles({ quiet: true });
-        void refreshMailings();
+        await refreshAccountManager({ quiet: true });
+        void refreshMailings({ quiet: true });
       })();
       if (mailingsTimer) clearInterval(mailingsTimer);
       mailingsTimer = setInterval(() => {
@@ -919,8 +1073,7 @@
 
     function showAdminSection(sectionId) {
       const sections = {
-        ladies: document.getElementById("section-ladies"),
-        operators: document.getElementById("section-operators"),
+        accounts: document.getElementById("section-accounts"),
         mailings: document.getElementById("section-mailings"),
       };
       Object.entries(sections).forEach(([key, el]) => {
@@ -940,13 +1093,6 @@
       });
     });
 
-    function formatCreatedAt(value) {
-      if (!value) return "—";
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return "—";
-      return date.toLocaleString();
-    }
-
     function escapeHtml(text) {
       return String(text || "")
         .replace(/&/g, "&amp;")
@@ -955,65 +1101,206 @@
         .replace(/"/g, "&quot;");
     }
 
-    async function refreshOperators({ quiet = false } = {}) {
-      const emptyEl = document.getElementById("operators-empty");
-      const wrapEl = document.getElementById("operators-wrap");
-      const bodyEl = document.getElementById("operators-body");
-      if (!quiet) setStatus("Loading operators...");
-      try {
-        const data = await api("/auth/operators");
-        const operators = Array.isArray(data.operators) ? data.operators : [];
-        cachedOperators = operators;
-        paintOperatorSelect();
-        bodyEl.innerHTML = "";
-        if (!operators.length) {
-          emptyEl.classList.remove("hidden");
-          wrapEl.classList.add("hidden");
-        } else {
-          emptyEl.classList.add("hidden");
-          wrapEl.classList.remove("hidden");
-          for (const operator of operators) {
-            const tr = document.createElement("tr");
-            const password = operator.password
-              ? `<code>${escapeHtml(operator.password)}</code>`
-              : '<span style="color:#7f94b3">not saved</span>';
-            tr.innerHTML = `
-              <td>${escapeHtml(operator.name || "—")}</td>
-              <td><code>${escapeHtml(operator.email || "—")}</code></td>
-              <td>${password}</td>
-              <td>${formatCreatedAt(operator.createdAt)}</td>
-            `;
-            bodyEl.appendChild(tr);
-          }
+    function profilePhotoUrl(profile) {
+      const id = Number(profile.femaleProfileId) || 0;
+      if (!id) return "";
+      return `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg`;
+    }
+
+    function profileTitle(profile) {
+      return profile.displayName || profile.dreamUsername || `Profile #${profile.id}`;
+    }
+
+    function initials(name) {
+      const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return "?";
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+
+    function avatarHtml(profile) {
+      const url = profilePhotoUrl(profile);
+      const title = profileTitle(profile);
+      const fallback = escapeHtml(initials(title));
+      if (url) {
+        return `<img class="account-avatar" src="${escapeHtml(url)}" alt="" loading="lazy" data-fallback="${fallback}">`;
+      }
+      return `<div class="account-avatar placeholder">${fallback}</div>`;
+    }
+
+    function renderAccountManager() {
+      const listEl = document.getElementById("accounts-list");
+      const gridEl = document.getElementById("operators-grid");
+      const emptyOps = document.getElementById("operators-empty");
+      document.getElementById("accounts-count").textContent = `(${cachedProfiles.length})`;
+      document.getElementById("operators-count").textContent = `(${cachedOperators.length})`;
+
+      if (!cachedProfiles.length) {
+        listEl.innerHTML = `<div class="empty-state">No accounts yet. Add a Dream profile.</div>`;
+      } else {
+        listEl.innerHTML = cachedProfiles.map((profile) => {
+          const assigned = profile.assignedUserId
+            ? cachedOperators.find((op) => String(op.id) === String(profile.assignedUserId))
+            : null;
+          const sub = assigned
+            ? `Assigned · ${assigned.name || assigned.email}`
+            : `${profile.dreamUsername || "Dream"} · ${profile.inboxMenCount || 0} in DB`;
+          return `
+            <div class="account-card${assigned ? " is-assigned" : ""}"
+              draggable="true"
+              data-profile-id="${profile.id}"
+              data-drag-source="list">
+              ${avatarHtml(profile)}
+              <div class="account-meta">
+                <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
+                <p class="account-sub">${escapeHtml(sub)}</p>
+              </div>
+              <div class="account-actions">
+                <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
+                <button type="button" class="scan-btn profile-scanall-btn" data-profile-id="${profile.id}">Scan All</button>
+                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Delete</button>
+              </div>
+            </div>`;
+        }).join("");
+      }
+
+      if (!cachedOperators.length) {
+        emptyOps.classList.remove("hidden");
+        gridEl.innerHTML = "";
+      } else {
+        emptyOps.classList.add("hidden");
+        gridEl.innerHTML = cachedOperators.map((operator) => {
+          const linked = cachedProfiles.filter(
+            (p) => String(p.assignedUserId || "") === String(operator.id),
+          );
+          const linkedHtml = linked.length
+            ? linked.map((profile) => `
+                <div class="linked-account"
+                  draggable="true"
+                  data-profile-id="${profile.id}"
+                  data-drag-source="operator">
+                  ${avatarHtml(profile)}
+                  <div class="account-meta">
+                    <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
+                    <p class="account-sub">${escapeHtml(profile.dreamUsername || "Dream")}</p>
+                  </div>
+                  <button type="button" class="linked-unassign" data-profile-id="${profile.id}" title="Unassign">×</button>
+                </div>`).join("")
+            : `<div class="empty-state" style="padding:12px 4px">No linked accounts</div>`;
+          return `
+            <div class="operator-card" data-operator-id="${operator.id}" data-drop="operator">
+              <div class="operator-card-head">
+                <div class="operator-icon">${escapeHtml(initials(operator.name || operator.email))}</div>
+                <div class="operator-meta">
+                  <p class="operator-name">${escapeHtml(operator.name || operator.email)}</p>
+                  <p class="operator-login">${escapeHtml(operator.email || "")}${operator.password ? ` · ${escapeHtml(operator.password)}` : ""}</p>
+                </div>
+              </div>
+              <div class="operator-body">${linkedHtml}</div>
+            </div>`;
+        }).join("");
+      }
+
+    }
+
+    function clearDropHighlights() {
+      document.querySelectorAll(".is-drop-target").forEach((el) => el.classList.remove("is-drop-target"));
+    }
+
+    function setupDragAndDrop() {
+      const board = document.querySelector(".am-board");
+      if (!board || board.dataset.dndBound) return;
+      board.dataset.dndBound = "1";
+
+      board.addEventListener("dragstart", (event) => {
+        const card = event.target.closest("[data-profile-id][draggable='true']");
+        if (!card) return;
+        const profileId = card.getAttribute("data-profile-id");
+        dragProfileId = profileId;
+        card.classList.add("is-dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", String(profileId || ""));
+      });
+
+      board.addEventListener("dragend", (event) => {
+        const card = event.target.closest("[data-profile-id][draggable='true']");
+        if (card) card.classList.remove("is-dragging");
+        dragProfileId = null;
+        clearDropHighlights();
+      });
+
+      board.addEventListener("dragover", (event) => {
+        const dropEl =
+          event.target.closest("[data-drop='operator']") ||
+          event.target.closest("[data-drop='unassign']");
+        if (!dropEl) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        clearDropHighlights();
+        dropEl.classList.add("is-drop-target");
+      });
+
+      board.addEventListener("dragleave", (event) => {
+        const dropEl =
+          event.target.closest("[data-drop='operator']") ||
+          event.target.closest("[data-drop='unassign']");
+        if (!dropEl) return;
+        if (!dropEl.contains(event.relatedTarget)) dropEl.classList.remove("is-drop-target");
+      });
+
+      board.addEventListener("drop", (event) => {
+        const dropEl =
+          event.target.closest("[data-drop='operator']") ||
+          event.target.closest("[data-drop='unassign']");
+        if (!dropEl) return;
+        event.preventDefault();
+        dropEl.classList.remove("is-drop-target");
+        const profileId = event.dataTransfer.getData("text/plain") || dragProfileId;
+        if (!profileId) return;
+        if (dropEl.getAttribute("data-drop") === "unassign") {
+          void assignProfileOperator(profileId, null);
+          return;
         }
+        const operatorId = dropEl.getAttribute("data-operator-id");
+        if (operatorId) void assignProfileOperator(profileId, operatorId);
+      });
+
+      board.addEventListener("error", (event) => {
+        const img = event.target;
+        if (!(img instanceof HTMLImageElement) || !img.classList.contains("account-avatar")) return;
+        const fallback = img.getAttribute("data-fallback") || "?";
+        const div = document.createElement("div");
+        div.className = "account-avatar placeholder";
+        div.textContent = fallback;
+        img.replaceWith(div);
+      }, true);
+    }
+
+    async function refreshAccountManager({ quiet = false } = {}) {
+      if (!quiet) setStatus("Loading accounts...");
+      try {
+        const [opsData, profilesData] = await Promise.all([
+          api("/auth/operators"),
+          api("/profiles/admin/list"),
+        ]);
+        cachedOperators = Array.isArray(opsData.operators) ? opsData.operators : [];
+        cachedProfiles = Array.isArray(profilesData.profiles) ? profilesData.profiles : [];
+        renderAccountManager();
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
       }
     }
 
-    function operatorSelectOptionsHtml(selectedId = "") {
-      const current = String(selectedId || "");
-      let html = '<option value="">— Unassigned —</option>';
-      for (const operator of cachedOperators) {
-        const id = String(operator.id);
-        const label = `${operator.name || operator.email} (${operator.email})`;
-        html += `<option value="${escapeHtml(id)}"${id === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
-      }
-      return html;
-    }
+    async function assignProfileOperator(profileId, assignedUserId) {
+      const profile = cachedProfiles.find((p) => String(p.id) === String(profileId));
+      const prev = profile?.assignedUserId ? String(profile.assignedUserId) : "";
+      const next = assignedUserId ? String(assignedUserId) : "";
+      if (prev === next) return;
 
-    function paintOperatorSelect(selectedId = "") {
-      const select = document.getElementById("profile-assigned-operator");
-      if (!select) return;
-      const current = String(selectedId || select.value || "");
-      select.innerHTML = operatorSelectOptionsHtml(current);
-    }
-
-    async function assignProfileOperator(profileId, assignedUserId, selectEl) {
-      const previous = selectEl.getAttribute("data-prev") || "";
-      selectEl.disabled = true;
-      setStatus("Saving operator...");
+      if (profile) profile.assignedUserId = assignedUserId ? Number(assignedUserId) : null;
+      renderAccountManager();
+      setStatus(assignedUserId ? "Assigning..." : "Unassigning...");
       try {
         await api(`/profiles/admin/${profileId}`, {
           method: "PATCH",
@@ -1021,85 +1308,32 @@
             assignedUserId: assignedUserId ? Number(assignedUserId) : null,
           }),
         });
-        selectEl.setAttribute("data-prev", assignedUserId || "");
-        setStatus("Operator assigned", "ok");
+        setStatus(assignedUserId ? "Profile assigned" : "Profile unassigned", "ok");
+        await refreshAccountManager({ quiet: true });
       } catch (error) {
-        selectEl.value = previous;
+        if (profile) profile.assignedUserId = prev ? Number(prev) : null;
+        renderAccountManager();
         setStatus(error.message, "error");
-      } finally {
-        selectEl.disabled = false;
-      }
-    }
-
-    async function refreshProfiles({ quiet = false } = {}) {
-      const emptyEl = document.getElementById("profiles-empty");
-      const wrapEl = document.getElementById("profiles-wrap");
-      const bodyEl = document.getElementById("profiles-body");
-      if (!quiet) setStatus("Loading profiles...");
-      try {
-        if (!cachedOperators.length) {
-          await refreshOperators({ quiet: true });
-        }
-        const data = await api("/profiles/admin/list");
-        const profiles = Array.isArray(data.profiles) ? data.profiles : [];
-        bodyEl.innerHTML = "";
-        if (!profiles.length) {
-          emptyEl.classList.remove("hidden");
-          wrapEl.classList.add("hidden");
-        } else {
-          emptyEl.classList.add("hidden");
-          wrapEl.classList.remove("hidden");
-          for (const profile of profiles) {
-            const tr = document.createElement("tr");
-            const assignedId = profile.assignedUserId ? String(profile.assignedUserId) : "";
-            const password = profile.password
-              ? `<code>${escapeHtml(profile.password)}</code>`
-              : '<span style="color:#7f94b3">—</span>';
-            tr.innerHTML = `
-              <td>${escapeHtml(profile.displayName || "—")}</td>
-              <td>${profile.femaleProfileId || "—"}</td>
-              <td><code>${escapeHtml(profile.dreamUsername || "—")}</code></td>
-              <td>${password}</td>
-              <td>
-                <select class="profile-assign-select profile-assign-row" data-profile-id="${profile.id}" data-prev="${escapeHtml(assignedId)}">
-                  ${operatorSelectOptionsHtml(assignedId)}
-                </select>
-              </td>
-              <td>${profile.inboxMenCount || 0}</td>
-              <td class="action-cell">
-                <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
-                <button type="button" class="scan-btn profile-scanall-btn" data-profile-id="${profile.id}">Scan All</button>
-                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Delete</button>
-              </td>
-            `;
-            bodyEl.appendChild(tr);
-          }
-        }
-        if (!quiet) setStatus("");
-      } catch (error) {
-        if (!quiet) setStatus(error.message, "error");
       }
     }
 
     async function createProfile() {
       setStatus("Checking Dream login...");
       try {
-        const assignedUserId = document.getElementById("profile-assigned-operator").value;
         await api("/profiles/admin", {
           method: "POST",
           body: JSON.stringify({
             dreamUsername: document.getElementById("profile-dream-login").value,
             password: document.getElementById("profile-dream-password").value,
             displayName: document.getElementById("profile-display-name").value,
-            assignedUserId: assignedUserId ? Number(assignedUserId) : null,
           }),
         });
         document.getElementById("profile-dream-login").value = "";
         document.getElementById("profile-dream-password").value = "";
         document.getElementById("profile-display-name").value = "";
-        document.getElementById("profile-assigned-operator").value = "";
+        document.getElementById("add-account-panel").classList.add("hidden");
         setStatus("Profile added", "ok");
-        await refreshProfiles({ quiet: true });
+        await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       }
@@ -1108,7 +1342,7 @@
     async function scanProfile(profileId, maxPages, button) {
       const label = button.textContent;
       button.disabled = true;
-      button.textContent = maxPages === 0 ? "Scan All…" : "Update…";
+      button.textContent = maxPages === 0 ? "…" : "…";
       setStatus(maxPages === 0 ? "Scan All..." : "Update...");
       try {
         const data = await api(`/profiles/admin/${profileId}/scan`, {
@@ -1116,7 +1350,7 @@
           body: JSON.stringify({ maxPages }),
         });
         setStatus(`Done: ${data.men || 0} men, +${data.added || 0} added to DB`, "ok");
-        await refreshProfiles({ quiet: true });
+        await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       } finally {
@@ -1243,6 +1477,26 @@
       }
     }
 
+    async function forceLogoutProfile(userId, profileId, button) {
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = "Logging out…";
+      setStatus("Stopping and logging out profile...");
+      try {
+        await api("/letterbot/admin/disconnect-shift", {
+          method: "POST",
+          body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
+        });
+        setStatus("Mailing stopped — profile logout sent to operator", "ok");
+        await refreshMailings({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+      }
+    }
+
     async function init() {
       if (token) {
         try {
@@ -1327,7 +1581,8 @@
         document.getElementById("operator-email").value = "";
         document.getElementById("operator-password").value = "";
         document.getElementById("operator-name").value = "";
-        await refreshOperators({ quiet: true });
+        document.getElementById("add-operator-panel").classList.add("hidden");
+        await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
       }
@@ -1344,67 +1599,51 @@
       setStatus("", "", "panel");
     });
 
-    async function forceLogoutProfile(userId, profileId, button) {
-      const label = button.textContent;
-      button.disabled = true;
-      button.textContent = "Logging out…";
-      setStatus("Stopping and logging out profile...");
-      try {
-        await api("/letterbot/admin/disconnect-shift", {
-          method: "POST",
-          body: JSON.stringify({ userId: Number(userId), profileId: String(profileId || "default") }),
-        });
-        setStatus("Mailing stopped — profile logout sent to operator", "ok");
-        await refreshMailings({ quiet: true });
-      } catch (error) {
-        setStatus(error.message, "error");
-      } finally {
-        button.disabled = false;
-        button.textContent = label;
-      }
-    }
-
     document.getElementById("toggle-bootstrap").addEventListener("click", () => {
       showView("bootstrap");
       setStatus("", "", "auth");
       setStatus("", "", "bootstrap");
     });
-
     document.getElementById("toggle-login").addEventListener("click", () => {
       showView("login");
       setStatus("", "", "auth");
       setStatus("", "", "bootstrap");
     });
 
+    document.getElementById("toggle-add-account").addEventListener("click", () => {
+      document.getElementById("add-account-panel").classList.toggle("hidden");
+    });
+    document.getElementById("cancel-add-account").addEventListener("click", () => {
+      document.getElementById("add-account-panel").classList.add("hidden");
+    });
+    document.getElementById("toggle-add-operator").addEventListener("click", () => {
+      document.getElementById("add-operator-panel").classList.toggle("hidden");
+    });
+    document.getElementById("cancel-add-operator").addEventListener("click", () => {
+      document.getElementById("add-operator-panel").classList.add("hidden");
+    });
+
+    document.getElementById("refresh-accounts-btn").addEventListener("click", () => {
+      void refreshAccountManager();
+    });
+    document.getElementById("create-profile-btn").addEventListener("click", () => {
+      void createProfile();
+    });
     document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
       void refreshMailings();
     });
 
-    document.getElementById("create-profile-btn").addEventListener("click", () => {
-      void createProfile();
-    });
-
-    document.getElementById("refresh-profiles-btn").addEventListener("click", () => {
-      void refreshProfiles();
-    });
-
-    document.getElementById("profiles-body").addEventListener("change", (event) => {
-      const assignSelect = event.target.closest(".profile-assign-row");
-      if (!assignSelect) return;
-      const profileId = assignSelect.getAttribute("data-profile-id");
-      if (!profileId) return;
-      void assignProfileOperator(profileId, assignSelect.value, assignSelect);
-    });
-
-    document.getElementById("profiles-body").addEventListener("click", (event) => {
+    document.getElementById("accounts-list").addEventListener("click", (event) => {
       const updateBtn = event.target.closest(".profile-update-btn");
       if (updateBtn) {
+        event.stopPropagation();
         const profileId = updateBtn.getAttribute("data-profile-id");
         if (profileId) void scanProfile(profileId, 3, updateBtn);
         return;
       }
       const scanAllBtn = event.target.closest(".profile-scanall-btn");
       if (scanAllBtn) {
+        event.stopPropagation();
         const profileId = scanAllBtn.getAttribute("data-profile-id");
         if (!profileId) return;
         if (!window.confirm("Scan All — import the full inbox into the database?")) return;
@@ -1413,6 +1652,7 @@
       }
       const deleteBtn = event.target.closest(".profile-delete-btn");
       if (deleteBtn) {
+        event.stopPropagation();
         const profileId = deleteBtn.getAttribute("data-profile-id");
         if (!profileId) return;
         if (!window.confirm("Delete this profile from the cabinet? (DB data will remain)")) return;
@@ -1420,7 +1660,7 @@
           try {
             await api(`/profiles/admin/${profileId}`, { method: "DELETE" });
             setStatus("Profile deleted", "ok");
-            await refreshProfiles({ quiet: true });
+            await refreshAccountManager({ quiet: true });
           } catch (error) {
             setStatus(error.message, "error");
           }
@@ -1428,8 +1668,12 @@
       }
     });
 
-    document.getElementById("refresh-operators-btn").addEventListener("click", () => {
-      void refreshOperators();
+    document.getElementById("operators-grid").addEventListener("click", (event) => {
+      const unassignBtn = event.target.closest(".linked-unassign");
+      if (!unassignBtn) return;
+      event.stopPropagation();
+      const profileId = unassignBtn.getAttribute("data-profile-id");
+      if (profileId) void assignProfileOperator(profileId, null);
     });
 
     document.getElementById("mailings-body").addEventListener("click", (event) => {
