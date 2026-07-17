@@ -602,33 +602,157 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .account-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 0 0 auto;
-    }
-    .account-actions button {
-      width: auto;
-      min-height: 24px;
+    .account-edit-btn {
+      width: 34px;
+      height: 34px;
       margin: 0;
-      padding: 0 8px;
-      border-radius: 6px;
-      font: 600 10px/1 var(--font);
+      padding: 0;
       border: 1px solid var(--line-strong);
-      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
       color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 34px;
     }
-    .account-actions .scan-btn {
-      border-color: rgba(62, 207, 142, 0.35);
+    .account-edit-btn:hover {
+      color: #b7d6ff;
+      border-color: rgba(61, 139, 253, 0.45);
+      background: var(--accent-soft);
+    }
+    .account-edit-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(4, 8, 16, 0.72);
+      backdrop-filter: blur(6px);
+    }
+    .modal-card {
+      width: 100%;
+      max-width: 440px;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      padding: 22px;
+      border: 1px solid var(--line-strong);
+      border-radius: 16px;
+      background: linear-gradient(165deg, rgba(18, 30, 52, 0.98), rgba(10, 18, 34, 0.99));
+      box-shadow: var(--shadow);
+    }
+    .modal-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .modal-head .account-avatar {
+      width: 48px;
+      height: 48px;
+      flex-basis: 48px;
+    }
+    .modal-head-meta { flex: 1 1 auto; min-width: 0; }
+    .modal-title {
+      margin: 0;
+      font: 700 18px/1.25 var(--font);
+      letter-spacing: -0.02em;
+    }
+    .modal-sub {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font: 700 16px/1 var(--font);
+      flex: 0 0 32px;
+    }
+    .modal-close:hover {
+      color: var(--danger);
+      border-color: rgba(240, 113, 120, 0.35);
+      background: var(--danger-soft);
+    }
+    .modal-section {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .modal-section-title {
+      margin: 0 0 10px;
+      color: #a8bad4;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .modal-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .modal-actions-row .btn-primary,
+    .modal-actions-row .btn-ghost,
+    .modal-actions-row .scan-btn,
+    .modal-actions-row .delete-btn {
+      width: auto;
+      min-height: 36px;
+      margin: 0;
+      padding: 0 14px;
+      border-radius: 9px;
+      font: 600 12px/1 var(--font);
+    }
+    .modal-actions-row .scan-btn {
+      border: 1px solid rgba(62, 207, 142, 0.35);
       background: var(--ok-soft);
       color: #8ef0bf;
     }
-    .account-actions .delete-btn {
-      border-color: rgba(240, 113, 120, 0.35);
+    .modal-actions-row .delete-btn {
+      border: 1px solid rgba(240, 113, 120, 0.35);
       background: var(--danger-soft);
       color: #ffb0b6;
+      margin-left: auto;
     }
+    .modal-footer {
+      display: flex;
+      gap: 8px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .modal-footer .btn-primary { flex: 1 1 auto; min-width: 120px; }
+    .linked-edit {
+      width: 26px;
+      height: 26px;
+      margin: 0 0 0 auto;
+      padding: 0;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+    .linked-edit:hover {
+      background: var(--accent-soft);
+      color: #b7d6ff;
+    }
+    .linked-edit svg { width: 14px; height: 14px; fill: currentColor; }
 
     .operators-grid {
       display: grid;
@@ -956,6 +1080,50 @@
     </div>
   </div>
 
+  <div id="profile-edit-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="profile-edit-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div id="profile-edit-avatar"></div>
+        <div class="modal-head-meta">
+          <h3 class="modal-title" id="profile-edit-title">Profile settings</h3>
+          <p class="modal-sub" id="profile-edit-sub"></p>
+        </div>
+        <button type="button" id="profile-edit-close" class="modal-close" aria-label="Close">×</button>
+      </div>
+
+      <input type="hidden" id="profile-edit-id" value="">
+
+      <div class="form-grid" style="grid-template-columns:1fr">
+        <div class="field">
+          <input id="profile-edit-name" type="text" placeholder=" ">
+          <label for="profile-edit-name">Name</label>
+        </div>
+        <div class="field">
+          <input id="profile-edit-login" type="text" placeholder=" " autocomplete="off">
+          <label for="profile-edit-login">Dream login</label>
+        </div>
+        <div class="field">
+          <input id="profile-edit-password" type="text" placeholder=" " autocomplete="off">
+          <label for="profile-edit-password">Dream password</label>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Inbox tools</div>
+        <div class="modal-actions-row">
+          <button type="button" id="profile-edit-update" class="scan-btn">Update</button>
+          <button type="button" id="profile-edit-scanall" class="scan-btn">Scan All</button>
+          <button type="button" id="profile-edit-delete" class="delete-btn">Delete</button>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="profile-edit-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="profile-edit-save" class="btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API = window.location.origin;
     let token = localStorage.getItem("autosenderAdminToken") || "";
@@ -1155,11 +1323,9 @@
                 <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
                 <p class="account-sub">${escapeHtml(sub)}</p>
               </div>
-              <div class="account-actions">
-                <button type="button" class="scan-btn profile-update-btn" data-profile-id="${profile.id}">Update</button>
-                <button type="button" class="scan-btn profile-scanall-btn" data-profile-id="${profile.id}">Scan All</button>
-                <button type="button" class="delete-btn profile-delete-btn" data-profile-id="${profile.id}">Delete</button>
-              </div>
+              <button type="button" class="account-edit-btn profile-edit-btn" data-profile-id="${profile.id}" title="Edit profile" aria-label="Edit profile">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66z"/></svg>
+              </button>
             </div>`;
         }).join("");
       }
@@ -1184,6 +1350,9 @@
                     <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
                     <p class="account-sub">${escapeHtml(profile.dreamUsername || "Dream")}</p>
                   </div>
+                  <button type="button" class="linked-edit profile-edit-btn" data-profile-id="${profile.id}" title="Edit profile" aria-label="Edit profile">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66z"/></svg>
+                  </button>
                   <button type="button" class="linked-unassign" data-profile-id="${profile.id}" title="Unassign">×</button>
                 </div>`).join("")
             : `<div class="empty-state" style="padding:12px 4px">No linked accounts</div>`;
@@ -1213,6 +1382,10 @@
       board.dataset.dndBound = "1";
 
       board.addEventListener("dragstart", (event) => {
+        if (event.target.closest("button")) {
+          event.preventDefault();
+          return;
+        }
         const card = event.target.closest("[data-profile-id][draggable='true']");
         if (!card) return;
         const profileId = card.getAttribute("data-profile-id");
@@ -1333,6 +1506,65 @@
         document.getElementById("profile-display-name").value = "";
         document.getElementById("add-account-panel").classList.add("hidden");
         setStatus("Profile added", "ok");
+        await refreshAccountManager({ quiet: true });
+      } catch (error) {
+        setStatus(error.message, "error");
+      }
+    }
+
+    function openProfileEditModal(profileId) {
+      const profile = cachedProfiles.find((p) => String(p.id) === String(profileId));
+      if (!profile) return;
+      document.getElementById("profile-edit-id").value = String(profile.id);
+      document.getElementById("profile-edit-title").textContent = profileTitle(profile);
+      const assigned = profile.assignedUserId
+        ? cachedOperators.find((op) => String(op.id) === String(profile.assignedUserId))
+        : null;
+      document.getElementById("profile-edit-sub").textContent = assigned
+        ? `ID ${profile.femaleProfileId || "—"} · Assigned to ${assigned.name || assigned.email}`
+        : `ID ${profile.femaleProfileId || "—"} · Unassigned · ${profile.inboxMenCount || 0} in DB`;
+      document.getElementById("profile-edit-avatar").innerHTML = avatarHtml(profile);
+      document.getElementById("profile-edit-name").value = profile.displayName || "";
+      document.getElementById("profile-edit-login").value = profile.dreamUsername || "";
+      document.getElementById("profile-edit-password").value = profile.password || "";
+      document.getElementById("profile-edit-modal").classList.remove("hidden");
+    }
+
+    function closeProfileEditModal() {
+      document.getElementById("profile-edit-modal").classList.add("hidden");
+      document.getElementById("profile-edit-id").value = "";
+    }
+
+    async function saveProfileEdit() {
+      const profileId = document.getElementById("profile-edit-id").value;
+      if (!profileId) return;
+      const profile = cachedProfiles.find((p) => String(p.id) === String(profileId));
+      const name = String(document.getElementById("profile-edit-name").value || "").trim();
+      const login = String(document.getElementById("profile-edit-login").value || "").trim();
+      const password = String(document.getElementById("profile-edit-password").value || "");
+      if (!login) {
+        setStatus("Dream login is required", "error");
+        return;
+      }
+      setStatus("Saving profile...");
+      try {
+        const body = { displayName: name };
+        const loginChanged = login !== String(profile?.dreamUsername || "");
+        const passwordChanged = password !== String(profile?.password || "");
+        if (loginChanged || passwordChanged) {
+          body.dreamUsername = login;
+          body.password = password || profile?.password || "";
+          if (!body.password) {
+            setStatus("Dream password is required when changing login", "error");
+            return;
+          }
+        }
+        await api(`/profiles/admin/${profileId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        setStatus("Profile saved", "ok");
+        closeProfileEditModal();
         await refreshAccountManager({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
@@ -1634,46 +1866,63 @@
     });
 
     document.getElementById("accounts-list").addEventListener("click", (event) => {
-      const updateBtn = event.target.closest(".profile-update-btn");
-      if (updateBtn) {
-        event.stopPropagation();
-        const profileId = updateBtn.getAttribute("data-profile-id");
-        if (profileId) void scanProfile(profileId, 3, updateBtn);
-        return;
-      }
-      const scanAllBtn = event.target.closest(".profile-scanall-btn");
-      if (scanAllBtn) {
-        event.stopPropagation();
-        const profileId = scanAllBtn.getAttribute("data-profile-id");
-        if (!profileId) return;
-        if (!window.confirm("Scan All — import the full inbox into the database?")) return;
-        void scanProfile(profileId, 0, scanAllBtn);
-        return;
-      }
-      const deleteBtn = event.target.closest(".profile-delete-btn");
-      if (deleteBtn) {
-        event.stopPropagation();
-        const profileId = deleteBtn.getAttribute("data-profile-id");
-        if (!profileId) return;
-        if (!window.confirm("Delete this profile from the cabinet? (DB data will remain)")) return;
-        void (async () => {
-          try {
-            await api(`/profiles/admin/${profileId}`, { method: "DELETE" });
-            setStatus("Profile deleted", "ok");
-            await refreshAccountManager({ quiet: true });
-          } catch (error) {
-            setStatus(error.message, "error");
-          }
-        })();
-      }
+      const editBtn = event.target.closest(".profile-edit-btn");
+      if (!editBtn) return;
+      event.stopPropagation();
+      const profileId = editBtn.getAttribute("data-profile-id");
+      if (profileId) openProfileEditModal(profileId);
     });
 
     document.getElementById("operators-grid").addEventListener("click", (event) => {
+      const editBtn = event.target.closest(".profile-edit-btn");
+      if (editBtn) {
+        event.stopPropagation();
+        const profileId = editBtn.getAttribute("data-profile-id");
+        if (profileId) openProfileEditModal(profileId);
+        return;
+      }
       const unassignBtn = event.target.closest(".linked-unassign");
       if (!unassignBtn) return;
       event.stopPropagation();
       const profileId = unassignBtn.getAttribute("data-profile-id");
       if (profileId) void assignProfileOperator(profileId, null);
+    });
+
+    document.getElementById("profile-edit-close").addEventListener("click", closeProfileEditModal);
+    document.getElementById("profile-edit-cancel").addEventListener("click", closeProfileEditModal);
+    document.getElementById("profile-edit-modal").addEventListener("click", (event) => {
+      if (event.target.id === "profile-edit-modal") closeProfileEditModal();
+    });
+    document.getElementById("profile-edit-save").addEventListener("click", () => {
+      void saveProfileEdit();
+    });
+    document.getElementById("profile-edit-update").addEventListener("click", (event) => {
+      const profileId = document.getElementById("profile-edit-id").value;
+      if (profileId) void scanProfile(profileId, 3, event.currentTarget);
+    });
+    document.getElementById("profile-edit-scanall").addEventListener("click", (event) => {
+      const profileId = document.getElementById("profile-edit-id").value;
+      if (!profileId) return;
+      if (!window.confirm("Scan All — import the full inbox into the database?")) return;
+      void scanProfile(profileId, 0, event.currentTarget);
+    });
+    document.getElementById("profile-edit-delete").addEventListener("click", () => {
+      const profileId = document.getElementById("profile-edit-id").value;
+      if (!profileId) return;
+      if (!window.confirm("Delete this profile from the cabinet? (DB data will remain)")) return;
+      void (async () => {
+        try {
+          await api(`/profiles/admin/${profileId}`, { method: "DELETE" });
+          setStatus("Profile deleted", "ok");
+          closeProfileEditModal();
+          await refreshAccountManager({ quiet: true });
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      })();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeProfileEditModal();
     });
 
     document.getElementById("mailings-body").addEventListener("click", (event) => {
