@@ -1179,7 +1179,7 @@
                       <tr>
                         <th>Operator</th>
                         <th>Product</th>
-                        <th>Profile</th>
+                        <th>Questionnaire</th>
                         <th>Filter</th>
                         <th>Progress</th>
                         <th>Actions</th>
@@ -1870,15 +1870,54 @@
     function formatOperator(job) {
       const name = String(job.operatorName || "").trim();
       const email = String(job.operatorEmail || "").trim();
-      if (name && email) return `${name}<br><span style="color:#6b7c94">${email}</span>`;
-      return email || `User #${job.userId}`;
+      if (name && email) return `${escapeHtml(name)}<br><span style="color:var(--muted)">${escapeHtml(email)}</span>`;
+      return escapeHtml(email || `User #${job.userId}`);
+    }
+
+    function formatPercent(job) {
+      const pct = Number(job.percent);
+      if (!Number.isFinite(pct)) return null;
+      const rounded = Math.round(pct * 10) / 10;
+      return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+    }
+
+    function formatQuestionnaire(job) {
+      const id = job.profileId || "—";
+      const name = String(job.displayName || job.dreamUsername || "").trim() || `ID ${id}`;
+      const photo =
+        job.photoUrl ||
+        (Number(id)
+          ? `https://profile-photos-cdn.dream-singles.com/im${Number(id)}_small.jpg`
+          : "");
+      const avatar = photo
+        ? `<img class="account-avatar" src="${escapeHtml(photo)}" alt="" style="width:32px;height:32px;flex-basis:32px" onerror="this.style.display='none'">`
+        : `<span class="account-avatar placeholder" style="width:32px;height:32px;flex-basis:32px">?</span>`;
+      return `
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          ${avatar}
+          <div style="min-width:0">
+            <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</div>
+            <div style="color:var(--muted);font-size:11px">ID ${escapeHtml(id)}</div>
+          </div>
+        </div>`;
     }
 
     function formatProgress(job) {
-      const pct = job.percent != null ? `${job.percent}%` : "—";
-      const sent = job.sent != null ? `SENT ${job.sent}` : "";
-      const failed = job.failed != null && Number(job.failed) > 0 ? ` · FAIL ${job.failed}` : "";
-      return `${pct}${sent ? `<br>${sent}${failed}` : ""}`;
+      const pct = formatPercent(job);
+      const sent = job.sent != null ? Number(job.sent) : null;
+      const total = job.total != null ? Number(job.total) : null;
+      const daySent = job.daySent != null ? Number(job.daySent) : null;
+      const failed = job.failed != null && Number(job.failed) > 0 ? Number(job.failed) : 0;
+      const lines = [];
+      if (pct) lines.push(pct);
+      if (sent != null && total != null && total > 0) {
+        lines.push(`Sent ${sent} / ${total}`);
+      } else if (sent != null) {
+        lines.push(`Sent ${sent}`);
+      }
+      if (failed) lines.push(`Fail ${failed}`);
+      if (daySent != null) lines.push(`Today ${daySent}`);
+      return lines.length ? lines.map((line, i) => (i === 0 ? line : `<br>${line}`)).join("") : "—";
     }
 
     function productLabel(job) {
@@ -1931,8 +1970,8 @@
             tr.innerHTML = `
               <td>${formatOperator(job)}<br>${statusBadge(job)}</td>
               <td>${productLabel(job)}</td>
-              <td>${job.profileId}</td>
-              <td>${job.filter || "—"}</td>
+              <td>${formatQuestionnaire(job)}</td>
+              <td>${escapeHtml(job.filter || "—")}</td>
               <td>${formatProgress(job)}</td>
               <td class="action-cell">
                 <button type="button" class="stop-btn"

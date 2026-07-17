@@ -69,6 +69,22 @@ export async function listAgencyProfiles() {
   );
 }
 
+/** Fast lookup for admin Mailings: femaleProfileId → name + photo. */
+export async function mapAgencyProfilesByFemaleId() {
+  const profiles = await listAgencyProfiles();
+  const map = new Map();
+  for (const profile of profiles) {
+    const id = Number(profile.femaleProfileId) || 0;
+    if (!id || map.has(id)) continue;
+    map.set(id, {
+      displayName: String(profile.displayName || "").trim(),
+      dreamUsername: String(profile.dreamUsername || "").trim(),
+      photoUrl: `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg`,
+    });
+  }
+  return map;
+}
+
 export async function getAgencyProfileById(id) {
   const db = getPool();
   const result = await db.query(

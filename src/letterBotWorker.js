@@ -120,11 +120,41 @@ class LetterBotWorker {
       isPaused: false,
       updatedAt: 0,
       profileId: this.profileId,
+      daySent: 0,
+      sendDayKey: "",
     };
   }
 
   getState() {
     return { ...this.state };
+  }
+
+  kyivDayKey(date = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  bumpDaySent(prevSent, nextSent) {
+    const day = this.kyivDayKey();
+    if (this.state.sendDayKey !== day) {
+      this.state.sendDayKey = day;
+      this.state.daySent = 0;
+    }
+    const prev = Number(prevSent);
+    const next = Number(nextSent);
+    if (!Number.isFinite(next)) return;
+    if (Number.isFinite(prev) && next > prev) {
+      this.state.daySent = (Number(this.state.daySent) || 0) + (next - prev);
+      return;
+    }
+    if (!Number.isFinite(prev) && next > 0 && next < 50) {
+      // First progress tick in a fresh mailing usually starts near 0.
+      this.state.daySent = (Number(this.state.daySent) || 0) + next;
+    }
   }
 
   setCookieHeader(cookieHeader) {
@@ -438,12 +468,14 @@ class LetterBotWorker {
         const prev = this.state.progress || {};
         const percentRaw = msg.percent ?? msg.completePercent ?? msg.progress;
         const percentNum = Number(percentRaw);
+        const nextSent = msg.sent ?? prev.sent ?? null;
+        this.bumpDaySent(prev.sent, nextSent);
         this.state.progress = {
           to: msg.to ?? prev.to ?? null,
           total: msg.total ?? prev.total ?? null,
           filter: msg.filter ?? prev.filter ?? null,
           percent: Number.isFinite(percentNum) ? percentNum : Number(prev.percent) || 0,
-          sent: msg.sent ?? prev.sent ?? null,
+          sent: nextSent,
           complete: Boolean(msg.complete),
           recipients: Array.isArray(msg.recipients) ? msg.recipients : prev.recipients || [],
         };

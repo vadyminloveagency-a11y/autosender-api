@@ -319,6 +319,8 @@ export class SenderReadsWorker {
       startedAt: 0,
       activeMs: 0,
       seen: 0,
+      daySent: 0,
+      sendDayKey: "",
       preset: "allReaders",
       galleryId: "",
       channel: this.channel || "read",
@@ -333,11 +335,32 @@ export class SenderReadsWorker {
     };
   }
 
+  kyivDayKey(date = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Kyiv",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  bumpDaySent(delta = 1) {
+    const day = this.kyivDayKey();
+    if (this.state.sendDayKey !== day) {
+      this.state.sendDayKey = day;
+      this.state.daySent = 0;
+    }
+    const add = Number(delta);
+    if (!Number.isFinite(add) || add <= 0) return;
+    this.state.daySent = (Number(this.state.daySent) || 0) + add;
+  }
+
   getState() {
     return { ...this.state, seen: this.seenMemberIds.size };
   }
 
   emit(patch = {}) {
+    const prevSent = Number(this.state.sent) || 0;
     this.state = {
       ...this.state,
       ...patch,
@@ -346,6 +369,8 @@ export class SenderReadsWorker {
       updatedAt: Date.now(),
       profileId: this.profileId,
     };
+    const nextSent = Number(this.state.sent) || 0;
+    if (nextSent > prevSent) this.bumpDaySent(nextSent - prevSent);
     if (this.onStateChange) this.onStateChange(this.getState());
     return this.getState();
   }

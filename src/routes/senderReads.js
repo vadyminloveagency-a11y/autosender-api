@@ -3,6 +3,7 @@ import { adminMiddleware, authMiddleware } from "../auth.js";
 import { decryptSecret } from "../cryptoUtil.js";
 import { dreamLogin } from "../dreamLogin.js";
 import { getDreamCredentials, getUserById } from "../letterbotStore.js";
+import { mapAgencyProfilesByFemaleId } from "../agencyProfileStore.js";
 import {
   ensureSenderReadsTables,
   getSenderReadsJob,
@@ -19,6 +20,24 @@ const router = express.Router();
 const workers = new Map();
 /** @type {Map<string, object>} */
 const lastStates = new Map();
+
+function nicePercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? rounded : Number(rounded.toFixed(1));
+}
+
+function attachProfileMeta(job, profileMap) {
+  const id = Number(job?.profileId) || 0;
+  const meta = id ? profileMap.get(id) : null;
+  return {
+    ...job,
+    displayName: meta?.displayName || "",
+    dreamUsername: meta?.dreamUsername || "",
+    photoUrl: meta?.photoUrl || (id ? `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg` : ""),
+  };
+}
 
 function profileIdFrom(req) {
   return String(
@@ -389,6 +408,13 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
           ? "All readers · Online"
           : "All readers";
   const running = Boolean(state?.running) && !Boolean(state?.stopRequested);
+  const sent = Number.isFinite(Number(state?.sent)) ? Number(state.sent) : null;
+  const remaining = Number.isFinite(Number(state?.remaining)) ? Number(state.remaining) : null;
+  const total =
+    sent != null && remaining != null && remaining >= 0 ? sent + remaining : null;
+  let pct = null;
+  if (total > 0 && sent != null) pct = (sent / total) * 100;
+  const daySent = Number.isFinite(Number(state?.daySent)) ? Number(state.daySent) : sent;
   return {
     product: "sender",
     channel,
@@ -400,9 +426,11 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
     sessionActive: running,
     isPaused: Boolean(state?.paused),
     filter,
-    percent: null,
-    sent: Number.isFinite(Number(state?.sent)) ? Number(state.sent) : null,
+    percent: nicePercent(pct),
+    sent,
+    total,
     failed: Number.isFinite(Number(state?.failed)) ? Number(state.failed) : null,
+    daySent,
     statusMessage: String(state?.statusMessage || ""),
     updatedAt: state?.updatedAt || null,
   };
@@ -410,6 +438,7 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
 
 async function listActiveSenderMailingJobs() {
   const byKey = new Map();
+  const profileMap = await mapAgencyProfilesByFemaleId().catch(() => new Map());
 
   const rows = await listRunningSenderReadsJobsWithUsers();
   for (const row of rows) {
@@ -423,10 +452,13 @@ async function listActiveSenderMailingJobs() {
     if (!Boolean(state?.running) && !live) continue;
     byKey.set(
       key,
-      summarizeSenderMailingJob(userId, storeId, state, {
-        email: row.email,
-        name: row.name,
-      }, row.selection || {}),
+      attachProfileMeta(
+        summarizeSenderMailingJob(userId, storeId, state, {
+          email: row.email,
+          name: row.name,
+        }, row.selection || {}),
+        profileMap,
+      ),
     );
   }
 
@@ -443,12 +475,15 @@ async function listActiveSenderMailingJobs() {
     const user = await getUserById(userId);
     byKey.set(
       key,
-      summarizeSenderMailingJob(
-        userId,
-        storeId,
-        state,
-        { email: user?.email || "", name: user?.name || "" },
-        {},
+      attachProfileMeta(
+        summarizeSenderMailingJob(
+          userId,
+          storeId,
+          state,
+          { email: user?.email || "", name: user?.name || "" },
+          {},
+        ),
+        profileMap,
       ),
     );
   }

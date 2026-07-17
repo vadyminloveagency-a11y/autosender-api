@@ -20,12 +20,32 @@ import {
   upsertLetterBotJob,
 } from "../letterbotStore.js";
 
+import { mapAgencyProfilesByFemaleId } from "../agencyProfileStore.js";
+
 const router = express.Router();
 
 /** @type {Map<string, LetterBotWorker>} */
 const workers = new Map();
 /** @type {Map<string, object>} */
 const lastStates = new Map();
+
+function nicePercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? rounded : Number(rounded.toFixed(1));
+}
+
+function attachProfileMeta(job, profileMap) {
+  const id = Number(job?.profileId) || 0;
+  const meta = id ? profileMap.get(id) : null;
+  return {
+    ...job,
+    displayName: meta?.displayName || "",
+    dreamUsername: meta?.dreamUsername || "",
+    photoUrl: meta?.photoUrl || (id ? `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg` : ""),
+  };
+}
 
 function idleState(profileId) {
   return {
@@ -355,7 +375,13 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
 
 function summarizeMailingJob(userId, profileId, state, user = {}) {
   const progress = state?.progress && typeof state.progress === "object" ? state.progress : {};
-  const pct = Number(progress.percent);
+  const sent = Number.isFinite(Number(progress.sent)) ? Number(progress.sent) : null;
+  const total = Number.isFinite(Number(progress.total)) ? Number(progress.total) : null;
+  let pct = Number(progress.percent);
+  if ((!Number.isFinite(pct) || pct === 0) && sent != null && total > 0) {
+    pct = (sent / total) * 100;
+  }
+  const daySent = Number.isFinite(Number(state?.daySent)) ? Number(state.daySent) : null;
   return {
     userId: Number(userId),
     profileId: String(profileId || "default"),
@@ -364,8 +390,10 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
     sessionActive: Boolean(state?.sessionActive),
     isPaused: Boolean(state?.isPaused),
     filter: String(progress.filter || state?.filter || ""),
-    percent: Number.isFinite(pct) ? pct : null,
-    sent: progress.sent ?? null,
+    percent: nicePercent(pct),
+    sent,
+    total,
+    daySent,
     statusMessage: String(state?.statusMessage || ""),
     updatedAt: state?.updatedAt || null,
   };
@@ -373,6 +401,7 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
 
 async function listActiveMailingJobs() {
   const byKey = new Map();
+  const profileMap = await mapAgencyProfilesByFemaleId().catch(() => new Map());
 
   const rows = await listRunningLetterBotJobsWithUsers();
   for (const row of rows) {
@@ -383,10 +412,13 @@ async function listActiveMailingJobs() {
     const state = live ? live.getState() : row.state || {};
     byKey.set(
       key,
-      summarizeMailingJob(userId, profileId, state, {
-        email: row.email,
-        name: row.name,
-      }),
+      attachProfileMeta(
+        summarizeMailingJob(userId, profileId, state, {
+          email: row.email,
+          name: row.name,
+        }),
+        profileMap,
+      ),
     );
   }
 
@@ -401,10 +433,13 @@ async function listActiveMailingJobs() {
     const user = await getUserById(userId);
     byKey.set(
       key,
-      summarizeMailingJob(userId, profileId, state, {
-        email: user?.email || "",
-        name: user?.name || "",
-      }),
+      attachProfileMeta(
+        summarizeMailingJob(userId, profileId, state, {
+          email: user?.email || "",
+          name: user?.name || "",
+        }),
+        profileMap,
+      ),
     );
   }
 
