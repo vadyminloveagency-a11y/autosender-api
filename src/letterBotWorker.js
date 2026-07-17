@@ -1,6 +1,7 @@
 ﻿import WebSocket from "ws";
 import { withDreamGate } from "./dreamGate.js";
 import { dreamLogin } from "./dreamLogin.js";
+import { bumpMailingDailyLetters } from "./mailingDailyStore.js";
 
 const ORIGIN = "https://www.dream-singles.com";
 const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
@@ -203,15 +204,23 @@ class LetterBotWorker {
     const prev = Number(prevSent);
     const next = Number(nextSent);
     if (!Number.isFinite(next) || next < 0) return;
+    let delta = 0;
     // Only count positive deltas of real bot sends — never re-add full counters on reconnect.
     if (Number.isFinite(prev) && next > prev) {
-      this.state.daySent = (Number(this.state.daySent) || 0) + (next - prev);
-      return;
+      delta = next - prev;
+    } else if (!Number.isFinite(prev) && next > 0 && next <= 5) {
+      // First tick of a new run (no previous progress): count only a small initial step.
+      delta = next;
     }
-    // First tick of a new run (no previous progress): count only a small initial step.
-    if (!Number.isFinite(prev) && next > 0 && next <= 5) {
-      this.state.daySent = (Number(this.state.daySent) || 0) + next;
-    }
+    if (delta <= 0) return;
+    this.state.daySent = (Number(this.state.daySent) || 0) + delta;
+    void bumpMailingDailyLetters({
+      dayKey: day,
+      profileId: this.profileId,
+      product: "letterbot",
+      userId: this.ownerUserId,
+      delta,
+    }).catch(() => {});
   }
 
   setCookieHeader(cookieHeader) {

@@ -21,6 +21,12 @@ import {
 } from "../letterbotStore.js";
 
 import { mapAgencyProfilesByFemaleId } from "../agencyProfileStore.js";
+import {
+  ensureMailingDailyTables,
+  kyivDayKey,
+  listMailingDailyByProfile,
+  listMailingDailyMonthTotals,
+} from "../mailingDailyStore.js";
 
 const router = express.Router();
 
@@ -566,6 +572,85 @@ router.get("/admin/running", adminMiddleware, async (req, res) => {
       ok: false,
       error: error?.message || String(error),
       jobs: [],
+    });
+  }
+});
+
+/** Director cabinet — letters by questionnaire for a day + month calendar totals. */
+router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
+  try {
+    await ensureMailingDailyTables();
+    const today = kyivDayKey();
+    let date = String(req.query?.date || today).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+
+    const [yStr, mStr] = date.split("-");
+    const year = Number(req.query?.year) || Number(yStr);
+    const month = Number(req.query?.month) || Number(mStr);
+
+    const [rows, monthDays, profileMap] = await Promise.all([
+      listMailingDailyByProfile(date),
+      listMailingDailyMonthTotals(year, month),
+      mapAgencyProfilesByFemaleId().catch(() => new Map()),
+    ]);
+
+    const byProfile = new Map();
+    for (const row of rows) {
+      const key = String(row.profileId || "");
+      if (!key) continue;
+      let entry = byProfile.get(key);
+      if (!entry) {
+        const idNum = Number(key) || 0;
+        const meta = idNum ? profileMap.get(idNum) : null;
+        entry = {
+          profileId: key,
+          displayName: meta?.displayName || "",
+          dreamUsername: meta?.dreamUsername || "",
+          photoUrl:
+            meta?.photoUrl ||
+            (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+          operatorName: "",
+          operatorEmail: "",
+          letterbot: 0,
+          read: 0,
+          online: 0,
+          total: 0,
+        };
+        byProfile.set(key, entry);
+      }
+      if (row.product === "online") entry.online += row.letters;
+      else if (row.product === "read") entry.read += row.letters;
+      else entry.letterbot += row.letters;
+      entry.total = entry.letterbot + entry.read + entry.online;
+      if (row.operatorName || row.operatorEmail) {
+        entry.operatorName = row.operatorName || entry.operatorName;
+        entry.operatorEmail = row.operatorEmail || entry.operatorEmail;
+      }
+    }
+
+    const profiles = [...byProfile.values()].sort((a, b) => {
+      if (b.total !== a.total) return b.total - a.total;
+      return String(a.displayName || a.profileId).localeCompare(
+        String(b.displayName || b.profileId),
+        "en",
+      );
+    });
+
+    return res.json({
+      ok: true,
+      date,
+      year,
+      month,
+      today,
+      monthDays,
+      profiles,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+      profiles: [],
+      monthDays: [],
     });
   }
 });

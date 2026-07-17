@@ -1,6 +1,7 @@
 import { dreamLogin } from "./dreamLogin.js";
 import { dreamHttp, hasDreamProxy } from "./dreamHttp.js";
 import { hasTwoCaptcha } from "./twoCaptcha.js";
+import { bumpMailingDailyLetters } from "./mailingDailyStore.js";
 import WebSocket from "ws";
 
 const ORIGIN = "https://www.dream-singles.com";
@@ -353,6 +354,13 @@ export class SenderReadsWorker {
     const add = Number(delta);
     if (!Number.isFinite(add) || add <= 0) return;
     this.state.daySent = (Number(this.state.daySent) || 0) + add;
+    void bumpMailingDailyLetters({
+      dayKey: day,
+      profileId: this.profileId,
+      product: this.channel === "online" ? "online" : "read",
+      userId: this.ownerUserId,
+      delta: add,
+    }).catch(() => {});
   }
 
   getState() {

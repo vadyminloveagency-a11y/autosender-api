@@ -13,6 +13,7 @@ import letterbotRoutes, { restoreRunningLetterBotJobs } from "./routes/letterbot
 import senderReadsRoutes, { restoreRunningSenderReadsJobs } from "./routes/senderReads.js";
 import { ensureLetterBotTables } from "./letterbotStore.js";
 import { ensureSenderReadsTables } from "./senderReadsStore.js";
+import { ensureMailingDailyTables } from "./mailingDailyStore.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -51,6 +52,7 @@ async function start() {
   await ensureLetterBotTables();
   await ensureAgencyProfileTables();
   await ensureSenderReadsTables();
+  await ensureMailingDailyTables();
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port}`);
   });
