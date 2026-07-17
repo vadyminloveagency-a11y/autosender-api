@@ -104,25 +104,40 @@ function dayKeyInAgencyTz(ms) {
 function parseReadMessageDate(message) {
   const raw = String(message?.date || "").trim();
   if (!raw) return null;
+  // Prefer the calendar day Dream shows ("2026-07-16 07:46") — do not append UTC
+  // (evening-of-16 as UTC becomes the 17th in Kyiv and wrongly passes "today").
+  const day = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (day) {
+    const ms = Date.parse(`${day[1]}-${day[2]}-${day[3]}T12:00:00Z`);
+    return Number.isFinite(ms) ? ms : null;
+  }
   const normalized = /(?:z|gmt|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw} UTC`;
   const ms = Date.parse(normalized);
   return Number.isFinite(ms) ? ms : null;
 }
 
+/** Calendar day as Dream shows on the letter row (YYYY-MM-DD prefix). */
+function dreamRowDayKey(message) {
+  const raw = String(message?.date || "").trim();
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+}
+
 function isReadOnFdDay(message, fd) {
   const want = dayKeyFromFd(fd);
   if (!want) return true;
-  const readAt = parseReadMessageDate(message);
-  if (readAt == null) return true;
-  return dayKeyInAgencyTz(readAt) === want;
+  const rowDay = dreamRowDayKey(message);
+  // No date on row → skip (do not treat as today).
+  if (!rowDay) return false;
+  return rowDay === want;
 }
 
 function readPageHasOlderThanFd(messages, fd) {
   const want = dayKeyFromFd(fd);
   if (!want) return false;
   return (messages || []).some((message) => {
-    const readAt = parseReadMessageDate(message);
-    return readAt != null && dayKeyInAgencyTz(readAt) < want;
+    const rowDay = dreamRowDayKey(message);
+    return rowDay && rowDay < want;
   });
 }
 
