@@ -73,12 +73,57 @@ export async function ensureAgencyProfileTables() {
   `);
 }
 
-async function recordAssignmentChange(db, profile, previousUserId, nextUserId) {
+/** Parse YYYY-MM-DD or D/M[/YYYY] into Kyiv calendar day (YYYY-MM-DD), or null. */
+function parseAssignmentDay(assignedAt) {
+  const raw = String(assignedAt || "").trim();
+  if (!raw) return null;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = raw.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?$/);
+  if (dmy) {
+    const dd = String(dmy[1]).padStart(2, "0");
+    const mm = String(dmy[2]).padStart(2, "0");
+    let yyyy = dmy[3] ? String(dmy[3]) : String(new Date().getFullYear());
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return null;
+}
+
+async function recordAssignmentChange(db, profile, previousUserId, nextUserId, assignedAt = null) {
   const profileId = Number(profile?.id) || 0;
   const femaleProfileId = Number(profile?.female_profile_id) || 0;
   const oldUserId = Number(previousUserId) || null;
   const newUserId = Number(nextUserId) || null;
-  if (!profileId || !femaleProfileId || oldUserId === newUserId) return;
+  if (!profileId || !femaleProfileId) return;
+
+  const day = parseAssignmentDay(assignedAt);
+  const sameUser = oldUserId === newUserId;
+
+  // Same operator + explicit date: backdate (or create) the open interval.
+  if (sameUser && newUserId && day) {
+    const updated = await db.query(
+      `UPDATE agency_profile_assignments
+       SET assigned_at = ($2::date::timestamp AT TIME ZONE 'Europe/Kyiv')
+       WHERE agency_profile_id = $1
+         AND user_id = $3
+         AND unassigned_at IS NULL
+       RETURNING id`,
+      [profileId, day, newUserId],
+    );
+    if (updated.rowCount) return;
+    await db.query(
+      `INSERT INTO agency_profile_assignments (
+         agency_profile_id, female_profile_id, display_name, user_id, assigned_at
+       ) VALUES ($1, $2, $3, $4, ($5::date::timestamp AT TIME ZONE 'Europe/Kyiv'))`,
+      [profileId, femaleProfileId, String(profile.display_name || ""), newUserId, day],
+    );
+    return;
+  }
+
+  if (sameUser) return;
 
   await db.query(
     `UPDATE agency_profile_assignments
@@ -87,17 +132,21 @@ async function recordAssignmentChange(db, profile, previousUserId, nextUserId) {
        AND unassigned_at IS NULL`,
     [profileId],
   );
-  if (newUserId) {
+  if (!newUserId) return;
+
+  if (day) {
+    await db.query(
+      `INSERT INTO agency_profile_assignments (
+         agency_profile_id, female_profile_id, display_name, user_id, assigned_at
+       ) VALUES ($1, $2, $3, $4, ($5::date::timestamp AT TIME ZONE 'Europe/Kyiv'))`,
+      [profileId, femaleProfileId, String(profile.display_name || ""), newUserId, day],
+    );
+  } else {
     await db.query(
       `INSERT INTO agency_profile_assignments (
          agency_profile_id, female_profile_id, display_name, user_id, assigned_at
        ) VALUES ($1, $2, $3, $4, NOW())`,
-      [
-        profileId,
-        femaleProfileId,
-        String(profile.display_name || ""),
-        newUserId,
-      ],
+      [profileId, femaleProfileId, String(profile.display_name || ""), newUserId],
     );
   }
 }
@@ -379,13 +428,19 @@ export async function updateAgencyProfile(id, patch = {}) {
     ],
   );
   const row = result.rows[0] || null;
-  if (row && Number(existing.assignedUserId || 0) !== Number(row.assigned_user_id || 0)) {
-    await recordAssignmentChange(
-      db,
-      row,
-      existing.assignedUserId,
-      row.assigned_user_id,
-    );
+  if (row) {
+    const userChanged =
+      Number(existing.assignedUserId || 0) !== Number(row.assigned_user_id || 0);
+    const backdate = Boolean(parseAssignmentDay(patch.assignedAt));
+    if (userChanged || (backdate && row.assigned_user_id)) {
+      await recordAssignmentChange(
+        db,
+        row,
+        existing.assignedUserId,
+        row.assigned_user_id,
+        patch.assignedAt,
+      );
+    }
   }
   return row;
 }

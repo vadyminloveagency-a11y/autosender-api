@@ -140,6 +140,7 @@ router.patch("/admin/:id", adminMiddleware, async (req, res) => {
       password: req.body?.password,
       displayName: req.body?.displayName || req.body?.name,
       assignedUserId: req.body?.assignedUserId,
+      assignedAt: req.body?.assignedAt,
     });
     if (!row) {
       return res.status(404).json({ ok: false, error: "Profile not found" });
