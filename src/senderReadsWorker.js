@@ -613,18 +613,19 @@ export class SenderReadsWorker {
   }
 
   async fetchReadPage(page, { fromDate = "" } = {}) {
-    // Readers today: Dream UI Search filter fd=MM/DD/YYYY (+ empty td=), not row timestamps.
+    // Full Readers list (empty fd= like Dream UI). "Today" = filter message.date in code.
     const params = new URLSearchParams({
       mode: "sent",
+      folder: "-1",
       page: String(Math.max(1, Number(page) || 1)),
       returnJson: "1",
       view: "read",
+      fq: "",
+      q: "",
+      fd: "",
+      td: "",
     });
-    const fd = String(fromDate || "").trim();
-    if (fd) {
-      params.set("fd", fd);
-      params.set("td", "");
-    }
+    void fromDate;
     const url = `${READS_URL}?${params.toString()}`;
     const response = await this.dreamFetch(url);
     if (response.status === 401 || response.status === 403) {
@@ -1271,7 +1272,12 @@ export class SenderReadsWorker {
             skipSeen += 1;
             continue;
           }
-          // todayOnly: Dream already filtered via fd= on fetch — do not re-filter message.date.
+          // Today = date on the letter row (message.date), not Dream Search fd=.
+          if (filters.todayOnly && readsFromDate && !isReadOnFdDay(message, readsFromDate)) {
+            this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
+            skipOld += 1;
+            continue;
+          }
           if (!isReadOnlineEligible(message, filters.onlineOnly)) {
             this.emit({ skipped: this.state.skipped + 1, ...this.nextRemaining() });
             pageOnline += 1;
