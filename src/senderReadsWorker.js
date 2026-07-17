@@ -1,5 +1,4 @@
 import { dreamLogin } from "./dreamLogin.js";
-import { withDreamGate } from "./dreamGate.js";
 import { dreamHttp, hasDreamProxy } from "./dreamHttp.js";
 import { hasTwoCaptcha } from "./twoCaptcha.js";
 import WebSocket from "ws";
@@ -1097,18 +1096,33 @@ export class SenderReadsWorker {
       return { ok: false, error: msg, state: this.getState(), useLocal: true };
     }
 
+    this.emit({
+      statusMessage:
+        channel === "online"
+          ? "Starting Online list…"
+          : filters.excludeFavorites
+            ? "Loading Favorites table…"
+            : `Cycle ${this.state.cycle || 1} · Reads page 1…`,
+    });
     await this.persist(true);
 
-    const gateKey = `${this.ownerUserId || "anon"}:${this.profileId}:${channel}`;
-    if (channel === "online") {
-      void withDreamGate(gateKey, () =>
-        this.runOnlineLoop(token, plain, filters, photoId, delayMs),
-      );
-    } else {
-      void withDreamGate(gateKey, () =>
-        this.runLoop(token, plain, filters, photoId, delayMs, maxPages),
-      );
-    }
+    const runJob = () =>
+      channel === "online"
+        ? this.runOnlineLoop(token, plain, filters, photoId, delayMs)
+        : this.runLoop(token, plain, filters, photoId, delayMs, maxPages);
+
+    // Do not queue behind a zombie Read loop on dreamGate — Stop+Start must begin
+    // immediately (old loop exits on runToken mismatch after its current fetch).
+    void runJob().catch((error) => {
+      if (token !== this.runToken) return;
+      const msg = error?.message || String(error);
+      this.emit({
+        ...this.idleState(msg || "Reads failed"),
+        ...this.keepRunStats(),
+        lastError: msg,
+      });
+      void this.persist(false);
+    });
 
     return { ok: true, state: this.getState() };
   }
