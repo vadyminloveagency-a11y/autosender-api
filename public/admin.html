@@ -992,8 +992,9 @@
     .bal-tab-btn:hover { border-color: rgba(4, 242, 160, 0.35); }
     .bal-tab-btn.is-active {
       border-color: rgba(4, 242, 160, 0.45);
-      background: #101816;
+      background: rgba(4, 242, 160, 0.16);
       color: #04f2a0;
+      box-shadow: 0 0 0 1px rgba(4, 242, 160, 0.18), 0 0 14px rgba(4, 242, 160, 0.12);
     }
     .bal-tab-panel { display: none; }
     .bal-tab-panel.is-active { display: block; }
@@ -2983,7 +2984,7 @@
 
     function syncBalTabUi(tab) {
       const next = tab === "bonuses" ? "bonuses" : "balances";
-      document.querySelectorAll(".bal-tab-btn").forEach((button) => {
+      document.querySelectorAll("[data-bal-tab]").forEach((button) => {
         const active = button.dataset.balTab === next;
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
@@ -3981,7 +3982,7 @@
       }
       void refreshBalances();
     });
-    document.querySelectorAll(".bal-tab-btn").forEach((button) => {
+    document.querySelectorAll("[data-bal-tab]").forEach((button) => {
       button.addEventListener("click", () => {
         setBalTab(button.dataset.balTab);
       });
