@@ -109,15 +109,14 @@
     }
     .auth-logo {
       display: block;
-      width: 108px;
-      height: 108px;
+      width: 112px;
+      height: 112px;
       margin: 0 auto 12px;
-      border-radius: 20px;
-      object-fit: cover;
-      /* Blends the black logo background into the dark card. */
-      mix-blend-mode: screen;
+      border-radius: 50%;
+      /* Zoom into the cat emblem, cropping out the in-image caption. */
+      background: #05060a url("/inlove-logo.png") 53.6% 33.4% / 260% auto no-repeat;
+      border: 1px solid rgba(4, 242, 160, 0.18);
       user-select: none;
-      -webkit-user-drag: none;
     }
     .auth-form {
       display: flex;
@@ -1605,7 +1604,7 @@
   </div>
   <div id="auth-shell" class="app-auth-gate">
     <div id="login-view" class="auth-card">
-      <img class="auth-logo" src="/inlove-logo.png" alt="Inlove Services">
+      <div class="auth-logo" role="img" aria-label="Inlove Services"></div>
       <h1 class="auth-title">Inlove Services</h1>
       <p class="auth-hint" style="margin-top:0">Director cabinet</p>
       <form id="login-form" class="auth-form" autocomplete="on">
@@ -1628,7 +1627,7 @@
     </div>
 
     <div id="bootstrap-view" class="auth-card hidden">
-      <img class="auth-logo" src="/inlove-logo.png" alt="Inlove Services">
+      <div class="auth-logo" role="img" aria-label="Inlove Services"></div>
       <h1 class="auth-title">Inlove Services</h1>
       <p class="auth-hint" style="margin-top:0">Create the first admin account</p>
       <form id="bootstrap-form" class="auth-form">
