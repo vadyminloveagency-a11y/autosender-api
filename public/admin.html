@@ -839,11 +839,29 @@
       font-size: 12px;
     }
     .bal-filters {
+      position: relative;
       margin: 0 0 12px;
       padding: 8px;
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 8px;
       background: rgba(13, 19, 23, 0.45);
+    }
+    .bal-cal-popover {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 8px;
+      z-index: 60;
+      display: none;
+      filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.5));
+    }
+    .bal-cal-popover.is-open { display: block; }
+    .bal-cal-popover .mail-cal {
+      width: 220px;
+      background: #0d1317;
+    }
+    #bal-cal-toggle.is-open {
+      border-color: rgba(255, 43, 58, 0.55);
+      color: #ff2b3a;
     }
     .bal-filters-row {
       display: flex;
@@ -947,19 +965,12 @@
       #section-balances .mail-calendar-layout {
         flex: 1 1 auto;
         min-height: 0;
-        flex-direction: column;
         flex-wrap: nowrap;
-        align-items: stretch;
-        gap: 10px;
         margin-bottom: 0;
         overflow: hidden;
       }
-      #section-balances .mail-cal {
-        width: min(220px, 100%);
-        flex: 0 0 auto;
-      }
       #section-balances .mail-day-panel {
-        height: auto;
+        height: 100%;
         flex: 1 1 auto;
         min-height: 0;
         display: flex;
@@ -2204,6 +2215,7 @@
 
               <div class="bal-filters">
                 <div class="bal-filters-row">
+                  <button type="button" id="bal-cal-toggle" class="btn-ghost" aria-haspopup="true" aria-expanded="false">Calendar</button>
                   <select id="bal-filter-profile" aria-label="Questionnaire">
                     <option value="">All questionnaires</option>
                   </select>
@@ -2212,24 +2224,25 @@
                   <button type="button" id="bal-filter-apply" class="btn-ghost">Apply</button>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
                 </div>
+                <div id="bal-cal-popover" class="bal-cal-popover" hidden>
+                  <div class="mail-cal">
+                    <div class="mail-cal-head">
+                      <h4 id="bal-cal-title">—</h4>
+                      <div class="mail-cal-nav">
+                        <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
+                        <button type="button" id="bal-cal-today" title="Today">●</button>
+                        <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
+                      </div>
+                    </div>
+                    <div class="mail-cal-weekdays">
+                      <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                    </div>
+                    <div id="bal-cal-grid" class="mail-cal-grid"></div>
+                  </div>
+                </div>
               </div>
 
               <div class="mail-calendar-layout" style="margin-top:12px">
-                <div class="mail-cal">
-                  <div class="mail-cal-head">
-                    <h4 id="bal-cal-title">—</h4>
-                    <div class="mail-cal-nav">
-                      <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
-                      <button type="button" id="bal-cal-today" title="Today">●</button>
-                      <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
-                    </div>
-                  </div>
-                  <div class="mail-cal-weekdays">
-                    <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
-                  </div>
-                  <div id="bal-cal-grid" class="mail-cal-grid"></div>
-                </div>
-
                 <div class="mail-day-panel">
                   <div id="bal-tab-balances" class="bal-tab-panel is-active" role="tabpanel">
                     <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
@@ -5100,7 +5113,31 @@
       if (!btn || btn.disabled) return;
       setBalSingleDay(btn.getAttribute("data-date"));
       balCalState.bonusesLoadedFor = "";
+      setBalCalPopoverOpen(false);
       void refreshBalances({ quiet: true });
+    });
+    function setBalCalPopoverOpen(open) {
+      const popover = document.getElementById("bal-cal-popover");
+      const toggle = document.getElementById("bal-cal-toggle");
+      if (!popover || !toggle) return;
+      popover.hidden = !open;
+      popover.classList.toggle("is-open", open);
+      toggle.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    document.getElementById("bal-cal-toggle")?.addEventListener("click", () => {
+      const popover = document.getElementById("bal-cal-popover");
+      setBalCalPopoverOpen(popover ? popover.hidden : false);
+    });
+    document.addEventListener("click", (event) => {
+      const popover = document.getElementById("bal-cal-popover");
+      if (!popover || popover.hidden) return;
+      if (popover.contains(event.target)) return;
+      if (event.target.closest?.("#bal-cal-toggle")) return;
+      setBalCalPopoverOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setBalCalPopoverOpen(false);
     });
     document.getElementById("bal-filter-apply")?.addEventListener("click", () => {
       readBalFiltersFromInputs();
