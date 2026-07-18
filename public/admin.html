@@ -4431,6 +4431,8 @@
       }
       return rows.sort((a, b) => (b.whenTs || 0) - (a.whenTs || 0));
     }
+
+    function renderBonusActions(profiles, date, meta = {}) {
       const emptyEl = document.getElementById("bonus-day-empty");
       const listEl = document.getElementById("bonus-profiles");
       const statusEl = document.getElementById("bonus-status");
