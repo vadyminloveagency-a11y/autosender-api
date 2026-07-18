@@ -145,15 +145,6 @@ function eachDreamDayKey(startDay, endDay) {
   return days;
 }
 
-/** Calendar day YYYY-MM-DD from Dream action timestamp MM/DD/YYYY HH:MM:SS. */
-function actionCalendarDayKey(occurredAt) {
-  const match = String(occurredAt || "").match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/,
-  );
-  if (!match) return "";
-  return `${match[3]}-${String(match[1]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
-}
-
 function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 0) {
   const url = new URL(BONUSES_URL);
   // Dream agency form accepts ISO dates (verified against live curls).
@@ -195,11 +186,10 @@ function actionDedupeKey(action) {
   ].join("|");
 }
 
-function filterDayActions(actions, day, profileId = 0) {
+function filterRequestedActions(actions, profileId = 0) {
   const pid = Number(profileId) || 0;
   return (Array.isArray(actions) ? actions : []).filter((action) => {
     if (pid && String(action.femaleProfileId) !== String(pid)) return false;
-    if (actionCalendarDayKey(action.occurredAt) !== day) return false;
     return true;
   });
 }
@@ -427,7 +417,11 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
   const byKey = new Map();
   const addActions = (rows) => {
     let added = 0;
-    for (const action of filterDayActions(rows, day, pid)) {
+    // Dream already filters this response by its business day. That day runs
+    // 10:00–10:00 Kyiv and therefore legitimately contains timestamps from
+    // two calendar dates. Filtering again by the displayed calendar date
+    // discarded all actions between midnight and 10:00.
+    for (const action of filterRequestedActions(rows, pid)) {
       const key = actionDedupeKey(action);
       if (byKey.has(key)) continue;
       byKey.set(key, action);
