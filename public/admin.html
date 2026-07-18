@@ -2283,6 +2283,7 @@
                     <input type="hidden" id="bal-filter-profile" value="">
                   </div>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
+                  <button type="button" id="bal-filter-day" class="btn-ghost">This day</button>
                   <div id="bal-cal-popover" class="bal-cal-popover" hidden>
                     <div class="mail-cal">
                       <div class="mail-cal-head">
@@ -5201,6 +5202,17 @@
       balCalState.selectedDate = to;
       persistBalFilters();
       syncBalFilterInputs();
+      balCalState.bonusesLoadedFor = "";
+      void refreshBalances();
+    });
+    document.getElementById("bal-filter-day")?.addEventListener("click", () => {
+      balCalState.today = kyivTodayLocal();
+      setBalSingleDay(balCalState.today);
+      const [y, m] = balCalState.today.split("-").map(Number);
+      balCalState.year = y;
+      balCalState.month = m;
+      balCalPickStart = null;
+      setBalCalPopoverOpen(false);
       balCalState.bonusesLoadedFor = "";
       void refreshBalances();
     });
