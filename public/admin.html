@@ -836,7 +836,7 @@
     .bal-cal-popover {
       position: absolute;
       top: calc(100% + 6px);
-      left: 8px;
+      left: 0;
       z-index: 60;
       display: none;
       filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.5));
@@ -1089,9 +1089,27 @@
       justify-content: space-between;
       gap: 8px;
       margin: 0 0 10px;
+      flex-wrap: wrap;
+    }
+    .bal-top-controls {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .bal-top-controls .btn-ghost {
+      min-height: 32px;
+      height: 32px;
+      min-width: 0;
+      padding: 2px 12px 0;
+      border-radius: 6px;
+      font: 600 13px/1 var(--font);
+      box-sizing: border-box;
     }
     .bal-top-day-total {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       min-width: 0;
       min-height: 32px;
       height: 32px;
@@ -1542,15 +1560,12 @@
       min-width: 0;
       padding: 4px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(78, 98, 108, 0.45);
-      background: rgba(255, 255, 255, 0.03);
-      color: #dde3e9;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
       font: 600 11px/1 var(--font);
       white-space: nowrap;
     }
-    .bonus-type-badge.type-letter { border-color: rgba(255, 43, 58, 0.45); }
-    .bonus-type-badge.type-chat { border-color: rgba(86, 156, 214, 0.55); }
-    .bonus-type-badge.type-video { border-color: rgba(197, 134, 192, 0.55); }
     .bonus-actions-table th.bonus-col-operator,
     .bonus-actions-table td.bonus-col-operator {
       max-width: 110px;
@@ -2265,22 +2280,7 @@
                   <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
                   <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
                 </div>
-                <div id="bal-day-total" class="bal-section-total bal-top-day-total hidden">
-                  <h4 id="bal-day-title" class="bal-section-total-title">Balances</h4>
-                  <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
-                </div>
-                <div id="bonus-day-total" class="bal-section-total bal-top-day-total hidden">
-                  <h4 id="bonus-day-title" class="bal-section-total-title">Bonuses</h4>
-                  <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
-                </div>
-                <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
-                  <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
-                  <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
-                </div>
-              </div>
-
-              <div class="bal-filters">
-                <div class="bal-filters-row">
+                <div class="bal-top-controls">
                   <button type="button" id="bal-cal-toggle" class="btn-ghost" aria-haspopup="true" aria-expanded="false">Calendar</button>
                   <div class="bal-profile-picker" id="bal-profile-picker">
                     <button type="button" id="bal-profile-toggle" class="btn-ghost bal-profile-toggle" aria-haspopup="listbox" aria-expanded="false">All profiles</button>
@@ -2291,23 +2291,35 @@
                     <input type="hidden" id="bal-filter-profile" value="">
                   </div>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
-                </div>
-                <div id="bal-cal-popover" class="bal-cal-popover" hidden>
-                  <div class="mail-cal">
-                    <div class="mail-cal-head">
-                      <h4 id="bal-cal-title">—</h4>
-                      <div class="mail-cal-nav">
-                        <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
-                        <button type="button" id="bal-cal-today" title="Today">●</button>
-                        <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
+                  <div id="bal-cal-popover" class="bal-cal-popover" hidden>
+                    <div class="mail-cal">
+                      <div class="mail-cal-head">
+                        <h4 id="bal-cal-title">—</h4>
+                        <div class="mail-cal-nav">
+                          <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
+                          <button type="button" id="bal-cal-today" title="Today">●</button>
+                          <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
+                        </div>
                       </div>
+                      <div class="mail-cal-weekdays">
+                        <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                      </div>
+                      <div id="bal-cal-grid" class="mail-cal-grid"></div>
+                      <p id="bal-cal-hint" class="bal-cal-hint">1st click = start, 2nd click = end</p>
                     </div>
-                    <div class="mail-cal-weekdays">
-                      <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
-                    </div>
-                    <div id="bal-cal-grid" class="mail-cal-grid"></div>
-                    <p id="bal-cal-hint" class="bal-cal-hint">1st click = start, 2nd click = end</p>
                   </div>
+                </div>
+                <div id="bal-day-total" class="bal-section-total bal-top-day-total hidden">
+                  <span class="bal-month-total-label">Period total</span>
+                  <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
+                </div>
+                <div id="bonus-day-total" class="bal-section-total bal-top-day-total hidden">
+                  <span class="bal-month-total-label">Period total</span>
+                  <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
+                </div>
+                <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
+                  <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
+                  <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
                 </div>
               </div>
 
@@ -4273,13 +4285,11 @@
       const emptyEl = document.getElementById("bal-day-empty");
       const wrapEl = document.getElementById("bal-day-wrap");
       const bodyEl = document.getElementById("bal-day-body");
-      const titleEl = document.getElementById("bal-day-title");
       const statusEl = document.getElementById("bal-status");
       const totalWrap = document.getElementById("bal-day-total");
       const totalValue = document.getElementById("bal-day-total-value");
-      if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
+      if (!emptyEl || !wrapEl || !bodyEl) return;
       balProfilesCache = { profiles: Array.isArray(profiles) ? profiles : [], date, meta };
-      titleEl.textContent = `Balances · ${date}`;
       bodyEl.innerHTML = "";
       if (statusEl) {
         if (meta.error) {
@@ -4358,12 +4368,7 @@
 
     function bonusTypeBadge(type) {
       const raw = String(type || "Paid action").trim();
-      const key = raw.toLowerCase();
-      let variant = "";
-      if (key.includes("video")) variant = " type-video";
-      else if (key.includes("chat")) variant = " type-chat";
-      else if (key.includes("letter")) variant = " type-letter";
-      return `<span class="bonus-type-badge${variant}">${escapeHtml(raw)}</span>`;
+      return `<span class="bonus-type-badge">${escapeHtml(raw)}</span>`;
     }
 
     function parseBonusWhen(value) {
@@ -4572,8 +4577,6 @@
       const from = balCalState.fromDate;
       const to = balCalState.toDate;
       const label = balRangeLabel();
-      const titleEl = document.getElementById("bonus-day-title");
-      if (titleEl) titleEl.textContent = `Bonuses · ${label}`;
       try {
         const profileId = balCalState.profileId || "";
         const totalParams = new URLSearchParams({ from, to });
