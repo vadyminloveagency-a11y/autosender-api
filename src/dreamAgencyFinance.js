@@ -7,15 +7,25 @@ const LOGIN_URL = `${ORIGIN}/login`;
 const LOGIN_CHECK_URL = `${ORIGIN}/login_check`;
 const BONUSES_URL = `${ORIGIN}/finances/bonuses`;
 
+const PROFILE_STATUS_PATHS = {
+  active: "/profiles",
+  all: "/profiles/all",
+  inactive: "/profiles/inactive",
+  online: "/profiles/online",
+};
+
 /** @type {{ cookieHeader: string, expAt: number } | null} */
 let sessionCache = null;
 /** @type {Map<string, { at: number, rows: Array<{ profileId: string, name: string, amount: number }> }>} */
 const dayCache = new Map();
 /** @type {Map<string, { at: number, actions: Array<object> }>} */
 const detailCache = new Map();
+/** @type {{ at: number, status: string, profiles: Array<object> } | null} */
+let profilesCache = null;
 const SESSION_TTL_MS = 45 * 60_000;
 const DAY_CACHE_TTL_MS = 3 * 60_000;
 const DETAIL_CACHE_TTL_MS = 60_000;
+const PROFILES_CACHE_TTL_MS = 5 * 60_000;
 
 function cookieMapFromHeader(header) {
   const jar = new Map();
@@ -652,8 +662,100 @@ export async function fetchBonusActions(dayKey, options = {}) {
   return detail.actions;
 }
 
+/** Parse Dream agency profile cards from /profiles HTML. */
+export function parseAgencyProfilesHtml(html) {
+  const profiles = [];
+  const seen = new Set();
+  const chunks = String(html || "").split(
+    /<div class="col-12 col-md-6 col-lg-4"[^>]*>/i,
+  );
+  for (let i = 1; i < chunks.length; i += 1) {
+    const chunk = chunks[i];
+    const titleHtml =
+      chunk.match(/class="[^"]*card-title[^"]*"[^>]*>([\s\S]*?)<\/div>/i)?.[1] ||
+      "";
+    const name = stripTags(titleHtml).replace(/\s+/g, " ").trim();
+    const text = stripTags(chunk);
+    const profileId =
+      text.match(/Profile:\s*(\d+)/i)?.[1] ||
+      chunk.match(/\/profiles\/update\/(\d+)/i)?.[1] ||
+      chunk.match(/im(\d+)_\d+\.jpg/i)?.[1] ||
+      "";
+    if (!profileId || seen.has(profileId)) continue;
+    seen.add(profileId);
+    profiles.push({
+      profileId,
+      name: name || `Profile ${profileId}`,
+      regDate: text.match(/Reg:\s*(\d{2}\/\d{2}\/\d{4})/i)?.[1] || "",
+      status: text.match(/Status:\s*([A-Za-z]+)/i)?.[1] || "",
+      login: text.match(/Login:\s*([A-Za-z]+)/i)?.[1] || "",
+    });
+  }
+  return profiles;
+}
+
+/**
+ * Active Dream agency questionnaires (default /profiles = Active).
+ * @param {{ status?: keyof typeof PROFILE_STATUS_PATHS, force?: boolean }} [options]
+ */
+export async function fetchAgencyProfiles({
+  status = "active",
+  force = false,
+} = {}) {
+  const key = String(status || "active").toLowerCase();
+  const path = PROFILE_STATUS_PATHS[key];
+  if (!path) throw new Error(`Unknown profile status: ${status}`);
+
+  if (
+    !force &&
+    profilesCache &&
+    profilesCache.status === key &&
+    Date.now() - profilesCache.at < PROFILES_CACHE_TTL_MS
+  ) {
+    return profilesCache.profiles;
+  }
+
+  const url = `${ORIGIN}${path}`;
+  const headers = {
+    Accept: "text/html,application/xhtml+xml",
+    Referer: `${ORIGIN}/profiles`,
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  };
+
+  const jar = cookieMapFromHeader(await getCookieHeader());
+  let result = await fetchWithCookies(url, { method: "GET", jar, headers });
+
+  if (
+    /id="_username"/i.test(result.html) &&
+    /name="_password"/i.test(result.html)
+  ) {
+    const fresh = cookieMapFromHeader(await getCookieHeader({ force: true }));
+    result = await fetchWithCookies(url, {
+      method: "GET",
+      jar: fresh,
+      headers,
+    });
+  }
+
+  if (!result.response.ok) {
+    throw new Error(`Agency profiles HTTP ${result.response.status}`);
+  }
+
+  const cookieHeader = cookieHeaderFromJar(result.jar);
+  if (sessionCache) {
+    sessionCache.cookieHeader = cookieHeader;
+    sessionCache.expAt = Date.now() + SESSION_TTL_MS;
+  }
+
+  const profiles = parseAgencyProfilesHtml(result.html);
+  profilesCache = { at: Date.now(), status: key, profiles };
+  return profiles;
+}
+
 export function clearAgencyFinanceCaches() {
   sessionCache = null;
   dayCache.clear();
   detailCache.clear();
+  profilesCache = null;
 }

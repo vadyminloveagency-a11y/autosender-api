@@ -11,6 +11,7 @@ import {
 } from "../agencyFinanceStore.js";
 import {
   clearAgencyFinanceCaches,
+  fetchAgencyProfiles,
   fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
 import {
@@ -517,6 +518,36 @@ router.get("/bonuses-actions", adminMiddleware, async (req, res) => {
       profiles: [],
       error: error?.message || String(error),
     });
+  }
+});
+
+router.get("/dream-profiles", adminMiddleware, async (req, res) => {
+  try {
+    await ensureAgencyFinanceTables();
+    const status = String(req.query?.status || "active").toLowerCase();
+    const force = String(req.query?.force || "") === "1";
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.json({
+        ok: true,
+        configured: false,
+        status,
+        profiles: [],
+        count: 0,
+      });
+    }
+    const profiles = await fetchAgencyProfiles({ status, force });
+    return res.json({
+      ok: true,
+      configured: true,
+      status,
+      profiles,
+      count: profiles.length,
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ ok: false, error: error?.message || String(error) });
   }
 });
 

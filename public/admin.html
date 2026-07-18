@@ -2547,6 +2547,9 @@
     let mailingsTimer = null;
     let cachedOperators = [];
     let cachedProfiles = [];
+    /** Active Dream agency questionnaires from /profiles (not local Account Manager). */
+    let cachedDreamProfiles = [];
+    let dreamProfilesLoadedAt = 0;
     let dragProfileId = null;
 
     (function keepAmbientPlaying() {
@@ -4033,9 +4036,35 @@
       }
     }
 
+    async function ensureDreamActiveProfiles({ force = false } = {}) {
+      const fresh =
+        !force &&
+        cachedDreamProfiles.length &&
+        Date.now() - dreamProfilesLoadedAt < 5 * 60_000;
+      if (fresh) return cachedDreamProfiles;
+      try {
+        const data = await api(
+          `/agency-finance/dream-profiles?status=active${force ? "&force=1" : ""}`,
+        );
+        cachedDreamProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+        dreamProfilesLoadedAt = Date.now();
+        fillBalProfileOptions();
+      } catch (_) {
+        /* keep previous list */
+      }
+      return cachedDreamProfiles;
+    }
+
     function listBalFilterProfiles() {
       const seen = new Set();
       const rows = [];
+      for (const profile of cachedDreamProfiles) {
+        const id = String(profile.profileId || "").trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        const name = String(profile.name || "").trim() || `Profile ${id}`;
+        rows.push({ id, name });
+      }
       for (const profile of cachedProfiles) {
         const id = String(profile.femaleProfileId || "").trim();
         if (!id || seen.has(id)) continue;
@@ -4053,7 +4082,8 @@
       if (!toggle) return;
       const id = String(balCalState.profileId || "").trim();
       if (!id) {
-        toggle.textContent = "All profiles";
+        const n = cachedDreamProfiles.length;
+        toggle.textContent = n ? `All profiles · ${n}` : "All profiles";
         return;
       }
       const match = listBalFilterProfiles().find((row) => row.id === id);
@@ -4622,6 +4652,7 @@
       persistBalFilters();
       syncBalFilterInputs();
       fillBalProfileOptions();
+      void ensureDreamActiveProfiles();
       if (!balCalState.year || !balCalState.month) {
         const [y, m] = balCalState.selectedDate.split("-").map(Number);
         balCalState.year = y;
@@ -5082,6 +5113,7 @@
         document.getElementById("agency-finance-pass").value = "";
         setStatus("Agency login saved", "ok");
         await refreshAgencyFinanceCredsHint();
+        await ensureDreamActiveProfiles({ force: true });
         await refreshBalances({ quiet: true });
       } catch (error) {
         setStatus(error.message, "error");
@@ -5092,6 +5124,7 @@
       if (balCalState.activeTab === "bonuses") {
         balCalState.bonusesLoadedFor = "";
       }
+      void ensureDreamActiveProfiles({ force: true });
       void refreshBalances();
     });
     document.getElementById("bal-month-total")?.addEventListener("click", () => {
