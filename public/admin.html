@@ -9,12 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-0: #060910;
-      --bg-1: #0a0e12;
-      --bg-2: #12171c;
-      --bg-3: #171d23;
-      --surface: rgba(18, 23, 28, 0.72);
-      --surface-2: rgba(23, 29, 35, 0.88);
+      --bg-0: #0a0d14;
+      --bg-1: #0e1216;
+      --bg-2: #161b20;
+      --bg-3: #1b2127;
+      --surface: rgba(24, 29, 34, 0.72);
+      --surface-2: rgba(29, 35, 41, 0.88);
       --line: rgba(78, 98, 108, 0.45);
       --line-strong: rgba(255, 43, 58, 0.28);
       --text: #e9edf1;
@@ -35,7 +35,7 @@
         0 18px 48px rgba(0, 0, 0, 0.34),
         0 0 0 1px rgba(255, 43, 58, 0.1),
         0 0 32px rgba(255, 43, 58, 0.05);
-      --sidebar: rgba(14, 18, 22, 0.88);
+      --sidebar: rgba(20, 24, 28, 0.88);
       --sidebar-text: #e9edf1;
       --sidebar-muted: #98a1aa;
     }
@@ -72,7 +72,7 @@
       inset: 0;
       background:
         radial-gradient(circle at 50% 42%, rgba(255, 43, 58, 0.1), transparent 42%),
-        rgba(5, 8, 12, 0.42);
+        rgba(5, 8, 12, 0.32);
     }
     #auth-shell,
     #panel-shell {
@@ -92,7 +92,7 @@
     body.auth-page #admin-shared-ambient::after {
       background:
         radial-gradient(circle at 50% 42%, rgba(255, 40, 55, 0.1), transparent 42%),
-        rgba(5, 8, 12, 0.42);
+        rgba(5, 8, 12, 0.32);
     }
     .auth-card {
       width: 100%;
@@ -140,7 +140,7 @@
       padding: 18px 14px 8px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.72);
+      background: rgba(13, 19, 23, 0.72);
       color: var(--text);
       font: 14px/1.2 var(--font);
       outline: none;
@@ -254,7 +254,7 @@
       padding: 16px 14px 8px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.72);
+      background: rgba(13, 19, 23, 0.72);
       color: var(--text);
       font: 14px/1.2 var(--font);
       outline: none;
@@ -263,7 +263,7 @@
     .field select:focus {
       border-color: rgba(255, 43, 58, 0.5);
       box-shadow: 0 0 0 3px rgba(255, 43, 58, 0.1);
-      background: rgba(10, 16, 20, 0.9);
+      background: rgba(15, 21, 25, 0.9);
     }
     .field label {
       position: absolute;
@@ -552,7 +552,7 @@
       font-size: 11px;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      background: rgba(8, 14, 18, 0.75);
+      background: rgba(13, 19, 23, 0.75);
       white-space: nowrap;
     }
     .data-table th.sortable,
@@ -613,7 +613,7 @@
     .mail-progress-fill {
       height: 100%;
       border-radius: 999px;
-      background: linear-gradient(90deg, #1aa86a, var(--accent-strong));
+      background: linear-gradient(90deg, #c81f2c, var(--accent-strong));
       min-width: 0;
       transition: width 0.25s ease;
     }
@@ -632,7 +632,7 @@
       padding: 10px 12px;
       border: 1px solid rgba(255, 43, 58, 0.18);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.55);
+      background: rgba(13, 19, 23, 0.55);
       font-size: 13px;
       color: var(--text-soft);
     }
@@ -667,7 +667,7 @@
       width: 196px;
       border: 1px solid rgba(255, 43, 58, 0.18);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.55);
+      background: rgba(13, 19, 23, 0.55);
       padding: 8px;
     }
     .mail-day-panel {
@@ -803,7 +803,7 @@
       padding: 10px;
       border: 1px solid rgba(255, 43, 58, 0.16);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.45);
+      background: rgba(13, 19, 23, 0.45);
     }
     .mail-agency-creds-row {
       display: flex;
@@ -831,7 +831,7 @@
       padding: 10px;
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 10px;
-      background: rgba(8, 14, 18, 0.45);
+      background: rgba(13, 19, 23, 0.45);
     }
     .bal-filters-row {
       display: flex;
@@ -879,7 +879,7 @@
     .bonus-profiles,
     #bal-day-wrap {
       scrollbar-width: thin;
-      scrollbar-color: rgba(255, 43, 58, 0.35) #0c1216;
+      scrollbar-color: rgba(255, 43, 58, 0.35) #11151a;
     }
     .bonus-profiles::-webkit-scrollbar,
     #bal-day-wrap::-webkit-scrollbar {
@@ -888,14 +888,14 @@
     }
     .bonus-profiles::-webkit-scrollbar-track,
     #bal-day-wrap::-webkit-scrollbar-track {
-      background: #0c1216;
+      background: #11151a;
       border-radius: 8px;
     }
     .bonus-profiles::-webkit-scrollbar-thumb,
     #bal-day-wrap::-webkit-scrollbar-thumb {
       background: rgba(255, 43, 58, 0.28);
       border-radius: 8px;
-      border: 2px solid #0c1216;
+      border: 2px solid #11151a;
     }
     .bonus-profiles::-webkit-scrollbar-thumb:hover,
     #bal-day-wrap::-webkit-scrollbar-thumb:hover {
@@ -903,7 +903,7 @@
     }
     .bonus-profiles::-webkit-scrollbar-corner,
     #bal-day-wrap::-webkit-scrollbar-corner {
-      background: #0c1216;
+      background: #11151a;
     }
     @media (min-width: 981px) {
       body.panel-page {
@@ -1058,7 +1058,7 @@
       max-height: calc(100vh - 340px);
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 7px;
-      background: #0c1216;
+      background: #11151a;
     }
     .bonus-actions-table {
       width: 100%;
@@ -1235,7 +1235,7 @@
       height: 40px;
       border-radius: 50%;
       object-fit: cover;
-      background: rgba(8, 14, 18, 0.8);
+      background: rgba(13, 19, 23, 0.8);
       flex: 0 0 40px;
       border: 1px solid var(--line);
     }
@@ -1426,7 +1426,7 @@
     .create-modal .field input {
       min-height: 48px;
       border-radius: 12px;
-      background: rgba(8, 14, 18, 0.72);
+      background: rgba(13, 19, 23, 0.72);
     }
     .create-modal .btn-submit {
       width: 100%;
