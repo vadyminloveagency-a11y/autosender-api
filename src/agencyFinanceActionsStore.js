@@ -366,7 +366,11 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
          COUNT(DISTINCT action_type)::int AS action_type_count,
          COALESCE(SUM(amount_usd), 0) AS total_usd,
          MIN(day_key)::text AS first_day,
-         MAX(day_key)::text AS last_day
+         MAX(day_key)::text AS last_day,
+         (ARRAY_AGG(occurred_at ORDER BY day_key ASC, occurred_at ASC))[1]
+           AS first_occurred_at,
+         (ARRAY_AGG(occurred_at ORDER BY day_key DESC, occurred_at DESC))[1]
+           AS last_occurred_at
        FROM identified
        GROUP BY male_key
      )
@@ -430,6 +434,8 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
       totalUsd: Number(row.total_usd) || 0,
       firstDay: String(row.first_day || "").slice(0, 10),
       lastDay: String(row.last_day || "").slice(0, 10),
+      firstOccurredAt: String(row.first_occurred_at || ""),
+      lastOccurredAt: String(row.last_occurred_at || ""),
     })),
     coverage: {
       firstDay: String(stats.first_day || "").slice(0, 10),
