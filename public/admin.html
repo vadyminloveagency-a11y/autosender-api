@@ -1429,18 +1429,17 @@
     .bonus-actions-table tbody tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.02);
     }
-    .bonus-actions-table td:last-child {
+    .bonus-actions-table td:nth-child(7) {
       color: #ff2b3a;
       font-weight: 700;
-      text-align: center;
     }
-    .bonus-actions-table th:last-child { text-align: center; }
-    .bonus-actions-table th:nth-child(2),
-    .bonus-actions-table td:nth-child(2),
-    .bonus-actions-table th:nth-child(3),
-    .bonus-actions-table td:nth-child(3),
-    .bonus-actions-table th:nth-child(5),
-    .bonus-actions-table td:nth-child(5) { text-align: center; }
+    .bonus-actions-table td:first-child {
+      color: var(--muted);
+    }
+    .bonus-actions-table th:nth-child(-n+7),
+    .bonus-actions-table td:nth-child(-n+7) { text-align: center; }
+    .bonus-actions-table th:nth-child(4),
+    .bonus-actions-table td:nth-child(4) { text-align: left; }
     .bonus-actions-table .bonus-total-row td {
       border-bottom: 0;
       background: #140f11;
@@ -4242,6 +4241,10 @@
       const rows = [];
       for (const profile of Array.isArray(profiles) ? profiles : []) {
         const girl = formatBonusGirl(profile);
+        const girlId = String(profile?.profileId || "").trim();
+        const girlName =
+          String(profile?.displayName || profile?.dreamUsername || "").trim() ||
+          (girlId ? `Profile ${girlId}` : "—");
         const girlKey = String(profile?.displayName || profile?.dreamUsername || girl || "")
           .trim()
           .toLowerCase();
@@ -4250,6 +4253,8 @@
             type: action?.type || "Paid action",
             man: formatBonusMan(action),
             girl,
+            girlId,
+            girlName,
             girlKey,
             operator: String(action?.operatorName || action?.operatorEmail || "").trim(),
             operatorHtml: formatBonusOperator(action),
@@ -4323,14 +4328,16 @@
       listEl.classList.remove("hidden");
       const bodyRows = actions
         .map(
-          (row) => `
+          (row, index) => `
             <tr>
-              <td>${escapeHtml(row.type)}</td>
+              <td>${index + 1}</td>
               <td>${escapeHtml(row.man)}</td>
-              <td>${escapeHtml(row.girl)}</td>
-              <td>${row.operatorHtml}</td>
+              <td>${escapeHtml(row.girlId || "—")}</td>
+              <td>${escapeHtml(row.girlName || "—")}</td>
               <td>${escapeHtml(row.when)}</td>
+              <td>${escapeHtml(row.type)}</td>
               <td>${formatBalanceUsd(row.amountUsd)}</td>
+              <td>${row.operatorHtml}</td>
             </tr>`,
         )
         .join("");
@@ -4346,12 +4353,14 @@
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              ${th("type", "Type of Bonus")}
-              ${th("man", "Men")}
-              ${th("questionnaire", "Lady")}
-              ${th("operator", "Operator")}
+              <th>#</th>
+              ${th("man", "Man")}
+              ${th("questionnaire", "Lady ID")}
+              ${th("questionnaire", "Lady Name")}
               ${th("date", "Date")}
-              ${th("amount", "Amount")}
+              ${th("type", "Type")}
+              ${th("amount", "Dollars")}
+              ${th("operator", "Operator")}
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
