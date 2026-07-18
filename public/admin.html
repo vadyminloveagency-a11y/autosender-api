@@ -3141,6 +3141,21 @@
         <span>Incomplete days: <strong>${Number(coverage.incompleteDays || 0).toLocaleString("en-US")}</strong></span>
         <span>Stored history: <strong>${escapeHtml(coverage.firstDay || "—")} → ${escapeHtml(coverage.lastDay || "—")}</strong></span>
         <span>Cached days: <strong>${Number(coverage.cachedDays || 0).toLocaleString("en-US")}</strong></span>`;
+      if (Number(coverage.incompleteDays || 0) > 0 && Array.isArray(coverage.incompleteRows) && coverage.incompleteRows.length) {
+        const preview = coverage.incompleteRows
+          .slice(0, 8)
+          .map((row) => {
+            const gap = Math.max(
+              0,
+              (Number(row.officialTotalUsd) || 0) - (Number(row.actionsTotalUsd) || 0),
+            );
+            return `${row.day} (−${formatBalanceUsd(gap)})`;
+          })
+          .join(" · ");
+        summary.innerHTML += `<span style="flex:1 1 100%">Gaps: <strong>${escapeHtml(preview)}</strong>${
+          coverage.incompleteRows.length > 8 ? "…" : ""
+        }</span>`;
+      }
       body.innerHTML = men
         .map((man) => {
           const id = String(man.maleProfileId || "").trim();
@@ -3292,12 +3307,20 @@
             body: JSON.stringify({ limit: 14 }),
           });
           repairedTotal += Number(result.repaired) || 0;
+          const detailText = Array.isArray(result.details)
+            ? result.details
+                .filter((row) => !row.complete)
+                .slice(0, 4)
+                .map((row) => row.day)
+                .join(", ")
+            : "";
           await refreshGoldMen({
             force: true,
             keepBusy: true,
             quiet: true,
             statusText:
-              `Repairing incomplete days… round ${rounds} · repaired ${repairedTotal}`,
+              `Repairing incomplete days… round ${rounds} · repaired ${repairedTotal}` +
+              (detailText ? ` · still: ${detailText}` : ""),
           });
           const incompleteAfter = Number(goldMenCoverage.incompleteDays || 0);
           if (!(Array.isArray(result.days) && result.days.length)) break;

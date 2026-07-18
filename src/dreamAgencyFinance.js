@@ -112,21 +112,32 @@ export function parseBonusActions(html) {
     const cells = [...tr[0].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) =>
       stripTags(m[1]),
     );
-    if (cells.length !== 5) continue;
+    if (cells.length < 5) continue;
     if (/^Type of Bonus$/i.test(cells[0]) || /Total$/i.test(cells[0])) continue;
 
-    const manMatch = cells[1].match(/^(\d{5,})\s*(.*)$/);
-    const womanMatch = cells[2].match(/^\[(\d{5,})\]\s*(.*)$/);
-    const amount = parseMoney(cells[4]);
+    // Dream sometimes inserts an extra utility column; keep the first five semantic cells.
+    const type = cells[0];
+    const manCell = cells[1];
+    const womanCell = cells[2];
+    const dateCell = cells[3];
+    const amountCell = cells[cells.length - 1];
+
+    const manMatch =
+      manCell.match(/^(\d{5,})\s*(.*)$/) ||
+      manCell.match(/(\d{5,})\s*(.*)$/);
+    const womanMatch =
+      womanCell.match(/^\[(\d{5,})\]\s*(.*)$/) ||
+      womanCell.match(/\[(\d{5,})\]\s*(.*)$/);
+    const amount = parseMoney(amountCell);
     if (!womanMatch || !Number.isFinite(amount)) continue;
 
     actions.push({
-      type: cells[0],
+      type,
       maleProfileId: manMatch?.[1] || "",
-      maleName: String(manMatch?.[2] || "").trim(),
+      maleName: String(manMatch?.[2] || manCell || "").trim(),
       femaleProfileId: womanMatch[1],
       femaleName: String(womanMatch[2] || "").trim(),
-      occurredAt: cells[3],
+      occurredAt: dateCell,
       amountUsd: amount,
     });
   }
@@ -370,7 +381,37 @@ export async function fetchBonusesByGirl(dayKey, options = {}) {
   return fetchBonusesByGirlRange(dayKey, dayKey, options);
 }
 
-async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } = {}) {
+async function fetchBonusPage(day, page, pid, headers, cookieJar) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const result = await fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
+        method: "GET",
+        jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
+        headers,
+      });
+      if (/id="_username"/i.test(result.html) && /name="_password"/i.test(result.html)) {
+        const cookieHeader = await getCookieHeader({ force: true });
+        cookieJar = cookieMapFromHeader(cookieHeader);
+        continue;
+      }
+      if (!result.response.ok) {
+        lastError = new Error(`Agency bonuses HTTP ${result.response.status}`);
+        continue;
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error(`Failed to load bonuses page ${page}`);
+}
+
+function totalsMatch(actionsSum, targetTotal) {
+  return targetTotal != null && Math.abs(actionsSum - targetTotal) < 0.02;
+}
+
+async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0, allowSplit = true } = {}) {
   const day = String(dayKey || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
     throw new Error("Invalid day key");
@@ -388,7 +429,7 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
   }
 
   let cookieHeader = await getCookieHeader();
-  let jar = cookieMapFromHeader(cookieHeader);
+  let cookieJar = cookieMapFromHeader(cookieHeader);
   const headers = {
     Accept: "text/html,application/xhtml+xml",
     Referer: BONUSES_URL,
@@ -396,31 +437,10 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
-  let first = await fetchWithCookies(bonusesUrl(day, 1, 1, day, pid).toString(), {
-    method: "GET",
-    jar,
-    headers,
-  });
-  if (/id="_username"/i.test(first.html) && /name="_password"/i.test(first.html)) {
-    cookieHeader = await getCookieHeader({ force: true });
-    jar = cookieMapFromHeader(cookieHeader);
-    first = await fetchWithCookies(bonusesUrl(day, 1, 1, day, pid).toString(), {
-      method: "GET",
-      jar,
-      headers,
-    });
-  }
-  if (!first.response.ok) {
-    throw new Error(`Agency bonuses HTTP ${first.response.status}`);
-  }
-
   const byKey = new Map();
   const addActions = (rows) => {
     let added = 0;
-    // Dream already filters this response by its business day. That day runs
-    // 10:00–10:00 Kyiv and therefore legitimately contains timestamps from
-    // two calendar dates. Filtering again by the displayed calendar date
-    // discarded all actions between midnight and 10:00.
+    // Dream already filters this response by its business day (10:00–10:00 Kyiv).
     for (const action of filterRequestedActions(rows, pid)) {
       const key = actionDedupeKey(action);
       if (byKey.has(key)) continue;
@@ -430,62 +450,57 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     return added;
   };
 
+  const first = await fetchBonusPage(day, 1, pid, headers, cookieJar);
+  cookieJar = first.jar;
   let targetTotal = parseBonusGrandTotal(first.html);
   let detectedPages = maxPaginationPage(first.html);
-  let cookieJar = first.jar;
   addActions(parseBonusActions(first.html));
 
-  // Load every page Dream advertises, refreshing the last-page estimate as we go.
-  for (let start = 2; start <= detectedPages; start += 4) {
+  const loadPage = async (page) => {
+    const result = await fetchBonusPage(day, page, pid, headers, cookieJar);
+    cookieJar = result.jar;
+    if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
+    detectedPages = Math.max(detectedPages, maxPaginationPage(result.html));
+    addActions(parseBonusActions(result.html));
+    return result;
+  };
+
+  // Parallel batches first, then fill gaps sequentially if the total still mismatches.
+  for (let start = 2; start <= detectedPages; start += 3) {
+    if (totalsMatch(sumActionsUsd([...byKey.values()]), targetTotal)) break;
     const pageNumbers = Array.from(
-      { length: Math.min(4, detectedPages - start + 1) },
+      { length: Math.min(3, detectedPages - start + 1) },
       (_, index) => start + index,
     );
-    const results = await Promise.all(
-      pageNumbers.map((page) =>
-        fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
-          method: "GET",
-          jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
-          headers,
-        }),
-      ),
-    );
-    for (const result of results) {
-      if (!result.response.ok) continue;
-      cookieJar = result.jar;
-      if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
-      detectedPages = Math.max(detectedPages, maxPaginationPage(result.html));
-      addActions(parseBonusActions(result.html));
-    }
-    if (targetTotal != null && Math.abs(sumActionsUsd([...byKey.values()]) - targetTotal) < 0.02) {
-      break;
+    const results = await Promise.allSettled(pageNumbers.map((page) => loadPage(page)));
+    for (let index = 0; index < results.length; index += 1) {
+      if (results[index].status === "rejected") {
+        await loadPage(pageNumbers[index]);
+      }
     }
   }
 
-  // Keep walking past hidden pagination until totals match or pages run out.
   let emptyStreak = 0;
+  const pageLimit = Math.min(MAX_BONUS_PAGES, Math.max(detectedPages + 10, detectedPages, 2));
   for (
-    let page = detectedPages + 1;
-    page <= MAX_BONUS_PAGES &&
-    (targetTotal == null ||
-      Math.abs(sumActionsUsd([...byKey.values()]) - targetTotal) >= 0.02);
+    let page = 2;
+    page <= pageLimit &&
+    !totalsMatch(sumActionsUsd([...byKey.values()]), targetTotal);
     page += 1
   ) {
-    const result = await fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
-      method: "GET",
-      jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
-      headers,
-    });
-    if (!result.response.ok) break;
-    cookieJar = result.jar;
-    if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
-    const added = addActions(parseBonusActions(result.html));
-    if (!added) {
+    try {
+      const before = byKey.size;
+      await loadPage(page);
+      if (byKey.size === before) {
+        emptyStreak += 1;
+        if (emptyStreak >= 3 && page > detectedPages) break;
+      } else {
+        emptyStreak = 0;
+      }
+    } catch (_) {
       emptyStreak += 1;
-      if (emptyStreak >= 2) break;
-      continue;
+      if (emptyStreak >= 3) break;
     }
-    emptyStreak = 0;
   }
 
   // Fallback target from Group-by-Girl if footer total was missing.
@@ -498,6 +513,35 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
           .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
           .toFixed(2),
       );
+    } catch (_) {}
+  }
+
+  // Heavy days: split by questionnaire so Dream returns smaller page sets.
+  if (
+    allowSplit &&
+    !pid &&
+    targetTotal != null &&
+    !totalsMatch(sumActionsUsd([...byKey.values()]), targetTotal)
+  ) {
+    try {
+      const girls = await fetchBonusesByGirl(day, { force: true, profileId: 0 });
+      for (let index = 0; index < girls.length; index += 2) {
+        if (totalsMatch(sumActionsUsd([...byKey.values()]), targetTotal)) break;
+        const batch = girls.slice(index, index + 2);
+        const parts = await Promise.all(
+          batch.map(async (girl) => {
+            const girlId = Number(girl.profileId) || 0;
+            if (!girlId) return [];
+            const detail = await fetchBonusActionsOneDay(day, {
+              force: true,
+              profileId: girlId,
+              allowSplit: false,
+            });
+            return detail.actions || [];
+          }),
+        );
+        for (const rows of parts) addActions(rows);
+      }
     } catch (_) {}
   }
 

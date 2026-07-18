@@ -182,21 +182,27 @@ export async function loadCachedFinanceActionsRange(
 
 /** Re-fetch incomplete cached days against Dream Grand Total, oldest first. */
 export async function repairIncompleteFinanceDays({ limit = 14 } = {}) {
-  const days = await listIncompleteAgencyFinanceDays({
+  const rows = await listIncompleteAgencyFinanceDays({
     limit: Math.min(62, Math.max(1, Number(limit) || 14)),
   });
+  const days = rows.map((row) => row.day).filter(Boolean);
   const results = [];
-  for (let index = 0; index < days.length; index += 2) {
-    const batch = days.slice(index, index + 2);
-    const synced = await Promise.all(
-      batch.map((day) => syncOneDay(day, { force: true })),
-    );
-    results.push(...synced);
+  for (let index = 0; index < days.length; index += 1) {
+    // One day at a time for stubborn incomplete days: split-by-girl is heavy.
+    const synced = await syncOneDay(days[index], { force: true });
+    results.push(synced);
   }
   return {
     days: results.map((row) => row?.day).filter(Boolean),
     repaired: results.filter((row) => row?.complete).length,
     stillIncomplete: results.filter((row) => row && !row.complete).length,
+    details: results.map((row) => ({
+      day: row?.day || "",
+      complete: Boolean(row?.complete),
+      officialTotalUsd: Number(row?.officialTotalUsd) || 0,
+      actionsTotalUsd: Number(row?.actionsTotalUsd) || 0,
+      error: String(row?.error || ""),
+    })),
     officialTotalUsd: Number(
       results.reduce((sum, row) => sum + (Number(row?.officialTotalUsd) || 0), 0).toFixed(2),
     ),
