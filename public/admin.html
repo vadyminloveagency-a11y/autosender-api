@@ -3323,9 +3323,14 @@
       void refreshVisibleMonthTotal();
       const label = balRangeLabel();
       if (!quiet) {
+        const from = balCalState.fromDate || balCalState.selectedDate;
+        const to = balCalState.toDate || from;
+        const multi = from && to && from !== to;
         setStatus(
           balCalState.activeTab === "bonuses"
-            ? "Loading paid actions..."
+            ? multi
+              ? "Loading paid actions for the selected period..."
+              : "Loading paid actions..."
             : "Loading balances...",
         );
       }

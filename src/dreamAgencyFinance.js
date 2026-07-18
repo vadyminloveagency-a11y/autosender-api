@@ -145,18 +145,20 @@ function eachDreamDayKey(startDay, endDay) {
   return days;
 }
 
-/** Dream form fields use MM/DD/YYYY in the agency UI. */
-function dreamFormDate(dayKey) {
-  const day = String(dayKey || "").slice(0, 10);
-  const match = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return day;
-  return `${match[2]}/${match[3]}/${match[1]}`;
+/** Calendar day YYYY-MM-DD from Dream action timestamp MM/DD/YYYY HH:MM:SS. */
+function actionCalendarDayKey(occurredAt) {
+  const match = String(occurredAt || "").match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/,
+  );
+  if (!match) return "";
+  return `${match[3]}-${String(match[1]).padStart(2, "0")}-${String(match[2]).padStart(2, "0")}`;
 }
 
 function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 0) {
   const url = new URL(BONUSES_URL);
-  url.searchParams.set("form[startDate]", dreamFormDate(startDay));
-  url.searchParams.set("form[endDate]", dreamFormDate(endDay));
+  // Dream agency form accepts ISO dates (verified against live curls).
+  url.searchParams.set("form[startDate]", String(startDay || "").slice(0, 10));
+  url.searchParams.set("form[endDate]", String(endDay || startDay || "").slice(0, 10));
   url.searchParams.set("form[type]", "0");
   url.searchParams.set("form[profileId]", String(Number(profileId) || 0));
   url.searchParams.set("form[groupBy]", String(groupBy));
@@ -408,6 +410,8 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     .flatMap((html) => parseBonusActions(html))
     .filter((action) => {
       if (pid && String(action.femaleProfileId) !== String(pid)) return false;
+      // Drop rows Dream returned for the wrong calendar day.
+      if (actionCalendarDayKey(action.occurredAt) !== day) return false;
       const key = [
         action.type,
         action.maleProfileId,
@@ -454,13 +458,30 @@ export async function fetchBonusActionsRange(
   // Dream's ungrouped list over a long range often paginates poorly and
   // effectively returns only the newest day. Fetch day-by-day instead.
   const days = eachDreamDayKey(startDay, endDay);
+  if (force) {
+    detailCache.delete(cacheKey);
+    for (const day of days) detailCache.delete(`${day}|${day}|${pid}`);
+  }
+
   const merged = [];
-  for (let i = 0; i < days.length; i += 4) {
-    const batch = days.slice(i, i + 4);
+  const errors = [];
+  for (let i = 0; i < days.length; i += 3) {
+    const batch = days.slice(i, i + 3);
     const results = await Promise.all(
-      batch.map((day) => fetchBonusActionsOneDay(day, { force, profileId: pid })),
+      batch.map(async (day) => {
+        try {
+          return await fetchBonusActionsOneDay(day, { force, profileId: pid });
+        } catch (error) {
+          errors.push(`${day}: ${error?.message || error}`);
+          return [];
+        }
+      }),
     );
     for (const rows of results) merged.push(...rows);
+  }
+
+  if (!merged.length && errors.length) {
+    throw new Error(`Failed to load bonus actions (${errors[0]})`);
   }
 
   const seen = new Set();
