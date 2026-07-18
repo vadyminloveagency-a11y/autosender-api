@@ -1432,16 +1432,16 @@
     .bonus-actions-table tbody tr:hover {
       background: rgba(255, 43, 58, 0.08);
     }
-    .bonus-actions-table td:nth-child(6) {
+    .bonus-actions-table td:nth-child(7) {
       color: #ff2b3a;
       font-weight: 700;
     }
     .bonus-actions-table th,
     .bonus-actions-table td { text-align: center; }
-    .bonus-actions-table th:nth-child(3),
-    .bonus-actions-table td:nth-child(3) { text-align: left; }
-    .bonus-man-name { color: #fff; font-weight: 600; }
-    .bonus-man-id { color: var(--muted); font-size: 11px; }
+    .bonus-actions-table th:nth-child(2),
+    .bonus-actions-table td:nth-child(2),
+    .bonus-actions-table th:nth-child(4),
+    .bonus-actions-table td:nth-child(4) { text-align: left; }
     .bonus-when-time { color: #fff; font-weight: 600; }
     .bonus-when-date { color: var(--muted); margin-left: 6px; }
     .bonus-op-none { color: rgba(152, 161, 170, 0.35); }
@@ -4234,15 +4234,6 @@
       return `<span class="bonus-op-none">—</span>`;
     }
 
-    function bonusManHtml(row) {
-      const id = String(row.manId || "").trim();
-      const name = String(row.manName || "").trim();
-      if (!id && !name) return "—";
-      return `<span class="bonus-man-name">${escapeHtml(name || "—")}</span>${
-        id ? ` <span class="bonus-man-id">${escapeHtml(id)}</span>` : ""
-      }`;
-    }
-
     function bonusWhenHtml(row) {
       if (!row.whenTime && !row.whenDate) return escapeHtml(row.when || "—");
       return `<span class="bonus-when-time">${escapeHtml(row.whenTime || "")}</span><span class="bonus-when-date">${escapeHtml(
@@ -4381,7 +4372,8 @@
         .map(
           (row) => `
             <tr>
-              <td>${bonusManHtml(row)}</td>
+              <td>${escapeHtml(row.manId || "—")}</td>
+              <td>${escapeHtml(row.manName || "—")}</td>
               <td>${escapeHtml(row.girlId || "—")}</td>
               <td>${escapeHtml(row.girlName || "—")}</td>
               <td>${bonusWhenHtml(row)}</td>
@@ -4403,7 +4395,8 @@
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              ${th("man", "Man")}
+              ${th("man", "Man ID")}
+              ${th("man", "Man Name")}
               ${th("questionnaire", "Lady ID")}
               ${th("questionnaire", "Lady Name")}
               ${th("date", "Date")}
@@ -4415,7 +4408,7 @@
           <tbody>${bodyRows}</tbody>
           <tfoot>
             <tr class="bonus-total-row">
-              <td colspan="5">Total · ${actions.length.toLocaleString("en-US")} actions</td>
+              <td colspan="6">Total · ${actions.length.toLocaleString("en-US")} actions</td>
               <td>${formatBalanceUsd(totalUsd)}</td>
               <td></td>
             </tr>
