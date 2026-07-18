@@ -20,6 +20,7 @@ import {
 import {
   listAgencyFinanceActions,
   listAgencyFinanceDaySyncs,
+  listAgencyFinanceManQuestionnaires,
   listAgencyFinanceMen,
 } from "../agencyFinanceActionsStore.js";
 import { dreamDayKey } from "../dreamDay.js";
@@ -147,6 +148,22 @@ router.get("/gold-men", adminMiddleware, async (req, res) => {
       ok: false,
       men: [],
       coverage: {},
+      error: error?.message || String(error),
+    });
+  }
+});
+
+router.get("/gold-men/questionnaires", adminMiddleware, async (req, res) => {
+  try {
+    const questionnaires = await listAgencyFinanceManQuestionnaires({
+      maleProfileId: req.query?.maleProfileId,
+      maleName: req.query?.maleName,
+    });
+    return res.json({ ok: true, questionnaires });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      questionnaires: [],
       error: error?.message || String(error),
     });
   }

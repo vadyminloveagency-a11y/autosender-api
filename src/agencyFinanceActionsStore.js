@@ -347,40 +347,12 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
          male_profile_id,
          male_name,
          female_profile_id,
-         female_name,
          action_type,
          day_key,
          occurred_at,
          amount_usd
        FROM agency_finance_actions
        WHERE male_profile_id <> '' OR TRIM(male_name) <> ''
-     ),
-     by_girl AS (
-       SELECT
-         male_key,
-         female_profile_id,
-         (ARRAY_AGG(female_name ORDER BY day_key DESC, occurred_at DESC)
-           FILTER (WHERE TRIM(female_name) <> ''))[1] AS female_name,
-         COUNT(*)::int AS action_count,
-         COALESCE(SUM(amount_usd), 0) AS total_usd
-       FROM identified
-       WHERE female_profile_id <> ''
-       GROUP BY male_key, female_profile_id
-     ),
-     questionnaires_by_man AS (
-       SELECT
-         male_key,
-         json_agg(
-           json_build_object(
-             'femaleProfileId', female_profile_id,
-             'femaleName', COALESCE(female_name, ''),
-             'actionCount', action_count,
-             'totalUsd', total_usd
-           )
-           ORDER BY total_usd DESC, female_name, female_profile_id
-         ) AS questionnaires
-       FROM by_girl
-       GROUP BY male_key
      ),
      grouped AS (
        SELECT
@@ -402,11 +374,8 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
        FROM identified
        GROUP BY male_key
      )
-     SELECT
-       g.*,
-       COALESCE(q.questionnaires, '[]'::json) AS questionnaires
+     SELECT g.*
      FROM grouped g
-     LEFT JOIN questionnaires_by_man q ON q.male_key = g.male_key
      WHERE $1 = ''
        OR COALESCE(g.male_profile_id, '') ILIKE '%' || $1 || '%'
        OR COALESCE(g.male_name, '') ILIKE '%' || $1 || '%'
@@ -456,16 +425,7 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
     incompleteRows = [];
   }
   return {
-    men: result.rows.map((row) => {
-      let questionnaires = [];
-      try {
-        questionnaires = Array.isArray(row.questionnaires)
-          ? row.questionnaires
-          : JSON.parse(row.questionnaires || "[]");
-      } catch (_) {
-        questionnaires = [];
-      }
-      return {
+    men: result.rows.map((row) => ({
         maleProfileId: String(row.male_profile_id || ""),
         maleName: String(row.male_name || ""),
         actionCount: Number(row.action_count) || 0,
@@ -476,14 +436,7 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
         lastDay: String(row.last_day || "").slice(0, 10),
         firstOccurredAt: String(row.first_occurred_at || ""),
         lastOccurredAt: String(row.last_occurred_at || ""),
-        questionnaires: questionnaires.map((item) => ({
-          femaleProfileId: String(item.femaleProfileId || ""),
-          femaleName: String(item.femaleName || ""),
-          actionCount: Number(item.actionCount) || 0,
-          totalUsd: Number(item.totalUsd) || 0,
-        })),
-      };
-    }),
+      })),
     coverage: {
       firstDay: String(stats.first_day || "").slice(0, 10),
       lastDay: String(stats.last_day || "").slice(0, 10),
@@ -504,5 +457,39 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
       oldestSyncedDay: String(stats.oldest_synced_day || "").slice(0, 10),
     },
   };
+}
+
+/** Breakdown loaded only when the director hovers a man's questionnaire count. */
+export async function listAgencyFinanceManQuestionnaires({
+  maleProfileId = "",
+  maleName = "",
+} = {}) {
+  const id = String(maleProfileId || "").trim();
+  const name = String(maleName || "").trim();
+  if (!id && !name) return [];
+  const db = getPool();
+  const result = await db.query(
+    `SELECT
+       female_profile_id,
+       (ARRAY_AGG(female_name ORDER BY day_key DESC, occurred_at DESC)
+         FILTER (WHERE TRIM(female_name) <> ''))[1] AS female_name,
+       COUNT(*)::int AS action_count,
+       COALESCE(SUM(amount_usd), 0) AS total_usd
+     FROM agency_finance_actions
+     WHERE female_profile_id <> ''
+       AND (
+         ($1 <> '' AND male_profile_id = $1)
+         OR ($1 = '' AND LOWER(TRIM(male_name)) = LOWER($2))
+       )
+     GROUP BY female_profile_id
+     ORDER BY total_usd DESC, female_name, female_profile_id`,
+    [id, name],
+  );
+  return result.rows.map((row) => ({
+    femaleProfileId: String(row.female_profile_id || ""),
+    femaleName: String(row.female_name || ""),
+    actionCount: Number(row.action_count) || 0,
+    totalUsd: Number(row.total_usd) || 0,
+  }));
 }
 

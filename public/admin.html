@@ -3143,6 +3143,8 @@
     let goldMenLoading = false;
     let goldMenCache = [];
     let goldMenCoverage = {};
+    const goldMenQuestionnaireCache = new Map();
+    let goldMenQuestionnaireAnchor = null;
     const goldMenSortState = { key: "date", dir: "desc" };
 
     function syncGoldMenPeriodDefaults() {
@@ -3205,17 +3207,60 @@
     function hideGoldMenQuestionnairesTip() {
       const tip = document.getElementById("gold-q-popover");
       if (!tip) return;
+      goldMenQuestionnaireAnchor = null;
       tip.classList.remove("is-open");
       tip.hidden = true;
       tip.innerHTML = "";
     }
 
-    function showGoldMenQuestionnairesTip(anchor, questionnaires) {
+    function positionGoldMenQuestionnairesTip(anchor, tip) {
+      const rect = anchor.getBoundingClientRect();
+      const tipWidth = Math.min(360, tip.offsetWidth || 260);
+      const tipHeight = tip.offsetHeight || 120;
+      let left = rect.right - tipWidth;
+      let top = rect.top - tipHeight - 8;
+      if (left < 8) left = 8;
+      if (left + tipWidth > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - tipWidth - 8);
+      }
+      if (top < 8) top = rect.bottom + 8;
+      tip.style.left = `${Math.round(left)}px`;
+      tip.style.top = `${Math.round(top)}px`;
+    }
+
+    async function showGoldMenQuestionnairesTip(anchor, man) {
       const tip = document.getElementById("gold-q-popover");
       if (!tip || !anchor) return;
-      const rows = Array.isArray(questionnaires) ? questionnaires : [];
+      goldMenQuestionnaireAnchor = anchor;
+      const maleProfileId = String(man?.maleProfileId || "").trim();
+      const maleName = String(man?.maleName || "").trim();
+      const cacheKey = maleProfileId ? `id:${maleProfileId}` : `name:${maleName.toLowerCase()}`;
+      let rows = goldMenQuestionnaireCache.get(cacheKey);
+      if (!rows) {
+        tip.innerHTML = `<p class="gold-q-title" style="margin:0">Loading questionnaires…</p>`;
+        tip.hidden = false;
+        tip.classList.add("is-open");
+        positionGoldMenQuestionnairesTip(anchor, tip);
+        try {
+          const params = new URLSearchParams();
+          if (maleProfileId) params.set("maleProfileId", maleProfileId);
+          else params.set("maleName", maleName);
+          const data = await api(`/agency-finance/gold-men/questionnaires?${params.toString()}`);
+          rows = Array.isArray(data?.questionnaires) ? data.questionnaires : [];
+          goldMenQuestionnaireCache.set(cacheKey, rows);
+        } catch (error) {
+          if (goldMenQuestionnaireAnchor !== anchor) return;
+          tip.innerHTML = `<p class="gold-q-title" style="margin:0">${escapeHtml(error.message || String(error))}</p>`;
+          positionGoldMenQuestionnairesTip(anchor, tip);
+          return;
+        }
+      }
+      if (goldMenQuestionnaireAnchor !== anchor) return;
       if (!rows.length) {
-        hideGoldMenQuestionnairesTip();
+        tip.innerHTML = `<p class="gold-q-title" style="margin:0">No questionnaire details</p>`;
+        tip.hidden = false;
+        tip.classList.add("is-open");
+        positionGoldMenQuestionnairesTip(anchor, tip);
         return;
       }
       tip.innerHTML = `
@@ -3235,18 +3280,7 @@
           .join("")}`;
       tip.hidden = false;
       tip.classList.add("is-open");
-      const rect = anchor.getBoundingClientRect();
-      const tipWidth = Math.min(360, tip.offsetWidth || 260);
-      const tipHeight = tip.offsetHeight || 120;
-      let left = rect.right - tipWidth;
-      let top = rect.top - tipHeight - 8;
-      if (left < 8) left = 8;
-      if (left + tipWidth > window.innerWidth - 8) {
-        left = Math.max(8, window.innerWidth - tipWidth - 8);
-      }
-      if (top < 8) top = rect.bottom + 8;
-      tip.style.left = `${Math.round(left)}px`;
-      tip.style.top = `${Math.round(top)}px`;
+      positionGoldMenQuestionnairesTip(anchor, tip);
     }
 
     function renderGoldMen(data) {
@@ -4827,7 +4861,7 @@
       if (!count || !document.getElementById("gold-men-body")?.contains(count)) return;
       const index = Number(count.getAttribute("data-gold-q-index"));
       const man = sortGoldMenRows(goldMenCache)[index];
-      showGoldMenQuestionnairesTip(count, man?.questionnaires || []);
+      void showGoldMenQuestionnairesTip(count, man);
     });
     document.getElementById("gold-men-body")?.addEventListener("mouseout", (event) => {
       const count = event.target.closest(".gold-q-count");
@@ -4841,7 +4875,7 @@
       if (!count) return;
       const index = Number(count.getAttribute("data-gold-q-index"));
       const man = sortGoldMenRows(goldMenCache)[index];
-      showGoldMenQuestionnairesTip(count, man?.questionnaires || []);
+      void showGoldMenQuestionnairesTip(count, man);
     });
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
       hideGoldMenQuestionnairesTip();
