@@ -4293,18 +4293,6 @@
 
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
-      if (statusEl && !meta.error && meta.configured !== false) {
-        const dates = [...new Set(actions.map((row) => String(row.when || "").slice(0, 10)).filter(Boolean))];
-        const dayCount = dates.length || 1;
-        const base =
-          dayCount > 1
-            ? `${actions.length} actions across ${dayCount} days · newest first — scroll down for earlier days`
-            : `${actions.length} actions · newest first`;
-        statusEl.style.display = "block";
-        statusEl.textContent = meta.listIncomplete
-          ? `${base}. Incomplete list — still loading from Dream or refresh again.`
-          : base;
-      }
       const bodyRows = actions
         .map(
           (row) => `
