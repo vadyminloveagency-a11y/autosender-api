@@ -848,6 +848,49 @@
     #bal-day-wrap::-webkit-scrollbar-corner {
       background: #0c1216;
     }
+    @media (min-width: 981px) {
+      body.panel-page {
+        height: 100vh;
+        overflow: hidden;
+      }
+      body.panel-page .panel-layout {
+        height: 100vh;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #section-balances > .panel-card {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #section-balances .mail-calendar-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+        flex-wrap: nowrap;
+        margin-bottom: 0;
+        overflow: hidden;
+      }
+      #section-balances .mail-day-panel {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #section-balances .bal-tab-panel.is-active {
+        height: 100%;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      #section-balances .bonus-profiles,
+      #section-balances #bal-day-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+      }
+    }
     .mail-balance {
       font-weight: 700;
       font-variant-numeric: tabular-nums;
@@ -3194,6 +3237,15 @@
 
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
+      if (statusEl && !meta.error && meta.configured !== false) {
+        const dates = [...new Set(actions.map((row) => String(row.when || "").slice(0, 10)).filter(Boolean))];
+        const dayCount = dates.length || 1;
+        statusEl.style.display = "block";
+        statusEl.textContent =
+          dayCount > 1
+            ? `${actions.length} actions across ${dayCount} days · newest first — scroll down for earlier days`
+            : `${actions.length} actions · newest first`;
+      }
       const bodyRows = actions
         .map(
           (row) => `
