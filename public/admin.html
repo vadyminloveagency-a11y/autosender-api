@@ -1427,7 +1427,10 @@
       z-index: 2;
     }
     .bonus-actions-table tbody tr:nth-child(even) {
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(255, 255, 255, 0.045);
+    }
+    .bonus-actions-table tbody tr:hover {
+      background: rgba(255, 43, 58, 0.08);
     }
     .bonus-actions-table td:nth-child(6) {
       color: #ff2b3a;
@@ -1437,12 +1440,36 @@
     .bonus-actions-table td { text-align: center; }
     .bonus-actions-table th:nth-child(3),
     .bonus-actions-table td:nth-child(3) { text-align: left; }
-    .bonus-actions-table .bonus-total-row td {
+    .bonus-man-name { color: #fff; font-weight: 600; }
+    .bonus-man-id { color: var(--muted); font-size: 11px; }
+    .bonus-when-time { color: #fff; font-weight: 600; }
+    .bonus-when-date { color: var(--muted); margin-left: 6px; }
+    .bonus-op-none { color: rgba(152, 161, 170, 0.35); }
+    .bonus-type-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(78, 98, 108, 0.45);
+      background: rgba(255, 255, 255, 0.03);
+      color: #dde3e9;
+      font: 600 11px/1 var(--font);
+      white-space: nowrap;
+    }
+    .bonus-type-badge.type-letter { border-color: rgba(255, 43, 58, 0.45); }
+    .bonus-type-badge.type-chat { border-color: rgba(86, 156, 214, 0.55); }
+    .bonus-type-badge.type-video { border-color: rgba(197, 134, 192, 0.55); }
+    .bonus-actions-table tfoot .bonus-total-row td {
       border-bottom: 0;
+      border-top: 1px solid rgba(255, 43, 58, 0.35);
       background: #140f11;
       color: #dde3e9;
       font-weight: 800;
+      position: sticky;
+      bottom: 0;
     }
+    .bonus-actions-table tfoot .bonus-total-row td:nth-child(2) { color: #ff2b3a; }
+    .bonus-actions-table tfoot .bonus-total-row td:first-child { text-align: right; }
     .scan-btn {
       border: 1px solid rgba(255, 43, 58, 0.45);
       border-radius: 7px;
@@ -4204,7 +4231,33 @@
       const name = String(action?.operatorName || "").trim();
       const email = String(action?.operatorEmail || "").trim();
       if (name || email) return escapeHtml(name || email);
-      return "—";
+      return `<span class="bonus-op-none">—</span>`;
+    }
+
+    function bonusManHtml(row) {
+      const id = String(row.manId || "").trim();
+      const name = String(row.manName || "").trim();
+      if (!id && !name) return "—";
+      return `<span class="bonus-man-name">${escapeHtml(name || "—")}</span>${
+        id ? ` <span class="bonus-man-id">${escapeHtml(id)}</span>` : ""
+      }`;
+    }
+
+    function bonusWhenHtml(row) {
+      if (!row.whenTime && !row.whenDate) return escapeHtml(row.when || "—");
+      return `<span class="bonus-when-time">${escapeHtml(row.whenTime || "")}</span><span class="bonus-when-date">${escapeHtml(
+        row.whenDate || "",
+      )}</span>`;
+    }
+
+    function bonusTypeBadge(type) {
+      const label = String(type || "Paid action").trim();
+      const key = label.toLowerCase();
+      let variant = "";
+      if (key.includes("video")) variant = " type-video";
+      else if (key.includes("chat")) variant = " type-chat";
+      else if (key.includes("letter")) variant = " type-letter";
+      return `<span class="bonus-type-badge${variant}">${escapeHtml(label)}</span>`;
     }
 
     function parseBonusWhen(value) {
@@ -4218,20 +4271,16 @@
       return Number.isFinite(t) ? t : 0;
     }
 
-    function formatBonusWhen(value) {
+    function splitBonusWhen(value) {
       const raw = String(value || "").trim();
-      if (!raw) return "—";
+      if (!raw) return { text: "—", time: "", date: "" };
       const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
       if (m) {
-        const day = String(+m[2]).padStart(2, "0");
-        const month = String(+m[1]).padStart(2, "0");
-        const year = m[3];
-        const hour = String(+m[4]).padStart(2, "0");
-        const minute = m[5];
-        const second = m[6];
-        return `${hour}:${minute}:${second} ${day}.${month}.${year}`;
+        const date = `${String(+m[2]).padStart(2, "0")}.${String(+m[1]).padStart(2, "0")}.${m[3]}`;
+        const time = `${String(+m[4]).padStart(2, "0")}:${m[5]}:${m[6]}`;
+        return { text: `${time} ${date}`, time, date };
       }
-      return raw;
+      return { text: raw, time: "", date: "" };
     }
 
     function flattenBonusActions(profiles) {
@@ -4246,16 +4295,21 @@
           .trim()
           .toLowerCase();
         for (const action of Array.isArray(profile?.actions) ? profile.actions : []) {
+          const when = splitBonusWhen(action?.occurredAt);
           rows.push({
             type: action?.type || "Paid action",
             man: formatBonusMan(action),
+            manId: String(action?.maleProfileId || "").trim(),
+            manName: String(action?.maleName || "").trim(),
             girl,
             girlId,
             girlName,
             girlKey,
             operator: String(action?.operatorName || action?.operatorEmail || "").trim(),
             operatorHtml: formatBonusOperator(action),
-            when: formatBonusWhen(action?.occurredAt),
+            when: when.text,
+            whenTime: when.time,
+            whenDate: when.date,
             whenTs: parseBonusWhen(action?.occurredAt),
             amountUsd: Number(action?.amountUsd) || 0,
           });
@@ -4327,11 +4381,11 @@
         .map(
           (row) => `
             <tr>
-              <td>${escapeHtml(row.man)}</td>
+              <td>${bonusManHtml(row)}</td>
               <td>${escapeHtml(row.girlId || "—")}</td>
               <td>${escapeHtml(row.girlName || "—")}</td>
-              <td>${escapeHtml(row.when)}</td>
-              <td>${escapeHtml(row.type)}</td>
+              <td>${bonusWhenHtml(row)}</td>
+              <td>${bonusTypeBadge(row.type)}</td>
               <td>${formatBalanceUsd(row.amountUsd)}</td>
               <td>${row.operatorHtml}</td>
             </tr>`,
@@ -4359,6 +4413,13 @@
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
+          <tfoot>
+            <tr class="bonus-total-row">
+              <td colspan="5">Total · ${actions.length.toLocaleString("en-US")} actions</td>
+              <td>${formatBalanceUsd(totalUsd)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>`;
     }
 
