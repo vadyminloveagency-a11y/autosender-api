@@ -476,11 +476,11 @@ async function listActiveMailingJobs() {
   }
 
   return [...byKey.values()].map((job) => {
-    const dreamTotal = Math.max(
-      Number(job.dailyTotal) || 0,
-      Number(job.daySent) || 0,
-      dailyLetterBotByProfile.get(String(job.profileId)) || 0,
-    );
+    // Letters today = Dream TOTAL DAY only. Never mix with AutoSender run counter (daySent).
+    const dreamTotal =
+      Number(job.dailyTotal) > 0
+        ? Number(job.dailyTotal)
+        : dailyLetterBotByProfile.get(String(job.profileId)) || 0;
     if ((Number(job.dailyTotal) || 0) > 0) {
       void setMailingDailyLettersAbsolute({
         dayKey: kyivDayKey(),
@@ -492,7 +492,6 @@ async function listActiveMailingJobs() {
     }
     return {
       ...job,
-      // Letters today = Dream LetterBot TOTAL DAY (live or persisted), not AutoSender run count.
       daySent: dreamTotal,
     };
   }).sort((a, b) => {

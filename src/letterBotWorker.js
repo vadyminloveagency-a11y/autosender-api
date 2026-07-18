@@ -146,16 +146,18 @@ class LetterBotWorker {
       /Daily\s*Total\s*<\/t[hd]>\s*<t[hd][^>]*>\s*([\d,\s]+)/i,
       /Daily\s*Total\s*:?\s*(?:<[^>]+>\s*){0,8}([\d]{1,3}(?:,\d{3})+|\d+)/i,
       /Total\s*Day\s*:?\s*(?:<[^>]+>\s*){0,8}([\d]{1,3}(?:,\d{3})+|\d+)/i,
+      /TOTAL\s*DAY\s*:?\s*(?:<[^>]+>\s*){0,8}([\d]{1,3}(?:,\d{3})+|\d+)/i,
       /id=["']dailyTotal["'][^>]*>\s*([\d,\s]+)/i,
       /["']dailyTotal["']\s*[:=]\s*["']?([\d,]+)/i,
       /Daily\s*Total\s*:?\s*([\d,\s]+)/i,
       /Today's\s*Total\s*:?\s*([\d,\s]+)/i,
     ];
+    const found = [];
     for (const pattern of patterns) {
       const match = raw.match(pattern);
       if (match?.[1]) {
         const normalized = this.normalizeDailyTotalValue(match[1]);
-        if (normalized) return normalized;
+        if (normalized) found.push(normalized);
       }
     }
     const plain = raw
@@ -164,8 +166,62 @@ class LetterBotWorker {
       .replace(/<[^>]+>/g, " ")
       .replace(/&nbsp;/gi, " ")
       .replace(/\s+/g, " ");
-    const plainMatch = plain.match(/(?:Daily\s*Total|Total\s*Day|Today's\s*Total)\s*:?\s*([\d,]+)/i);
-    return this.normalizeDailyTotalValue(plainMatch?.[1]) || null;
+    const plainMatch = plain.match(
+      /(?:Daily\s*Total|Total\s*Day|TOTAL\s*DAY|Today's\s*Total)\s*:?\s*([\d,]+)/i,
+    );
+    if (plainMatch?.[1]) {
+      const normalized = this.normalizeDailyTotalValue(plainMatch[1]);
+      if (normalized) found.push(normalized);
+    }
+    // Prefer the largest plausible Dream day total (ignore tiny false matches).
+    let best = null;
+    let bestNum = -1;
+    for (const value of found) {
+      const num = Number(String(value).replace(/,/g, ""));
+      if (!Number.isFinite(num) || num < 0) continue;
+      if (num >= bestNum) {
+        bestNum = num;
+        best = value;
+      }
+    }
+    return best;
+  }
+
+  async scrapeDailyTotalFromDreamPages() {
+    if (!this.cookieHeader) return null;
+    const urls = [
+      `${ORIGIN}/members/messaging/bot/send`,
+      `${ORIGIN}/members/messaging/bot/`,
+      `${ORIGIN}/members/`,
+    ];
+    let best = null;
+    let bestNum = -1;
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(20000),
+          headers: {
+            Accept: "text/html,application/xhtml+xml",
+            Cookie: this.cookieHeader,
+            Referer: BOT_SEND_URL,
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+        });
+        this.mergeSetCookies(response);
+        if (!response.ok) continue;
+        const value = this.extractDailyTotalFromBotHtml(await response.text());
+        const num = Number(String(value || "").replace(/,/g, ""));
+        if (!Number.isFinite(num) || num < 0) continue;
+        if (num >= bestNum) {
+          bestNum = num;
+          best = value;
+        }
+      } catch (_) {}
+    }
+    return best;
   }
 
   applyDailyTotal(raw) {
@@ -402,7 +458,11 @@ class LetterBotWorker {
     }
     if (!response.ok) throw new Error(`Could not load Letter Bot page (${response.status})`);
     const html = await response.text();
-    if (this.applyDailyTotal(this.extractDailyTotalFromBotHtml(html))) {
+    let dailyFromPage = this.extractDailyTotalFromBotHtml(html);
+    if (!dailyFromPage) {
+      dailyFromPage = await this.scrapeDailyTotalFromDreamPages();
+    }
+    if (this.applyDailyTotal(dailyFromPage)) {
       this.emitState();
     }
     const match =
