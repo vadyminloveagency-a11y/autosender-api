@@ -15,6 +15,7 @@ const dayCache = new Map();
 const detailCache = new Map();
 const SESSION_TTL_MS = 45 * 60_000;
 const DAY_CACHE_TTL_MS = 3 * 60_000;
+const DETAIL_CACHE_TTL_MS = 60_000;
 
 function cookieMapFromHeader(header) {
   const jar = new Map();
@@ -132,12 +133,12 @@ export function parseBonusActions(html) {
   return actions;
 }
 
-function bonusesUrl(day, groupBy, page = 1) {
+function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 0) {
   const url = new URL(BONUSES_URL);
-  url.searchParams.set("form[startDate]", day);
-  url.searchParams.set("form[endDate]", day);
+  url.searchParams.set("form[startDate]", startDay);
+  url.searchParams.set("form[endDate]", endDay);
   url.searchParams.set("form[type]", "0");
-  url.searchParams.set("form[profileId]", "0");
+  url.searchParams.set("form[profileId]", String(Number(profileId) || 0));
   url.searchParams.set("form[groupBy]", String(groupBy));
   url.searchParams.set("form[extra]", "");
   if (page > 1) url.searchParams.set("page", String(page));
@@ -253,18 +254,27 @@ async function getCookieHeader({ force = false } = {}) {
   return loginAgency();
 }
 
-export async function fetchBonusesByGirl(dayKey, { force = false } = {}) {
-  const day = String(dayKey || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    throw new Error("Invalid day key");
+export async function fetchBonusesByGirlRange(
+  startDayKey,
+  endDayKey = startDayKey,
+  { force = false, profileId = 0 } = {},
+) {
+  const startDay = String(startDayKey || "").slice(0, 10);
+  const endDay = String(endDayKey || "").slice(0, 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDay) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(endDay)
+  ) {
+    throw new Error("Invalid date range");
   }
 
-  const cached = dayCache.get(day);
+  const cacheKey = `${startDay}|${endDay}|${Number(profileId) || 0}`;
+  const cached = dayCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < DAY_CACHE_TTL_MS) {
     return cached.rows;
   }
 
-  const url = bonusesUrl(day, 2); // Group By Girl
+  const url = bonusesUrl(startDay, 2, 1, endDay, profileId); // Group By Girl
 
   const jar = cookieMapFromHeader(await getCookieHeader());
   let result = await fetchWithCookies(url.toString(), {
@@ -303,8 +313,12 @@ export async function fetchBonusesByGirl(dayKey, { force = false } = {}) {
   }
 
   const rows = parseBonusesGroupedByGirl(result.html);
-  dayCache.set(day, { at: Date.now(), rows });
+  dayCache.set(cacheKey, { at: Date.now(), rows });
   return rows;
+}
+
+export async function fetchBonusesByGirl(dayKey, options = {}) {
+  return fetchBonusesByGirlRange(dayKey, dayKey, options);
 }
 
 export async function fetchBonusActions(dayKey, { force = false } = {}) {
@@ -313,7 +327,7 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
     throw new Error("Invalid day key");
   }
   const cached = detailCache.get(day);
-  if (!force && cached && Date.now() - cached.at < DAY_CACHE_TTL_MS) {
+  if (!force && cached && Date.now() - cached.at < DETAIL_CACHE_TTL_MS) {
     return cached.actions;
   }
 

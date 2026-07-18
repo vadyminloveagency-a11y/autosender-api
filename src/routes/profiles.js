@@ -18,7 +18,10 @@ import { scrapeDreamInboxCloud } from "../inboxCloudScraper.js";
 import { syncInboxMenItems } from "../inboxSync.js";
 import { upsertDreamCredentials } from "../letterbotStore.js";
 import { getPool } from "../db.js";
-import { fetchBonusActions } from "../dreamAgencyFinance.js";
+import {
+  fetchBonusActions,
+  fetchBonusesByGirlRange,
+} from "../dreamAgencyFinance.js";
 
 const router = express.Router();
 
@@ -250,6 +253,94 @@ function actionFallsInAssignment(action, assignment) {
   return at >= start && at <= end;
 }
 
+function kyivDay(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Kyiv",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function monthBounds(day, today) {
+  const month = String(day || today).slice(0, 7);
+  const start = `${month}-01`;
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0))
+    .toISOString()
+    .slice(0, 10);
+  return { month, start, end: month === today.slice(0, 7) ? today : lastDay };
+}
+
+function mergeProfileMonthRanges(history, start, end) {
+  const byProfile = new Map();
+  for (const item of history) {
+    const profileId = String(item.femaleProfileId || "");
+    const assignedDay = kyivDay(item.assignedAt);
+    const unassignedDay = item.unassignedAt ? kyivDay(item.unassignedAt) : end;
+    const rangeStart = assignedDay > start ? assignedDay : start;
+    const rangeEnd = unassignedDay && unassignedDay < end ? unassignedDay : end;
+    if (!profileId || !rangeStart || rangeStart > rangeEnd) continue;
+    if (!byProfile.has(profileId)) {
+      byProfile.set(profileId, {
+        profileId,
+        displayName: item.displayName || `Profile ${profileId}`,
+        dreamUsername: item.dreamUsername || "",
+        photoUrl: item.photoUrl || "",
+        ranges: [],
+      });
+    }
+    byProfile.get(profileId).ranges.push({ start: rangeStart, end: rangeEnd });
+  }
+
+  for (const profile of byProfile.values()) {
+    profile.ranges.sort((a, b) => a.start.localeCompare(b.start));
+    profile.ranges = profile.ranges.reduce((merged, range) => {
+      const previous = merged[merged.length - 1];
+      if (!previous || range.start > previous.end) {
+        merged.push({ ...range });
+      } else if (range.end > previous.end) {
+        previous.end = range.end;
+      }
+      return merged;
+    }, []);
+  }
+  return [...byProfile.values()];
+}
+
+async function loadOperatorMonthBalance(history, selectedDay, today) {
+  const bounds = monthBounds(selectedDay, today);
+  const profiles = mergeProfileMonthRanges(history, bounds.start, bounds.end);
+  await Promise.all(
+    profiles.map(async (profile) => {
+      const amounts = await Promise.all(
+        profile.ranges.map(async (range) => {
+          const rows = await fetchBonusesByGirlRange(range.start, range.end, {
+            profileId: profile.profileId,
+          });
+          return rows
+            .filter((row) => String(row.profileId) === profile.profileId)
+            .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+        }),
+      );
+      profile.balanceUsd = Number(
+        amounts.reduce((sum, amount) => sum + amount, 0).toFixed(2),
+      );
+      delete profile.ranges;
+    }),
+  );
+  profiles.sort((a, b) => b.balanceUsd - a.balanceUsd);
+  return {
+    month: bounds.month,
+    totalUsd: Number(
+      profiles.reduce((sum, profile) => sum + profile.balanceUsd, 0).toFixed(2),
+    ),
+    profiles,
+  };
+}
+
 router.get("/balances", authMiddleware, async (req, res) => {
   try {
     const today = new Intl.DateTimeFormat("en-CA", {
@@ -310,6 +401,17 @@ router.get("/balances", authMiddleware, async (req, res) => {
         if (b.balanceUsd !== a.balanceUsd) return b.balanceUsd - a.balanceUsd;
         return String(a.displayName).localeCompare(String(b.displayName), "en");
       });
+    let monthBalance = null;
+    try {
+      monthBalance = await loadOperatorMonthBalance(history, date, today);
+    } catch (monthError) {
+      monthBalance = {
+        month: date.slice(0, 7),
+        totalUsd: 0,
+        profiles: [],
+        error: monthError?.message || String(monthError),
+      };
+    }
 
     return res.json({
       ok: true,
@@ -320,6 +422,7 @@ router.get("/balances", authMiddleware, async (req, res) => {
       ),
       profiles,
       history,
+      month: monthBalance,
     });
   } catch (error) {
     return res.status(500).json({
@@ -327,6 +430,7 @@ router.get("/balances", authMiddleware, async (req, res) => {
       error: error?.message || String(error),
       profiles: [],
       history: [],
+      month: null,
       totalUsd: 0,
     });
   }
