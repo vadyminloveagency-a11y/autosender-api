@@ -1677,72 +1677,71 @@
           </section>
 
           <section id="section-mailings" class="admin-section">
-            <h2 class="admin-main-title">Mailings</h2>
-            <p class="admin-main-lead">Letters for each questionnaire (LetterBot / Read / Online).</p>
-
-            <div class="panel-card" style="margin-bottom:16px">
-              <div class="card-head">
-                <h3>By questionnaire</h3>
-                <button type="button" id="refresh-mail-calendar-btn" class="btn-ghost">Refresh</button>
+            <div class="panel-card">
+              <div class="bal-topbar">
+                <div class="bal-tabs" role="tablist" aria-label="Mailings sections">
+                  <button type="button" class="bal-tab-btn is-active" data-mail-tab="questionnaires" role="tab" aria-selected="true">Mailings</button>
+                  <button type="button" class="bal-tab-btn" data-mail-tab="active" role="tab" aria-selected="false">Active mailings</button>
+                </div>
+                <button type="button" id="refresh-mail-section-btn" class="btn-ghost">Refresh</button>
               </div>
-              <div class="mail-calendar-layout">
-                <div class="mail-cal">
-                  <div class="mail-cal-head">
-                    <h4 id="mail-cal-title">—</h4>
-                    <div class="mail-cal-nav">
-                      <button type="button" id="mail-cal-prev" aria-label="Previous month">‹</button>
-                      <button type="button" id="mail-cal-today" title="Today">●</button>
-                      <button type="button" id="mail-cal-next" aria-label="Next month">›</button>
+
+              <div id="mail-tab-questionnaires" class="bal-tab-panel is-active" role="tabpanel">
+                <div class="mail-calendar-layout">
+                  <div class="mail-cal">
+                    <div class="mail-cal-head">
+                      <h4 id="mail-cal-title">—</h4>
+                      <div class="mail-cal-nav">
+                        <button type="button" id="mail-cal-prev" aria-label="Previous month">‹</button>
+                        <button type="button" id="mail-cal-today" title="Today">●</button>
+                        <button type="button" id="mail-cal-next" aria-label="Next month">›</button>
+                      </div>
+                    </div>
+                    <div class="mail-cal-weekdays">
+                      <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+                    </div>
+                    <div id="mail-cal-grid" class="mail-cal-grid"></div>
+                  </div>
+                  <div class="mail-day-panel">
+                    <h4 id="mail-day-title">Selected day</h4>
+                    <div id="mail-day-empty" class="mail-day-empty">No letters recorded for this day yet.</div>
+                    <div id="mail-day-wrap" class="table-scroll hidden">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th>Questionnaire</th>
+                            <th>Operator</th>
+                            <th>LetterBot</th>
+                            <th>Read</th>
+                            <th>Online</th>
+                          </tr>
+                        </thead>
+                        <tbody id="mail-day-body"></tbody>
+                      </table>
                     </div>
                   </div>
-                  <div class="mail-cal-weekdays">
-                    <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
-                  </div>
-                  <div id="mail-cal-grid" class="mail-cal-grid"></div>
                 </div>
-                <div class="mail-day-panel">
-                  <h4 id="mail-day-title">Selected day</h4>
-                  <div id="mail-day-empty" class="mail-day-empty">No letters recorded for this day yet.</div>
-                  <div id="mail-day-wrap" class="table-scroll hidden">
+              </div>
+
+              <div id="mail-tab-active" class="bal-tab-panel" role="tabpanel" hidden>
+                <div id="mailings-empty" class="empty-state hidden">No active mailings right now.</div>
+                <div id="mailings-wrap" class="hidden">
+                  <div class="table-scroll">
                     <table class="data-table">
                       <thead>
                         <tr>
-                          <th>Questionnaire</th>
                           <th>Operator</th>
-                          <th>LetterBot</th>
-                          <th>Read</th>
-                          <th>Online</th>
+                          <th>Product</th>
+                          <th>Questionnaire</th>
+                          <th>Filter</th>
+                          <th>Progress</th>
+                          <th>Letters today</th>
+                          <th>Actions</th>
                         </tr>
                       </thead>
-                      <tbody id="mail-day-body"></tbody>
+                      <tbody id="mailings-body"></tbody>
                     </table>
                   </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel-card">
-              <div class="card-head">
-                <h3>Active mailings</h3>
-                <button type="button" id="refresh-mailings-btn" class="btn-ghost">Refresh</button>
-              </div>
-              <div id="mailings-empty" class="empty-state hidden">No active mailings right now.</div>
-              <div id="mailings-wrap" class="hidden">
-                <div class="table-scroll">
-                  <table class="data-table">
-                    <thead>
-                      <tr>
-                        <th>Operator</th>
-                        <th>Product</th>
-                        <th>Questionnaire</th>
-                        <th>Filter</th>
-                        <th>Progress</th>
-                        <th>Letters today</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="mailings-body"></tbody>
-                  </table>
                 </div>
               </div>
             </div>
@@ -2084,6 +2083,7 @@
 
     const ADMIN_SECTION_KEY = "autosenderAdminSection";
     const ADMIN_BAL_TAB_KEY = "autosenderAdminBalTab";
+    const ADMIN_MAIL_TAB_KEY = "autosenderAdminMailTab";
     const ADMIN_BAL_DATE_KEY = "autosenderAdminBalDate";
     const ADMIN_BAL_FROM_KEY = "autosenderAdminBalFrom";
     const ADMIN_BAL_TO_KEY = "autosenderAdminBalTo";
@@ -2137,6 +2137,11 @@
         balCalState.activeTab = savedBalTab;
       }
       syncBalTabUi(balCalState.activeTab);
+      const savedMailTab = localStorage.getItem(ADMIN_MAIL_TAB_KEY);
+      if (savedMailTab === "active" || savedMailTab === "questionnaires") {
+        mailCalState.activeTab = savedMailTab;
+      }
+      syncMailTabUi(mailCalState.activeTab);
       syncBalFilterInputs();
       showAdminSection(loadSavedAdminSection());
       setupDragAndDrop();
@@ -2650,7 +2655,7 @@
     }
 
     function formatToday(job) {
-      // Real letters sent today via this AutoSender mailing (not Dream men / not TOTAL DAY).
+      // Real Dream LetterBot TOTAL DAY for this questionnaire (not the current run progress).
       const daySent =
         job.daySent != null && Number.isFinite(Number(job.daySent))
           ? Math.trunc(Number(job.daySent))
@@ -2690,7 +2695,36 @@
       selectedDate: null,
       today: null,
       monthDays: {},
+      activeTab: "questionnaires",
     };
+
+    function syncMailTabUi(tab) {
+      const next = tab === "active" ? "active" : "questionnaires";
+      document.querySelectorAll("[data-mail-tab]").forEach((button) => {
+        const active = button.dataset.mailTab === next;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      const questionnairesPanel = document.getElementById("mail-tab-questionnaires");
+      const activePanel = document.getElementById("mail-tab-active");
+      if (questionnairesPanel) {
+        questionnairesPanel.classList.toggle("is-active", next === "questionnaires");
+        questionnairesPanel.hidden = next !== "questionnaires";
+      }
+      if (activePanel) {
+        activePanel.classList.toggle("is-active", next === "active");
+        activePanel.hidden = next !== "active";
+      }
+    }
+
+    function setMailTab(tab) {
+      const next = tab === "active" ? "active" : "questionnaires";
+      mailCalState.activeTab = next;
+      localStorage.setItem(ADMIN_MAIL_TAB_KEY, next);
+      syncMailTabUi(next);
+      if (next === "active") void refreshMailings({ quiet: true });
+      else void refreshMailCalendar({ quiet: true });
+    }
 
     function kyivTodayLocal() {
       return new Intl.DateTimeFormat("en-CA", {
@@ -3866,11 +3900,14 @@
     document.getElementById("create-profile-btn").addEventListener("click", () => {
       void createProfile();
     });
-    document.getElementById("refresh-mailings-btn").addEventListener("click", () => {
-      void refreshMailings();
+    document.getElementById("refresh-mail-section-btn")?.addEventListener("click", () => {
+      if (mailCalState.activeTab === "active") void refreshMailings();
+      else void refreshMailCalendar();
     });
-    document.getElementById("refresh-mail-calendar-btn").addEventListener("click", () => {
-      void refreshMailCalendar();
+    document.querySelectorAll("[data-mail-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setMailTab(button.dataset.mailTab);
+      });
     });
     document.getElementById("mail-cal-prev").addEventListener("click", () => shiftMailCalMonth(-1));
     document.getElementById("mail-cal-next").addEventListener("click", () => shiftMailCalMonth(1));

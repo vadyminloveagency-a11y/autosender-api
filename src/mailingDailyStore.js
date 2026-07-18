@@ -63,6 +63,36 @@ export async function bumpMailingDailyLetters({
   );
 }
 
+/**
+ * Persist an absolute Dream day total (e.g. LetterBot TOTAL DAY).
+ * Never decreases an already stored value for the same day.
+ */
+export async function setMailingDailyLettersAbsolute({
+  dayKey,
+  profileId,
+  product,
+  userId,
+  letters,
+} = {}) {
+  const value = Math.trunc(Number(letters));
+  if (!Number.isFinite(value) || value < 0) return;
+  const pid = String(profileId || "").trim();
+  if (!pid || pid === "default") return;
+  const day = String(dayKey || kyivDayKey()).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+
+  const db = getPool();
+  await db.query(
+    `INSERT INTO mailing_daily_letters (day_key, profile_id, product, user_id, letters, updated_at)
+     VALUES ($1::date, $2, $3, $4, $5, NOW())
+     ON CONFLICT (day_key, profile_id, product) DO UPDATE SET
+       letters = GREATEST(mailing_daily_letters.letters, EXCLUDED.letters),
+       user_id = COALESCE(EXCLUDED.user_id, mailing_daily_letters.user_id),
+       updated_at = NOW()`,
+    [day, pid, normalizeProduct(product), userId != null ? Number(userId) : null, value],
+  );
+}
+
 /** Per-day totals for a month (for calendar heatmap). */
 export async function listMailingDailyMonthTotals(year, month) {
   const y = Number(year);

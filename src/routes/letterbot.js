@@ -26,6 +26,7 @@ import {
   kyivDayKey,
   listMailingDailyByProfile,
   listMailingDailyMonthTotals,
+  setMailingDailyLettersAbsolute,
 } from "../mailingDailyStore.js";
 import {
   ensureAgencyFinanceTables,
@@ -472,14 +473,27 @@ async function listActiveMailingJobs() {
     );
   }
 
-  return [...byKey.values()].map((job) => ({
-    ...job,
-    // "Letters today" is the durable daily total, not the current worker run.
-    daySent: Math.max(
+  return [...byKey.values()].map((job) => {
+    const dreamTotal = Math.max(
+      Number(job.dailyTotal) || 0,
       Number(job.daySent) || 0,
       dailyLetterBotByProfile.get(String(job.profileId)) || 0,
-    ),
-  })).sort((a, b) => {
+    );
+    if ((Number(job.dailyTotal) || 0) > 0) {
+      void setMailingDailyLettersAbsolute({
+        dayKey: kyivDayKey(),
+        profileId: job.profileId,
+        product: "letterbot",
+        userId: job.userId,
+        letters: Number(job.dailyTotal),
+      }).catch(() => {});
+    }
+    return {
+      ...job,
+      // Letters today = Dream LetterBot TOTAL DAY (live or persisted), not AutoSender run count.
+      daySent: dreamTotal,
+    };
+  }).sort((a, b) => {
     const au = Number(a.updatedAt) || 0;
     const bu = Number(b.updatedAt) || 0;
     return bu - au;

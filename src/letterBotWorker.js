@@ -2,7 +2,7 @@
 import { withDreamGate } from "./dreamGate.js";
 import { dreamLogin } from "./dreamLogin.js";
 import { dreamDayKey } from "./dreamDay.js";
-import { bumpMailingDailyLetters } from "./mailingDailyStore.js";
+import { setMailingDailyLettersAbsolute } from "./mailingDailyStore.js";
 
 const ORIGIN = "https://www.dream-singles.com";
 const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
@@ -181,10 +181,18 @@ class LetterBotWorker {
       // Mid-day Dream total should not drop; ignore small parse regressions.
       if (Number.isFinite(prev) && num < prev && prev - num < 200) return false;
     }
-    if (this.state.dailyTotal === num) return false;
+    const changed = this.state.dailyTotal !== num;
     this.state.dailyTotal = num;
     this.state.dailyTotalAt = Date.now();
-    return true;
+    // Persist Dream TOTAL DAY so director LetterBot / Letters today match Dream.
+    void setMailingDailyLettersAbsolute({
+      dayKey: day,
+      profileId: this.profileId,
+      product: "letterbot",
+      userId: this.ownerUserId,
+      letters: num,
+    }).catch(() => {});
+    return changed;
   }
 
   kyivDayKey(date = new Date()) {
@@ -209,14 +217,8 @@ class LetterBotWorker {
       delta = next;
     }
     if (delta <= 0) return;
+    // In-memory run counter only — durable LetterBot day total comes from Dream TOTAL DAY.
     this.state.daySent = (Number(this.state.daySent) || 0) + delta;
-    void bumpMailingDailyLetters({
-      dayKey: day,
-      profileId: this.profileId,
-      product: "letterbot",
-      userId: this.ownerUserId,
-      delta,
-    }).catch(() => {});
   }
 
   setCookieHeader(cookieHeader) {
