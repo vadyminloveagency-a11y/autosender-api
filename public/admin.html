@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AutoSender Admin</title>
+  <title>Inlove Services Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -106,6 +106,18 @@
       font: 700 24px/1.2 var(--font);
       letter-spacing: -0.02em;
       color: #f8fbff;
+    }
+    .auth-logo {
+      display: block;
+      width: 108px;
+      height: 108px;
+      margin: 0 auto 12px;
+      border-radius: 20px;
+      object-fit: cover;
+      /* Blends the black logo background into the dark card. */
+      mix-blend-mode: screen;
+      user-select: none;
+      -webkit-user-drag: none;
     }
     .auth-form {
       display: flex;
@@ -1593,7 +1605,8 @@
   </div>
   <div id="auth-shell" class="app-auth-gate">
     <div id="login-view" class="auth-card">
-      <h1 class="auth-title">AutoSender</h1>
+      <img class="auth-logo" src="/inlove-logo.png" alt="Inlove Services">
+      <h1 class="auth-title">Inlove Services</h1>
       <p class="auth-hint" style="margin-top:0">Director cabinet</p>
       <form id="login-form" class="auth-form" autocomplete="on">
         <div class="auth-field">
@@ -1615,7 +1628,8 @@
     </div>
 
     <div id="bootstrap-view" class="auth-card hidden">
-      <h1 class="auth-title">AutoSender</h1>
+      <img class="auth-logo" src="/inlove-logo.png" alt="Inlove Services">
+      <h1 class="auth-title">Inlove Services</h1>
       <p class="auth-hint" style="margin-top:0">Create the first admin account</p>
       <form id="bootstrap-form" class="auth-form">
         <div class="auth-field">
@@ -1640,7 +1654,7 @@
   <div id="panel-shell" class="hidden">
     <div class="panel-layout">
       <aside class="admin-sidebar" aria-label="Director navigation">
-        <h1 class="sidebar-brand">AutoSender</h1>
+        <h1 class="sidebar-brand">Inlove Services</h1>
         <p class="sidebar-user" id="admin-label"></p>
 
         <div class="sidebar-section-title">Main</div>
