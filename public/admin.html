@@ -863,6 +863,13 @@
       border-color: rgba(255, 43, 58, 0.55);
       color: #ff2b3a;
     }
+    .bal-cal-hint {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.3;
+      text-align: center;
+    }
     .bal-filters-row {
       display: flex;
       flex-wrap: wrap;
@@ -2219,9 +2226,6 @@
                   <select id="bal-filter-profile" aria-label="Questionnaire">
                     <option value="">All questionnaires</option>
                   </select>
-                  <input id="bal-filter-from" type="date" aria-label="From date">
-                  <input id="bal-filter-to" type="date" aria-label="To date">
-                  <button type="button" id="bal-filter-apply" class="btn-ghost">Apply</button>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
                 </div>
                 <div id="bal-cal-popover" class="bal-cal-popover" hidden>
@@ -2238,6 +2242,7 @@
                       <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
                     </div>
                     <div id="bal-cal-grid" class="mail-cal-grid"></div>
+                    <p id="bal-cal-hint" class="bal-cal-hint">Click a day — start, click another — end of period</p>
                   </div>
                 </div>
               </div>
@@ -3897,6 +3902,7 @@
       activeTab: "balances",
       bonusesLoadedFor: "",
     };
+    let balCalPickStart = null;
     const balSortState = { key: "questionnaire", dir: "asc" };
     const bonusSortState = { key: "date", dir: "desc" };
     let balProfilesCache = { profiles: [], date: "", meta: {} };
@@ -3966,13 +3972,22 @@
       return params.toString();
     }
 
+    function fmtBalDate(iso) {
+      const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return m ? `${m[3]}.${m[2]}.${m[1]}` : String(iso || "");
+    }
+
     function syncBalFilterInputs() {
-      const fromEl = document.getElementById("bal-filter-from");
-      const toEl = document.getElementById("bal-filter-to");
       const profileEl = document.getElementById("bal-filter-profile");
-      if (fromEl) fromEl.value = balCalState.fromDate || balCalState.selectedDate || "";
-      if (toEl) toEl.value = balCalState.toDate || balCalState.fromDate || balCalState.selectedDate || "";
       if (profileEl) profileEl.value = balCalState.profileId || "";
+      const toggle = document.getElementById("bal-cal-toggle");
+      if (toggle) {
+        const from = balCalState.fromDate || balCalState.selectedDate || "";
+        const to = balCalState.toDate || from;
+        if (!from) toggle.textContent = "Calendar";
+        else if (from === to) toggle.textContent = fmtBalDate(from);
+        else toggle.textContent = `${fmtBalDate(from)} — ${fmtBalDate(to)}`;
+      }
     }
 
     function fillBalProfileOptions() {
@@ -3996,16 +4011,7 @@
       balCalState.profileId = select.value || "";
     }
 
-    function readBalFiltersFromInputs() {
-      const fromEl = document.getElementById("bal-filter-from");
-      const toEl = document.getElementById("bal-filter-to");
-      const profileEl = document.getElementById("bal-filter-profile");
-      let from = String(fromEl?.value || "").slice(0, 10);
-      let to = String(toEl?.value || "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
-        from = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
-      }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) to = from;
+    function setBalRange(from, to) {
       if (from > to) {
         const swap = from;
         from = to;
@@ -4014,10 +4020,6 @@
       balCalState.fromDate = from;
       balCalState.toDate = to;
       balCalState.selectedDate = to;
-      balCalState.profileId = String(profileEl?.value || "").trim();
-      const [y, m] = to.split("-").map(Number);
-      balCalState.year = y;
-      balCalState.month = m;
       persistBalFilters();
       syncBalFilterInputs();
     }
@@ -4176,15 +4178,25 @@
       for (let day = 1; day <= daysInMonth; day += 1) {
         const date = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const classes = ["mail-cal-day"];
-        const from = balCalState.fromDate || balCalState.selectedDate;
-        const to = balCalState.toDate || from;
-        if (from && to && date >= from && date <= to) classes.push("selected");
+        if (balCalPickStart) {
+          if (date === balCalPickStart) classes.push("selected");
+        } else {
+          const from = balCalState.fromDate || balCalState.selectedDate;
+          const to = balCalState.toDate || from;
+          if (from && to && date >= from && date <= to) classes.push("selected");
+        }
         if (date === balCalState.today) classes.push("today");
         cells.push(
           `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span></button>`,
         );
       }
       grid.innerHTML = cells.join("");
+      const hint = document.getElementById("bal-cal-hint");
+      if (hint) {
+        hint.textContent = balCalPickStart
+          ? `Start: ${fmtBalDate(balCalPickStart)} — now click the end day`
+          : "Click a day — start, click another — end of period";
+      }
     }
 
     function renderBalanceProfiles(profiles, date, meta = {}) {
@@ -5106,12 +5118,21 @@
       const [y, m] = balCalState.selectedDate.split("-").map(Number);
       balCalState.year = y;
       balCalState.month = m;
+      balCalPickStart = null;
+      setBalCalPopoverOpen(false);
       void refreshBalances();
     });
     document.getElementById("bal-cal-grid")?.addEventListener("click", (event) => {
       const btn = event.target.closest(".mail-cal-day[data-date]");
       if (!btn || btn.disabled) return;
-      setBalSingleDay(btn.getAttribute("data-date"));
+      const date = btn.getAttribute("data-date");
+      if (!balCalPickStart) {
+        balCalPickStart = date;
+        renderBalCalendarGrid();
+        return;
+      }
+      setBalRange(balCalPickStart, date);
+      balCalPickStart = null;
       balCalState.bonusesLoadedFor = "";
       setBalCalPopoverOpen(false);
       void refreshBalances({ quiet: true });
@@ -5120,10 +5141,12 @@
       const popover = document.getElementById("bal-cal-popover");
       const toggle = document.getElementById("bal-cal-toggle");
       if (!popover || !toggle) return;
+      if (open) balCalPickStart = null;
       popover.hidden = !open;
       popover.classList.toggle("is-open", open);
       toggle.classList.toggle("is-open", open);
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) renderBalCalendarGrid();
     }
     document.getElementById("bal-cal-toggle")?.addEventListener("click", () => {
       const popover = document.getElementById("bal-cal-popover");
@@ -5138,11 +5161,6 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") setBalCalPopoverOpen(false);
-    });
-    document.getElementById("bal-filter-apply")?.addEventListener("click", () => {
-      readBalFiltersFromInputs();
-      balCalState.bonusesLoadedFor = "";
-      void refreshBalances();
     });
     document.getElementById("bal-filter-month")?.addEventListener("click", () => {
       if (!balCalState.year || !balCalState.month) {
