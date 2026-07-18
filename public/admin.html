@@ -1429,17 +1429,14 @@
     .bonus-actions-table tbody tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.02);
     }
-    .bonus-actions-table td:nth-child(7) {
+    .bonus-actions-table td:nth-child(6) {
       color: #ff2b3a;
       font-weight: 700;
     }
-    .bonus-actions-table td:first-child {
-      color: var(--muted);
-    }
-    .bonus-actions-table th:nth-child(-n+7),
-    .bonus-actions-table td:nth-child(-n+7) { text-align: center; }
-    .bonus-actions-table th:nth-child(4),
-    .bonus-actions-table td:nth-child(4) { text-align: left; }
+    .bonus-actions-table th,
+    .bonus-actions-table td { text-align: center; }
+    .bonus-actions-table th:nth-child(3),
+    .bonus-actions-table td:nth-child(3) { text-align: left; }
     .bonus-actions-table .bonus-total-row td {
       border-bottom: 0;
       background: #140f11;
@@ -4328,9 +4325,8 @@
       listEl.classList.remove("hidden");
       const bodyRows = actions
         .map(
-          (row, index) => `
+          (row) => `
             <tr>
-              <td>${index + 1}</td>
               <td>${escapeHtml(row.man)}</td>
               <td>${escapeHtml(row.girlId || "—")}</td>
               <td>${escapeHtml(row.girlName || "—")}</td>
@@ -4353,7 +4349,6 @@
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              <th>#</th>
               ${th("man", "Man")}
               ${th("questionnaire", "Lady ID")}
               ${th("questionnaire", "Lady Name")}
