@@ -4215,6 +4215,22 @@
       return Number.isFinite(t) ? t : 0;
     }
 
+    function formatBonusWhen(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "—";
+      const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (m) {
+        const day = String(+m[2]).padStart(2, "0");
+        const month = String(+m[1]).padStart(2, "0");
+        const year = m[3];
+        const hour = String(+m[4]).padStart(2, "0");
+        const minute = m[5];
+        const second = m[6];
+        return `${hour}:${minute}:${second} ${day}.${month}.${year}`;
+      }
+      return raw;
+    }
+
     function flattenBonusActions(profiles) {
       const rows = [];
       for (const profile of Array.isArray(profiles) ? profiles : []) {
@@ -4230,7 +4246,7 @@
             girlKey,
             operator: String(action?.operatorName || action?.operatorEmail || "").trim(),
             operatorHtml: formatBonusOperator(action),
-            when: action?.occurredAt || "—",
+            when: formatBonusWhen(action?.occurredAt),
             whenTs: parseBonusWhen(action?.occurredAt),
             amountUsd: Number(action?.amountUsd) || 0,
           });
