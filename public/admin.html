@@ -4601,7 +4601,7 @@
         let configured = true;
         for (let index = 0; index < days.length; index += 1) {
           const day = days[index];
-          if (!quiet && days.length > 1) {
+          if (days.length > 1) {
             showBalSpinner(`${index + 1} / ${days.length}`);
           }
           const params = new URLSearchParams({ from: day, to: day });
@@ -4662,7 +4662,7 @@
       renderBalCalendarGrid();
       void refreshVisibleMonthTotal();
       const label = balRangeLabel();
-      if (!quiet) showBalSpinner();
+      showBalSpinner();
       try {
         if (balCalState.activeTab === "bonuses") {
           await refreshBonusActions({ quiet });
@@ -4690,7 +4690,7 @@
         }
         if (!quiet) setStatus(error.message, "error");
       } finally {
-        if (!quiet) hideBalSpinner();
+        hideBalSpinner();
       }
     }
 
