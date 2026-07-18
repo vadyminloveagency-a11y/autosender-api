@@ -1553,17 +1553,9 @@
     .bonus-when-time { color: #fff; font-weight: 600; }
     .bonus-when-date { color: var(--muted); font-size: 11px; margin-left: 0; }
     .bonus-op-none { color: rgba(152, 161, 170, 0.35); }
-    .bonus-type-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 0;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      background: rgba(255, 255, 255, 0.06);
+    .bonus-type {
       color: #fff;
-      font: 600 11px/1 var(--font);
+      font-weight: 600;
       white-space: nowrap;
     }
     .bonus-actions-table th.bonus-col-operator,
@@ -4368,7 +4360,7 @@
 
     function bonusTypeBadge(type) {
       const raw = String(type || "Paid action").trim();
-      return `<span class="bonus-type-badge">${escapeHtml(raw)}</span>`;
+      return `<span class="bonus-type">${escapeHtml(raw)}</span>`;
     }
 
     function parseBonusWhen(value) {
