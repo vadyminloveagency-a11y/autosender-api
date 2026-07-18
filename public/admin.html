@@ -3648,8 +3648,8 @@
                 <span class="gold-man-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</span>
               </div>
             </td>
-            <td>${escapeHtml(man.firstDay || "—")}</td>
-            <td>${escapeHtml(man.lastDay || "—")}</td>
+            <td>${escapeHtml(man.firstDay ? fmtBalDate(man.firstDay) : "—")}</td>
+            <td>${escapeHtml(man.lastDay ? fmtBalDate(man.lastDay) : "—")}</td>
             <td>
               <span class="gold-q-count" data-gold-q-index="${index}" tabindex="0">${qCount.toLocaleString("en-US")}</span>
             </td>
