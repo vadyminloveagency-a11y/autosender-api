@@ -1,4 +1,5 @@
 import { getPool } from "./db.js";
+import { dreamDayKey } from "./dreamDay.js";
 
 export async function ensureMailingDailyTables() {
   const db = getPool();
@@ -23,13 +24,9 @@ export async function ensureMailingDailyTables() {
   `);
 }
 
+/** Dream business day key (starts 10:00 Europe/Kyiv). */
 export function kyivDayKey(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Kyiv",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+  return dreamDayKey(date);
 }
 
 function normalizeProduct(product) {
@@ -39,7 +36,7 @@ function normalizeProduct(product) {
   return "letterbot";
 }
 
-/** Increment real letters sent for a questionnaire on a Kyiv calendar day. */
+/** Increment real letters sent for a questionnaire on a Dream business day. */
 export async function bumpMailingDailyLetters({
   dayKey,
   profileId,

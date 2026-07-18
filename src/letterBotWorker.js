@@ -1,6 +1,7 @@
 ﻿import WebSocket from "ws";
 import { withDreamGate } from "./dreamGate.js";
 import { dreamLogin } from "./dreamLogin.js";
+import { dreamDayKey } from "./dreamDay.js";
 import { bumpMailingDailyLetters } from "./mailingDailyStore.js";
 
 const ORIGIN = "https://www.dream-singles.com";
@@ -187,12 +188,7 @@ class LetterBotWorker {
   }
 
   kyivDayKey(date = new Date()) {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Kyiv",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(date);
+    return dreamDayKey(date);
   }
 
   bumpDaySent(prevSent, nextSent) {

@@ -1,6 +1,7 @@
 import { dreamLogin } from "./dreamLogin.js";
 import { dreamHttp, hasDreamProxy } from "./dreamHttp.js";
 import { hasTwoCaptcha } from "./twoCaptcha.js";
+import { dreamDayKey } from "./dreamDay.js";
 import { bumpMailingDailyLetters } from "./mailingDailyStore.js";
 import WebSocket from "ws";
 
@@ -337,12 +338,7 @@ export class SenderReadsWorker {
   }
 
   kyivDayKey(date = new Date()) {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Kyiv",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(date);
+    return dreamDayKey(date);
   }
 
   bumpDaySent(delta = 1) {

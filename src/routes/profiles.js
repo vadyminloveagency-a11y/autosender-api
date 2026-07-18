@@ -22,6 +22,7 @@ import {
   fetchBonusActions,
   fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
+import { dreamDayKey } from "../dreamDay.js";
 
 const router = express.Router();
 
@@ -253,15 +254,8 @@ function actionFallsInAssignment(action, assignment) {
   return at >= start && at <= end;
 }
 
-function kyivDay(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Kyiv",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
+function dreamBusinessDay(value) {
+  return dreamDayKey(value);
 }
 
 function monthBounds(day, today) {
@@ -278,8 +272,10 @@ function mergeProfileMonthRanges(history, start, end) {
   const byProfile = new Map();
   for (const item of history) {
     const profileId = String(item.femaleProfileId || "");
-    const assignedDay = kyivDay(item.assignedAt);
-    const unassignedDay = item.unassignedAt ? kyivDay(item.unassignedAt) : end;
+    const assignedDay = dreamBusinessDay(item.assignedAt);
+    const unassignedDay = item.unassignedAt
+      ? dreamBusinessDay(item.unassignedAt)
+      : end;
     const rangeStart = assignedDay > start ? assignedDay : start;
     const rangeEnd = unassignedDay && unassignedDay < end ? unassignedDay : end;
     if (!profileId || !rangeStart || rangeStart > rangeEnd) continue;
@@ -343,12 +339,7 @@ async function loadOperatorMonthBalance(history, selectedDay, today) {
 
 router.get("/balances", authMiddleware, async (req, res) => {
   try {
-    const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Kyiv",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const today = dreamDayKey();
     let date = String(req.query?.date || today).slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
 

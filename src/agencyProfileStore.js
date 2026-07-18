@@ -1,6 +1,11 @@
 import { getPool } from "./db.js";
 import { decryptSecret, encryptSecret } from "./cryptoUtil.js";
 import { dreamLogin } from "./dreamLogin.js";
+import {
+  sqlCurrentDreamDayStart,
+  sqlDreamDayEnd,
+  sqlDreamDayStart,
+} from "./dreamDay.js";
 import { resolveDreamFemaleProfileId } from "./inboxCloudScraper.js";
 
 export async function ensureAgencyProfileTables() {
@@ -48,8 +53,8 @@ export async function ensureAgencyProfileTables() {
     WHERE agency_profile_id IS NOT NULL AND unassigned_at IS NULL
   `);
   // Existing assignments predate this history table. Seed the current operator
-  // from the start of today (Kyiv) so today's finance data is immediately visible
-  // without claiming we know older assignment history.
+  // from the start of the current Dream day (10:00 Kyiv) so today's finance
+  // data is immediately visible without claiming older assignment history.
   await db.query(`
     INSERT INTO agency_profile_assignments (
       agency_profile_id, female_profile_id, display_name, user_id, assigned_at
@@ -59,7 +64,7 @@ export async function ensureAgencyProfileTables() {
       ap.female_profile_id,
       ap.display_name,
       ap.assigned_user_id,
-      (date_trunc('day', NOW() AT TIME ZONE 'Europe/Kyiv') AT TIME ZONE 'Europe/Kyiv')
+      ${sqlCurrentDreamDayStart()}
     FROM agency_profiles ap
     WHERE ap.assigned_user_id IS NOT NULL
       AND ap.female_profile_id IS NOT NULL
@@ -103,10 +108,11 @@ async function recordAssignmentChange(db, profile, previousUserId, nextUserId, a
   const sameUser = oldUserId === newUserId;
 
   // Same operator + explicit date: backdate (or create) the open interval.
+  // Day keys map to Dream day start (10:00 Kyiv), not midnight.
   if (sameUser && newUserId && day) {
     const updated = await db.query(
       `UPDATE agency_profile_assignments
-       SET assigned_at = ($2::date::timestamp AT TIME ZONE 'Europe/Kyiv')
+       SET assigned_at = ${sqlDreamDayStart(2)}
        WHERE agency_profile_id = $1
          AND user_id = $3
          AND unassigned_at IS NULL
@@ -117,7 +123,7 @@ async function recordAssignmentChange(db, profile, previousUserId, nextUserId, a
     await db.query(
       `INSERT INTO agency_profile_assignments (
          agency_profile_id, female_profile_id, display_name, user_id, assigned_at
-       ) VALUES ($1, $2, $3, $4, ($5::date::timestamp AT TIME ZONE 'Europe/Kyiv'))`,
+       ) VALUES ($1, $2, $3, $4, ${sqlDreamDayStart(5)})`,
       [profileId, femaleProfileId, String(profile.display_name || ""), newUserId, day],
     );
     return;
@@ -138,7 +144,7 @@ async function recordAssignmentChange(db, profile, previousUserId, nextUserId, a
     await db.query(
       `INSERT INTO agency_profile_assignments (
          agency_profile_id, female_profile_id, display_name, user_id, assigned_at
-       ) VALUES ($1, $2, $3, $4, ($5::date::timestamp AT TIME ZONE 'Europe/Kyiv'))`,
+       ) VALUES ($1, $2, $3, $4, ${sqlDreamDayStart(5)})`,
       [profileId, femaleProfileId, String(profile.display_name || ""), newUserId, day],
     );
   } else {
@@ -195,10 +201,10 @@ export async function listProfileAssignmentsForUserDay(userId, dayKey) {
      FROM agency_profile_assignments h
      LEFT JOIN agency_profiles ap ON ap.id = h.agency_profile_id
      WHERE h.user_id = $1
-       AND h.assigned_at < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv')
+       AND h.assigned_at < ${sqlDreamDayEnd(2)}
        AND (
          h.unassigned_at IS NULL
-         OR h.unassigned_at >= ($2::date::timestamp AT TIME ZONE 'Europe/Kyiv')
+         OR h.unassigned_at >= ${sqlDreamDayStart(2)}
        )
      ORDER BY h.female_profile_id, h.assigned_at DESC`,
     [Number(userId), day],
