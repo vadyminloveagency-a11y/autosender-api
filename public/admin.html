@@ -3138,24 +3138,7 @@
         <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>
         <span>Dream days total: <strong>${formatBalanceUsd(coverage.officialTotalUsd)}</strong></span>
         <span>Missing vs Dream: <strong>${formatBalanceUsd(coverage.missingUsd)}</strong></span>
-        <span>Incomplete days: <strong>${Number(coverage.incompleteDays || 0).toLocaleString("en-US")}</strong></span>
-        <span>Stored history: <strong>${escapeHtml(coverage.firstDay || "—")} → ${escapeHtml(coverage.lastDay || "—")}</strong></span>
-        <span>Cached days: <strong>${Number(coverage.cachedDays || 0).toLocaleString("en-US")}</strong></span>`;
-      if (Number(coverage.incompleteDays || 0) > 0 && Array.isArray(coverage.incompleteRows) && coverage.incompleteRows.length) {
-        const preview = coverage.incompleteRows
-          .slice(0, 8)
-          .map((row) => {
-            const gap = Math.max(
-              0,
-              (Number(row.officialTotalUsd) || 0) - (Number(row.actionsTotalUsd) || 0),
-            );
-            return `${row.day} (−${formatBalanceUsd(gap)})`;
-          })
-          .join(" · ");
-        summary.innerHTML += `<span style="flex:1 1 100%">Gaps: <strong>${escapeHtml(preview)}</strong>${
-          coverage.incompleteRows.length > 8 ? "…" : ""
-        }</span>`;
-      }
+        <span>Incomplete days: <strong>${Number(coverage.incompleteDays || 0).toLocaleString("en-US")}</strong></span>`;
       body.innerHTML = men
         .map((man) => {
           const id = String(man.maleProfileId || "").trim();
