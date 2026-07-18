@@ -333,10 +333,29 @@ export async function listIncompleteAgencyFinanceDays({ limit = 14 } = {}) {
 }
 
 /** Aggregate every retained paid action by Dream male profile. */
-export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
+export async function listAgencyFinanceMen({
+  search = "",
+  page = 1,
+  pageSize = 50,
+  sort = "date",
+  dir = "desc",
+  limit = null,
+} = {}) {
   const db = getPool();
   const query = String(search || "").trim();
-  const safeLimit = Math.min(5000, Math.max(1, Number(limit) || 1000));
+  // Legacy callers (Copy all IDs) can still request a large flat list.
+  const legacyLimit = limit == null ? 0 : Math.min(5000, Math.max(1, Number(limit) || 1000));
+  const safePageSize = Math.min(100, Math.max(10, Number(pageSize) || 50));
+  const safePage = Math.max(1, Number(page) || 1);
+  const sortKey = String(sort || "date").toLowerCase() === "balance" ? "balance" : "date";
+  const sortDir = String(dir || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const orderSql =
+    sortKey === "balance"
+      ? `total_usd ${sortDir}, action_count DESC, male_name, male_profile_id`
+      : `last_day ${sortDir}, last_occurred_at ${sortDir}, male_name, male_profile_id`;
+  const offset = legacyLimit ? 0 : (safePage - 1) * safePageSize;
+  const fetchLimit = legacyLimit || safePageSize;
+
   const result = await db.query(
     `WITH identified AS (
        SELECT
@@ -373,15 +392,21 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
            AS last_occurred_at
        FROM identified
        GROUP BY male_key
+     ),
+     filtered AS (
+       SELECT *
+       FROM grouped
+       WHERE $1 = ''
+         OR COALESCE(male_profile_id, '') ILIKE '%' || $1 || '%'
+         OR COALESCE(male_name, '') ILIKE '%' || $1 || '%'
      )
-     SELECT g.*
-     FROM grouped g
-     WHERE $1 = ''
-       OR COALESCE(g.male_profile_id, '') ILIKE '%' || $1 || '%'
-       OR COALESCE(g.male_name, '') ILIKE '%' || $1 || '%'
-     ORDER BY g.total_usd DESC, g.action_count DESC, g.male_name, g.male_profile_id
-     LIMIT $2`,
-    [query, safeLimit],
+     SELECT
+       filtered.*,
+       COUNT(*) OVER()::int AS total_men
+     FROM filtered
+     ORDER BY ${orderSql}
+     LIMIT $2 OFFSET $3`,
+    [query, fetchLimit, offset],
   );
 
   const coverage = await db.query(
@@ -424,19 +449,27 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
   } catch (_) {
     incompleteRows = [];
   }
+  const totalMen = Number(result.rows[0]?.total_men) || 0;
+  const totalPages = Math.max(1, Math.ceil(totalMen / safePageSize));
   return {
     men: result.rows.map((row) => ({
-        maleProfileId: String(row.male_profile_id || ""),
-        maleName: String(row.male_name || ""),
-        actionCount: Number(row.action_count) || 0,
-        questionnaireCount: Number(row.questionnaire_count) || 0,
-        actionTypeCount: Number(row.action_type_count) || 0,
-        totalUsd: Number(row.total_usd) || 0,
-        firstDay: String(row.first_day || "").slice(0, 10),
-        lastDay: String(row.last_day || "").slice(0, 10),
-        firstOccurredAt: String(row.first_occurred_at || ""),
-        lastOccurredAt: String(row.last_occurred_at || ""),
-      })),
+      maleProfileId: String(row.male_profile_id || ""),
+      maleName: String(row.male_name || ""),
+      actionCount: Number(row.action_count) || 0,
+      questionnaireCount: Number(row.questionnaire_count) || 0,
+      actionTypeCount: Number(row.action_type_count) || 0,
+      totalUsd: Number(row.total_usd) || 0,
+      firstDay: String(row.first_day || "").slice(0, 10),
+      lastDay: String(row.last_day || "").slice(0, 10),
+      firstOccurredAt: String(row.first_occurred_at || ""),
+      lastOccurredAt: String(row.last_occurred_at || ""),
+    })),
+    pagination: {
+      page: legacyLimit ? 1 : safePage,
+      pageSize: legacyLimit || safePageSize,
+      totalMen,
+      totalPages: legacyLimit ? 1 : totalPages,
+    },
     coverage: {
       firstDay: String(stats.first_day || "").slice(0, 10),
       lastDay: String(stats.last_day || "").slice(0, 10),
@@ -455,6 +488,7 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
       syncedActionsTotalUsd: Number(stats.synced_actions_total_usd) || 0,
       missingUsd: Number(Math.max(0, officialTotalUsd - totalUsd).toFixed(2)),
       oldestSyncedDay: String(stats.oldest_synced_day || "").slice(0, 10),
+      menCount: totalMen,
     },
   };
 }

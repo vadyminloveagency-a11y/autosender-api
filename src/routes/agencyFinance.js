@@ -140,6 +140,10 @@ router.get("/gold-men", adminMiddleware, async (req, res) => {
   try {
     const data = await listAgencyFinanceMen({
       search: req.query?.search,
+      page: req.query?.page,
+      pageSize: req.query?.pageSize,
+      sort: req.query?.sort,
+      dir: req.query?.dir,
       limit: req.query?.limit,
     });
     return res.json({ ok: true, ...data });
@@ -148,6 +152,7 @@ router.get("/gold-men", adminMiddleware, async (req, res) => {
       ok: false,
       men: [],
       coverage: {},
+      pagination: { page: 1, pageSize: 50, totalMen: 0, totalPages: 1 },
       error: error?.message || String(error),
     });
   }

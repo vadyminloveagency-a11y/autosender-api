@@ -1115,6 +1115,7 @@
     }
     .gold-men-summary strong { color: #fff; }
     .gold-men-table-wrap {
+      position: relative;
       overflow: auto;
       border: 1px solid rgba(255, 43, 58, 0.22);
       border-radius: 8px;
@@ -1127,6 +1128,57 @@
       background: rgba(152, 161, 170, 0.38);
       border: 2px solid #11151a;
       border-radius: 8px;
+    }
+    .gold-men-loading {
+      position: absolute;
+      inset: 0;
+      z-index: 12;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: rgba(6, 12, 16, 0.72);
+      backdrop-filter: blur(2px);
+    }
+    .gold-men-loading.is-active { display: flex; }
+    .gold-men-pager {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .gold-men-pager-meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .gold-men-pager-pages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .gold-men-page-btn {
+      min-width: 34px;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      background: #11151a;
+      color: #fff;
+      font: 600 12px/1 var(--font);
+      cursor: pointer;
+    }
+    .gold-men-page-btn:hover { border-color: rgba(255, 43, 58, 0.45); }
+    .gold-men-page-btn.is-active {
+      border-color: rgba(255, 43, 58, 0.7);
+      color: #ff2b3a;
+    }
+    .gold-men-page-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
     }
     .gold-man {
       display: flex;
@@ -2114,6 +2166,13 @@
                   </thead>
                   <tbody id="gold-men-body"></tbody>
                 </table>
+                <div id="gold-men-loading" class="gold-men-loading" aria-hidden="true">
+                  <div class="bal-spinner" aria-label="Loading"></div>
+                </div>
+              </div>
+              <div id="gold-men-pager" class="gold-men-pager" hidden>
+                <div id="gold-men-pager-meta" class="gold-men-pager-meta"></div>
+                <div id="gold-men-pager-pages" class="gold-men-pager-pages"></div>
               </div>
               <div id="gold-q-popover" hidden></div>
             </div>
@@ -3143,9 +3202,11 @@
     let goldMenLoading = false;
     let goldMenCache = [];
     let goldMenCoverage = {};
+    let goldMenPagination = { page: 1, pageSize: 50, totalMen: 0, totalPages: 1 };
     const goldMenQuestionnaireCache = new Map();
     let goldMenQuestionnaireAnchor = null;
     const goldMenSortState = { key: "date", dir: "desc" };
+    const GOLD_MEN_PAGE_SIZE = 50;
 
     function syncGoldMenPeriodDefaults() {
       const today = kyivTodayLocal();
@@ -3169,38 +3230,6 @@
         const active = goldMenSortState.key === key;
         th.classList.toggle("is-sorted", active);
         th.textContent = `${labels[key] || key}${sortMark(goldMenSortState.key, key, goldMenSortState.dir)}`;
-      });
-    }
-
-    function goldMenActionTime(value, fallbackDay = "") {
-      const match = String(value || "").match(
-        /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/,
-      );
-      if (match) {
-        return Date.UTC(
-          Number(match[3]),
-          Number(match[1]) - 1,
-          Number(match[2]),
-          Number(match[4]),
-          Number(match[5]),
-          Number(match[6]),
-        );
-      }
-      const fallback = Date.parse(`${String(fallbackDay || "").slice(0, 10)}T00:00:00Z`);
-      return Number.isFinite(fallback) ? fallback : 0;
-    }
-
-    function sortGoldMenRows(men) {
-      const { key, dir } = goldMenSortState;
-      const factor = dir === "asc" ? 1 : -1;
-      return [...(Array.isArray(men) ? men : [])].sort((a, b) => {
-        if (key === "balance") {
-          return ((Number(a.totalUsd) || 0) - (Number(b.totalUsd) || 0)) * factor;
-        }
-        const aTime = goldMenActionTime(a.lastOccurredAt, a.lastDay);
-        const bTime = goldMenActionTime(b.lastOccurredAt, b.lastDay);
-        if (aTime !== bTime) return (aTime - bTime) * factor;
-        return String(a.maleProfileId || "").localeCompare(String(b.maleProfileId || "")) * factor;
       });
     }
 
@@ -3283,6 +3312,64 @@
       positionGoldMenQuestionnairesTip(anchor, tip);
     }
 
+    function setGoldMenLoading(active) {
+      const overlay = document.getElementById("gold-men-loading");
+      if (!overlay) return;
+      overlay.classList.toggle("is-active", Boolean(active));
+      overlay.setAttribute("aria-hidden", active ? "false" : "true");
+    }
+
+    function goldMenPageWindow(page, totalPages) {
+      const pages = [];
+      const current = Math.min(Math.max(1, page), Math.max(1, totalPages));
+      const total = Math.max(1, totalPages);
+      const push = (value) => {
+        if (!pages.includes(value)) pages.push(value);
+      };
+      push(1);
+      for (let i = current - 2; i <= current + 2; i += 1) {
+        if (i >= 1 && i <= total) push(i);
+      }
+      push(total);
+      return pages.sort((a, b) => a - b);
+    }
+
+    function renderGoldMenPager() {
+      const pager = document.getElementById("gold-men-pager");
+      const meta = document.getElementById("gold-men-pager-meta");
+      const pagesEl = document.getElementById("gold-men-pager-pages");
+      if (!pager || !meta || !pagesEl) return;
+      const { page, pageSize, totalMen, totalPages } = goldMenPagination;
+      if (!totalMen) {
+        pager.hidden = true;
+        pagesEl.innerHTML = "";
+        meta.textContent = "";
+        return;
+      }
+      pager.hidden = false;
+      const from = (page - 1) * pageSize + 1;
+      const to = Math.min(totalMen, page * pageSize);
+      meta.textContent = `Showing ${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${totalMen.toLocaleString("en-US")}`;
+      const buttons = [];
+      buttons.push(
+        `<button type="button" class="gold-men-page-btn" data-gold-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Prev</button>`,
+      );
+      let previous = 0;
+      for (const pageNumber of goldMenPageWindow(page, totalPages)) {
+        if (previous && pageNumber - previous > 1) {
+          buttons.push(`<span class="gold-men-pager-meta">…</span>`);
+        }
+        buttons.push(
+          `<button type="button" class="gold-men-page-btn${pageNumber === page ? " is-active" : ""}" data-gold-page="${pageNumber}">${pageNumber}</button>`,
+        );
+        previous = pageNumber;
+      }
+      buttons.push(
+        `<button type="button" class="gold-men-page-btn" data-gold-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>Next</button>`,
+      );
+      pagesEl.innerHTML = buttons.join("");
+    }
+
     function renderGoldMen(data) {
       const body = document.getElementById("gold-men-body");
       const summary = document.getElementById("gold-men-summary");
@@ -3292,12 +3379,19 @@
       if (data) {
         goldMenCache = Array.isArray(data.men) ? data.men : [];
         goldMenCoverage = data.coverage || {};
+        goldMenPagination = {
+          page: Number(data.pagination?.page) || 1,
+          pageSize: Number(data.pagination?.pageSize) || GOLD_MEN_PAGE_SIZE,
+          totalMen: Number(data.pagination?.totalMen ?? data.coverage?.menCount) || 0,
+          totalPages: Number(data.pagination?.totalPages) || 1,
+        };
       }
-      const men = sortGoldMenRows(goldMenCache);
+      const men = goldMenCache;
       const coverage = goldMenCoverage;
       updateGoldMenSortHeaders();
+      const menCount = Number(coverage.menCount ?? goldMenPagination.totalMen) || men.length;
       summary.innerHTML = `
-        <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
+        <span>Men: <strong>${menCount.toLocaleString("en-US")}</strong></span>
         <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
         <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>`;
       body.innerHTML = men
@@ -3323,7 +3417,8 @@
           </tr>`;
         })
         .join("");
-      status.style.display = men.length ? "none" : "block";
+      renderGoldMenPager();
+      status.style.display = men.length || goldMenLoading ? "none" : "block";
       status.textContent = men.length
         ? ""
         : "No retained paid-action men yet. Choose a period and press Load period.";
@@ -3337,7 +3432,10 @@
           status.style.display = "block";
           status.textContent = "Preparing all male IDs…";
         }
-        const data = await api("/agency-finance/gold-men?limit=5000");
+        const search = String(document.getElementById("gold-men-search")?.value || "").trim();
+        const params = new URLSearchParams({ limit: "5000" });
+        if (search) params.set("search", search);
+        const data = await api(`/agency-finance/gold-men?${params.toString()}`);
         source = Array.isArray(data?.men) ? data.men : source;
       } catch (_) {
         // Fall back to the currently loaded list if refresh is unavailable.
@@ -3378,13 +3476,17 @@
       const keepBusy = Boolean(options.keepBusy);
       if (!keepBusy) goldMenLoading = true;
       const status = document.getElementById("gold-men-status");
+      const page = Math.max(1, Number(options.page) || goldMenPagination.page || 1);
       try {
-        if (status && !options.quiet) {
-          status.style.display = "block";
-          status.textContent = "Loading Gold Men Agency…";
-        }
+        if (!options.quiet) setGoldMenLoading(true);
+        if (status && !options.quiet) status.style.display = "none";
         const search = String(document.getElementById("gold-men-search")?.value || "").trim();
-        const params = new URLSearchParams({ limit: "5000" });
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(GOLD_MEN_PAGE_SIZE),
+          sort: goldMenSortState.key === "balance" ? "balance" : "date",
+          dir: goldMenSortState.dir === "asc" ? "asc" : "desc",
+        });
         if (search) params.set("search", search);
         const data = await api(`/agency-finance/gold-men?${params.toString()}`);
         renderGoldMen(data);
@@ -3399,6 +3501,7 @@
         }
       } finally {
         if (!keepBusy) goldMenLoading = false;
+        if (!options.quiet) setGoldMenLoading(false);
       }
     }
 
@@ -4854,13 +4957,20 @@
       if (key !== "date" && key !== "balance") return;
       const defaultDir = key === "balance" || key === "date" ? "desc" : "asc";
       toggleSortState(goldMenSortState, key, defaultDir);
-      renderGoldMen();
+      void refreshGoldMen({ page: 1, force: true });
+    });
+    document.getElementById("gold-men-pager")?.addEventListener("click", (event) => {
+      const btn = event.target.closest("button[data-gold-page]");
+      if (!btn || btn.disabled) return;
+      const page = Number(btn.getAttribute("data-gold-page"));
+      if (!Number.isFinite(page) || page < 1) return;
+      void refreshGoldMen({ page, force: true });
     });
     document.getElementById("gold-men-body")?.addEventListener("mouseover", (event) => {
       const count = event.target.closest(".gold-q-count");
       if (!count || !document.getElementById("gold-men-body")?.contains(count)) return;
       const index = Number(count.getAttribute("data-gold-q-index"));
-      const man = sortGoldMenRows(goldMenCache)[index];
+      const man = goldMenCache[index];
       void showGoldMenQuestionnairesTip(count, man);
     });
     document.getElementById("gold-men-body")?.addEventListener("mouseout", (event) => {
@@ -4874,7 +4984,7 @@
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       const index = Number(count.getAttribute("data-gold-q-index"));
-      const man = sortGoldMenRows(goldMenCache)[index];
+      const man = goldMenCache[index];
       void showGoldMenQuestionnairesTip(count, man);
     });
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
@@ -4900,7 +5010,7 @@
     document.getElementById("gold-men-search")?.addEventListener("input", () => {
       if (goldMenSearchTimer) clearTimeout(goldMenSearchTimer);
       goldMenSearchTimer = setTimeout(() => {
-        void refreshGoldMen();
+        void refreshGoldMen({ page: 1, force: true });
       }, 250);
     });
 
