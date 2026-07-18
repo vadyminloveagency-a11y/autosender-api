@@ -43,6 +43,7 @@ import { loadCachedFinanceActionsRange } from "../agencyFinanceActionsCache.js";
 import {
   listAgencyFinanceActions,
   listAgencyFinanceDaySyncs,
+  listAgencyFinanceMen,
 } from "../agencyFinanceActionsStore.js";
 import { dreamDayKey } from "../dreamDay.js";
 
@@ -864,6 +865,69 @@ function parseFinanceDateRange(query, today) {
   };
 }
 
+function shiftIsoDay(dayKey, offsetDays) {
+  const date = new Date(`${String(dayKey || "").slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime())) return "";
+  date.setUTCDate(date.getUTCDate() + Number(offsetDays || 0));
+  return date.toISOString().slice(0, 10);
+}
+
+/** All retained paid-action men across every questionnaire and cached day. */
+router.get("/admin/gold-men", adminMiddleware, async (req, res) => {
+  try {
+    const data = await listAgencyFinanceMen({
+      search: req.query?.search,
+      limit: req.query?.limit,
+    });
+    return res.json({ ok: true, ...data });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      men: [],
+      coverage: {},
+      error: error?.message || String(error),
+    });
+  }
+});
+
+/**
+ * Import the previous uncached 14-day block. Repeating this call walks history
+ * backwards without one huge request that could overload Dream or time out.
+ */
+router.post("/admin/gold-men/sync-older", adminMiddleware, async (_req, res) => {
+  try {
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.status(400).json({
+        ok: false,
+        error: "Save the Dream agency login in Settings first.",
+      });
+    }
+    const current = await listAgencyFinanceMen({ limit: 1 });
+    const today = dreamDayKey() || kyivDayKey();
+    const to = current.coverage.oldestSyncedDay
+      ? shiftIsoDay(current.coverage.oldestSyncedDay, -1)
+      : today;
+    const from = shiftIsoDay(to, -13);
+    const synced = await loadCachedFinanceActionsRange(from, to, {
+      forceCurrent: true,
+    });
+    return res.json({
+      ok: true,
+      from,
+      to,
+      importedActions: Array.isArray(synced.actions) ? synced.actions.length : 0,
+      missingDays: synced.missingDays || [],
+      complete: Boolean(synced.complete),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+    });
+  }
+});
+
 router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
   try {
     const today = dreamDayKey() || kyivDayKey();
@@ -880,7 +944,7 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
         profileId: range.profileId || null,
         configured: false,
         profiles: [],
-        error: "Save agency login in Balances section",
+        error: "Save agency login in Settings",
       });
     }
 
@@ -1067,7 +1131,7 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
         configured: false,
         totalUsd: 0,
         profiles: [],
-        error: "Save agency login in Balances section",
+        error: "Save agency login in Settings",
       });
     }
 

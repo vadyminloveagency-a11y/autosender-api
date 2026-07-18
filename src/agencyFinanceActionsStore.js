@@ -31,6 +31,10 @@ export async function ensureAgencyFinanceActionTables() {
     ON agency_finance_actions (female_profile_id, day_key)
   `);
   await db.query(`
+    CREATE INDEX IF NOT EXISTS agency_finance_actions_male_day_idx
+    ON agency_finance_actions (male_profile_id, day_key)
+  `);
+  await db.query(`
     CREATE TABLE IF NOT EXISTS agency_finance_sync_days (
       day_key DATE PRIMARY KEY,
       official_total_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -302,4 +306,86 @@ export async function listAgencyFinanceDaySyncs(fromDay, toDay) {
     syncedAt: row.synced_at || null,
     error: String(row.last_error || ""),
   }));
+}
+
+/** Aggregate every retained paid action by Dream male profile. */
+export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
+  const db = getPool();
+  const query = String(search || "").trim();
+  const safeLimit = Math.min(5000, Math.max(1, Number(limit) || 1000));
+  const result = await db.query(
+    `WITH identified AS (
+       SELECT
+         CASE
+           WHEN male_profile_id <> '' THEN 'id:' || male_profile_id
+           ELSE 'name:' || LOWER(TRIM(male_name))
+         END AS male_key,
+         male_profile_id,
+         male_name,
+         female_profile_id,
+         action_type,
+         day_key,
+         occurred_at,
+         amount_usd
+       FROM agency_finance_actions
+       WHERE male_profile_id <> '' OR TRIM(male_name) <> ''
+     ),
+     grouped AS (
+       SELECT
+         male_key,
+         (ARRAY_AGG(male_profile_id ORDER BY day_key DESC, occurred_at DESC)
+           FILTER (WHERE male_profile_id <> ''))[1] AS male_profile_id,
+         (ARRAY_AGG(male_name ORDER BY day_key DESC, occurred_at DESC)
+           FILTER (WHERE TRIM(male_name) <> ''))[1] AS male_name,
+         COUNT(*)::int AS action_count,
+         COUNT(DISTINCT female_profile_id)::int AS questionnaire_count,
+         COUNT(DISTINCT action_type)::int AS action_type_count,
+         COALESCE(SUM(amount_usd), 0) AS total_usd,
+         MIN(day_key)::text AS first_day,
+         MAX(day_key)::text AS last_day
+       FROM identified
+       GROUP BY male_key
+     )
+     SELECT *
+     FROM grouped
+     WHERE $1 = ''
+       OR COALESCE(male_profile_id, '') ILIKE '%' || $1 || '%'
+       OR COALESCE(male_name, '') ILIKE '%' || $1 || '%'
+     ORDER BY total_usd DESC, action_count DESC, male_name, male_profile_id
+     LIMIT $2`,
+    [query, safeLimit],
+  );
+
+  const coverage = await db.query(
+    `SELECT
+       MIN(day_key)::text AS first_day,
+       MAX(day_key)::text AS last_day,
+       COUNT(DISTINCT day_key)::int AS cached_days,
+       COUNT(*)::int AS action_count,
+       COALESCE(SUM(amount_usd), 0) AS total_usd,
+       (SELECT MIN(day_key)::text FROM agency_finance_sync_days) AS oldest_synced_day
+     FROM agency_finance_actions
+     WHERE male_profile_id <> '' OR TRIM(male_name) <> ''`,
+  );
+  const stats = coverage.rows[0] || {};
+  return {
+    men: result.rows.map((row) => ({
+      maleProfileId: String(row.male_profile_id || ""),
+      maleName: String(row.male_name || ""),
+      actionCount: Number(row.action_count) || 0,
+      questionnaireCount: Number(row.questionnaire_count) || 0,
+      actionTypeCount: Number(row.action_type_count) || 0,
+      totalUsd: Number(row.total_usd) || 0,
+      firstDay: String(row.first_day || "").slice(0, 10),
+      lastDay: String(row.last_day || "").slice(0, 10),
+    })),
+    coverage: {
+      firstDay: String(stats.first_day || "").slice(0, 10),
+      lastDay: String(stats.last_day || "").slice(0, 10),
+      cachedDays: Number(stats.cached_days) || 0,
+      actionCount: Number(stats.action_count) || 0,
+      totalUsd: Number(stats.total_usd) || 0,
+      oldestSyncedDay: String(stats.oldest_synced_day || "").slice(0, 10),
+    },
+  };
 }

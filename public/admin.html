@@ -1071,6 +1071,47 @@
       font: 800 22px/1 var(--font);
       font-variant-numeric: tabular-nums;
     }
+    .gold-men-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 14px 0 10px;
+    }
+    .gold-men-toolbar input {
+      flex: 1 1 280px;
+      min-width: 0;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #11151a;
+      color: var(--text);
+      font: 500 13px/1 var(--font);
+      outline: none;
+    }
+    .gold-men-toolbar input:focus {
+      border-color: rgba(255, 43, 58, 0.55);
+      box-shadow: 0 0 0 3px rgba(255, 43, 58, 0.1);
+    }
+    .gold-men-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .gold-men-summary strong { color: #fff; }
+    #gold-men-table td:nth-child(4),
+    #gold-men-table td:nth-child(5),
+    #gold-men-table td:nth-child(6) { text-align: right; }
+    #gold-men-table th:nth-child(4),
+    #gold-men-table th:nth-child(5),
+    #gold-men-table th:nth-child(6) { text-align: right; }
+    #gold-men-table td:last-child {
+      color: #ff2b3a;
+      font-weight: 800;
+    }
     .bonus-profiles {
       overflow: auto;
       max-height: calc(100vh - 340px);
@@ -1691,6 +1732,7 @@
         <nav class="sidebar-nav" aria-label="Control">
           <button type="button" class="sidebar-nav-btn" data-section="mailings">Mailings</button>
           <button type="button" class="sidebar-nav-btn" data-section="balances">Balances</button>
+          <button type="button" class="sidebar-nav-btn" data-section="gold-men">Gold Men Agency</button>
         </nav>
 
         <div class="sidebar-spacer"></div>
@@ -1882,6 +1924,41 @@
                     <div id="bal-loading-text" class="bal-loading-text"></div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-gold-men" class="admin-section">
+            <div class="panel-card">
+              <div class="bal-topbar">
+                <div>
+                  <h2 class="admin-main-title" style="margin:0">Gold Men Agency</h2>
+                  <p class="mail-day-empty" style="text-align:left;padding:5px 0 0">
+                    Men who made paid actions across all questionnaires and retained Dream history.
+                  </p>
+                </div>
+                <button type="button" id="gold-men-sync-older" class="btn-primary">Load older 14 days</button>
+              </div>
+              <div class="gold-men-toolbar">
+                <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
+                <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
+              </div>
+              <div id="gold-men-summary" class="gold-men-summary"></div>
+              <div id="gold-men-status" class="mail-day-empty" style="display:none;text-align:left;padding:8px 0"></div>
+              <div class="table-scroll">
+                <table class="data-table" id="gold-men-table">
+                  <thead>
+                    <tr>
+                      <th>Man</th>
+                      <th>First paid action</th>
+                      <th>Last paid action</th>
+                      <th>Questionnaires</th>
+                      <th>Actions</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="gold-men-body"></tbody>
+                </table>
               </div>
             </div>
           </section>
@@ -2152,7 +2229,9 @@
 
     function loadSavedAdminSection() {
       const raw = localStorage.getItem(ADMIN_SECTION_KEY) || "accounts";
-      return ["accounts", "mailings", "balances"].includes(raw) ? raw : "accounts";
+      return ["accounts", "mailings", "balances", "gold-men", "settings"].includes(raw)
+        ? raw
+        : "accounts";
     }
 
     function persistBalDate(date) {
@@ -2224,6 +2303,7 @@
         accounts: document.getElementById("section-accounts"),
         mailings: document.getElementById("section-mailings"),
         balances: document.getElementById("section-balances"),
+        "gold-men": document.getElementById("section-gold-men"),
         settings: document.getElementById("section-settings"),
       };
       const next = sections[sectionId] ? sectionId : "accounts";
@@ -2252,6 +2332,9 @@
       }
       if (next === "settings") {
         void refreshAgencyFinanceCredsHint();
+      }
+      if (next === "gold-men") {
+        void refreshGoldMen();
       }
     }
 
@@ -2900,6 +2983,97 @@
       })}`;
     }
 
+    let goldMenLoading = false;
+
+    function renderGoldMen(data) {
+      const body = document.getElementById("gold-men-body");
+      const summary = document.getElementById("gold-men-summary");
+      const status = document.getElementById("gold-men-status");
+      if (!body || !summary || !status) return;
+      const men = Array.isArray(data?.men) ? data.men : [];
+      const coverage = data?.coverage || {};
+      summary.innerHTML = `
+        <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
+        <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
+        <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>
+        <span>Stored history: <strong>${escapeHtml(coverage.firstDay || "—")} → ${escapeHtml(coverage.lastDay || "—")}</strong></span>
+        <span>Cached days: <strong>${Number(coverage.cachedDays || 0).toLocaleString("en-US")}</strong></span>`;
+      body.innerHTML = men
+        .map((man) => {
+          const id = String(man.maleProfileId || "").trim();
+          const name = String(man.maleName || "").trim();
+          const label = [id, name].filter(Boolean).join(" ") || "Unknown man";
+          return `<tr>
+            <td><strong>${escapeHtml(label)}</strong></td>
+            <td>${escapeHtml(man.firstDay || "—")}</td>
+            <td>${escapeHtml(man.lastDay || "—")}</td>
+            <td>${Number(man.questionnaireCount || 0).toLocaleString("en-US")}</td>
+            <td>${Number(man.actionCount || 0).toLocaleString("en-US")}</td>
+            <td>${formatBalanceUsd(man.totalUsd)}</td>
+          </tr>`;
+        })
+        .join("");
+      status.style.display = men.length ? "none" : "block";
+      status.textContent = men.length
+        ? ""
+        : "No retained paid-action men yet. Load older history or open Bonuses to sync data.";
+    }
+
+    async function refreshGoldMen() {
+      if (goldMenLoading) return;
+      goldMenLoading = true;
+      const status = document.getElementById("gold-men-status");
+      try {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "Loading Gold Men Agency…";
+        }
+        const search = String(document.getElementById("gold-men-search")?.value || "").trim();
+        const params = new URLSearchParams({ limit: "5000" });
+        if (search) params.set("search", search);
+        const data = await api(`/letterbot/admin/gold-men?${params.toString()}`);
+        renderGoldMen(data);
+      } catch (error) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = error.message || String(error);
+        }
+      } finally {
+        goldMenLoading = false;
+      }
+    }
+
+    async function syncOlderGoldMen() {
+      if (goldMenLoading) return;
+      const button = document.getElementById("gold-men-sync-older");
+      const status = document.getElementById("gold-men-status");
+      goldMenLoading = true;
+      if (button) button.disabled = true;
+      try {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "Loading the previous 14 days from Dream…";
+        }
+        const result = await api("/letterbot/admin/gold-men/sync-older", {
+          method: "POST",
+          body: "{}",
+        });
+        if (status) {
+          status.textContent =
+            `Imported ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions.`;
+        }
+      } catch (error) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = error.message || String(error);
+        }
+      } finally {
+        goldMenLoading = false;
+        if (button) button.disabled = false;
+      }
+      await refreshGoldMen();
+    }
+
     function renderMailDayProfiles(profiles, date) {
       const emptyEl = document.getElementById("mail-day-empty");
       const wrapEl = document.getElementById("mail-day-wrap");
@@ -3247,7 +3421,7 @@
           statusEl.textContent = meta.error;
         } else if (meta.configured === false) {
           statusEl.style.display = "block";
-          statusEl.textContent = "Save agency login above to load balances.";
+          statusEl.textContent = "Save agency login in Settings to load balances.";
         } else {
           statusEl.style.display = "none";
           statusEl.textContent = "";
@@ -3376,7 +3550,7 @@
           statusEl.textContent = meta.error;
         } else if (meta.configured === false) {
           statusEl.style.display = "block";
-          statusEl.textContent = "Save agency login above to load paid actions.";
+          statusEl.textContent = "Save agency login in Settings to load paid actions.";
         } else {
           statusEl.style.display = "none";
           statusEl.textContent = "";
@@ -4142,6 +4316,20 @@
       persistBalFilters();
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
+    });
+
+    document.getElementById("gold-men-refresh")?.addEventListener("click", () => {
+      void refreshGoldMen();
+    });
+    document.getElementById("gold-men-sync-older")?.addEventListener("click", () => {
+      void syncOlderGoldMen();
+    });
+    let goldMenSearchTimer = null;
+    document.getElementById("gold-men-search")?.addEventListener("input", () => {
+      if (goldMenSearchTimer) clearTimeout(goldMenSearchTimer);
+      goldMenSearchTimer = setTimeout(() => {
+        void refreshGoldMen();
+      }, 250);
     });
 
     document.getElementById("accounts-list").addEventListener("click", (event) => {
