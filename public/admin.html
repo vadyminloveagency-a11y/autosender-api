@@ -809,6 +809,16 @@
       color: var(--muted);
       font-size: 12px;
     }
+    #bal-day-wrap {
+      max-height: calc(100vh - 340px);
+      overflow: auto;
+    }
+    #bal-day-wrap .data-table th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #0a1014;
+    }
     .mail-balance {
       font-weight: 700;
       font-variant-numeric: tabular-nums;
@@ -901,7 +911,8 @@
       font-variant-numeric: tabular-nums;
     }
     .bonus-profiles {
-      overflow-x: auto;
+      overflow: auto;
+      max-height: calc(100vh - 340px);
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 7px;
       background: #0c1216;
@@ -924,6 +935,9 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
       background: #101816;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     .bonus-actions-table tbody tr:nth-child(even) {
       background: rgba(255, 255, 255, 0.02);
