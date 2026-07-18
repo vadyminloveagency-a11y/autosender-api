@@ -498,35 +498,79 @@ export async function upsertAgencySyncedProfiles(items = []) {
 
 export async function updateAgencyProfile(id, patch = {}) {
   const existing = await getAgencyProfileById(id);
-  if (!existing) return null;
+  if (!existing) return { row: null, verifyWarning: "" };
 
   let femaleProfileId = existing.femaleProfileId;
   let displayName = existing.displayName;
   let dreamUsername = existing.dreamUsername;
   let passwordEnc = null;
+  let verifyWarning = "";
 
   if (patch.username || patch.password) {
     const current = await getAgencyProfileRowRaw(id);
     const secrets = await getAgencyProfileSecrets(current);
-    const verified = await verifyAndResolveDreamProfile({
-      username: patch.username || secrets.dreamUsername,
-      password: patch.password || secrets.password,
-      displayName: patch.displayName ?? displayName,
-    });
-    // Keep the agency-synced questionnaire ID if login resolves to another girl.
-    if (
-      femaleProfileId &&
-      verified.femaleProfileId &&
-      Number(femaleProfileId) !== Number(verified.femaleProfileId)
-    ) {
-      throw new Error(
-        `This Dream login belongs to profile ${verified.femaleProfileId}, expected ${femaleProfileId}`,
-      );
+    const nextUser = String(patch.username || secrets.dreamUsername || "").trim();
+    const nextPass = String(patch.password || secrets.password || "");
+    if (!nextUser || !nextPass) {
+      throw new Error("Dream login and password are required");
     }
-    femaleProfileId = verified.femaleProfileId || femaleProfileId;
-    displayName = verified.displayName;
-    dreamUsername = verified.dreamUsername;
-    passwordEnc = encryptSecret(verified.dreamPassword);
+    if (/^agency:\d+$/i.test(nextUser)) {
+      throw new Error("Enter the lady Dream login, not the agency placeholder");
+    }
+
+    const applyVerified = (verified) => {
+      if (
+        femaleProfileId &&
+        verified.femaleProfileId &&
+        Number(femaleProfileId) !== Number(verified.femaleProfileId)
+      ) {
+        throw new Error(
+          `This Dream login belongs to profile ${verified.femaleProfileId}, expected ${femaleProfileId}`,
+        );
+      }
+      femaleProfileId = verified.femaleProfileId || femaleProfileId;
+      displayName =
+        patch.displayName != null
+          ? String(patch.displayName || "").trim() || verified.displayName
+          : verified.displayName;
+      dreamUsername = verified.dreamUsername;
+      passwordEnc = encryptSecret(verified.dreamPassword);
+    };
+
+    // Agency-synced profiles already have female_profile_id. If live Dream login
+    // fails from Render IP (even with 2captcha), still store the credentials —
+    // Scan / LetterBot will verify later.
+    if (femaleProfileId) {
+      try {
+        const verified = await verifyAndResolveDreamProfile({
+          username: nextUser,
+          password: nextPass,
+          displayName: patch.displayName ?? displayName,
+        });
+        applyVerified(verified);
+      } catch (error) {
+        const msg = String(error?.message || error || "");
+        if (/belongs to profile/i.test(msg) && /expected/i.test(msg)) {
+          throw error;
+        }
+        console.warn(
+          `[updateAgencyProfile] soft-save credentials for ${femaleProfileId}: ${msg}`,
+        );
+        dreamUsername = nextUser;
+        passwordEnc = encryptSecret(nextPass);
+        if (patch.displayName != null) {
+          displayName = String(patch.displayName || "").trim() || displayName;
+        }
+        verifyWarning = msg;
+      }
+    } else {
+      const verified = await verifyAndResolveDreamProfile({
+        username: nextUser,
+        password: nextPass,
+        displayName: patch.displayName ?? displayName,
+      });
+      applyVerified(verified);
+    }
   } else if (patch.displayName != null) {
     displayName = String(patch.displayName || "").trim() || displayName;
   }
@@ -570,7 +614,7 @@ export async function updateAgencyProfile(id, patch = {}) {
       );
     }
   }
-  return row;
+  return { row, verifyWarning };
 }
 
 async function getAgencyProfileRowRaw(id) {

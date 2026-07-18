@@ -191,7 +191,7 @@ router.post("/admin", adminMiddleware, async (req, res) => {
 
 router.patch("/admin/:id", adminMiddleware, async (req, res) => {
   try {
-    const row = await updateAgencyProfile(req.params.id, {
+    const { row, verifyWarning } = await updateAgencyProfile(req.params.id, {
       username: req.body?.dreamUsername || req.body?.username,
       password: req.body?.password,
       displayName: req.body?.displayName || req.body?.name,
@@ -206,6 +206,7 @@ router.patch("/admin/:id", adminMiddleware, async (req, res) => {
     return res.json({
       ok: true,
       profile: mapAdminProfile(profile, secrets.password),
+      verifyWarning: verifyWarning || "",
     });
   } catch (error) {
     console.error(error);

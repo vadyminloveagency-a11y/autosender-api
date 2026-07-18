@@ -3237,13 +3237,20 @@
             return;
           }
         }
-        await api(`/profiles/admin/${profileId}`, {
+        const data = await api(`/profiles/admin/${profileId}`, {
           method: "PATCH",
           body: JSON.stringify(body),
         });
-        setStatus("Profile saved", "ok");
         closeProfileEditModal();
         await refreshAccountManager({ quiet: true });
+        if (data?.verifyWarning) {
+          setStatus(
+            "Login saved. Live Dream check failed from server — Scan may need DREAM_PROXY_URL",
+            "ok",
+          );
+        } else {
+          setStatus("Profile saved", "ok");
+        }
       } catch (error) {
         setStatus(error.message, "error");
       }
