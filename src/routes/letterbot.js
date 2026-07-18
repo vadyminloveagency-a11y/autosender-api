@@ -928,6 +928,43 @@ router.post("/admin/gold-men/sync-older", adminMiddleware, async (_req, res) => 
   }
 });
 
+/** Import one explicit block (up to 14 days) for the year backfill UI. */
+router.post("/admin/gold-men/sync-range", adminMiddleware, async (req, res) => {
+  try {
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.status(400).json({
+        ok: false,
+        error: "Save the Dream agency login in Settings first.",
+      });
+    }
+    const today = dreamDayKey() || kyivDayKey();
+    const range = parseFinanceDateRange(req.body || {}, today);
+    if (range.daySpan > 14) {
+      return res.status(400).json({
+        ok: false,
+        error: "Gold Men sync block is limited to 14 days.",
+      });
+    }
+    const synced = await loadCachedFinanceActionsRange(range.from, range.to, {
+      forceCurrent: true,
+    });
+    return res.json({
+      ok: true,
+      from: range.from,
+      to: range.to,
+      importedActions: Array.isArray(synced.actions) ? synced.actions.length : 0,
+      missingDays: synced.missingDays || [],
+      complete: Boolean(synced.complete),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+    });
+  }
+});
+
 router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
   try {
     const today = dreamDayKey() || kyivDayKey();

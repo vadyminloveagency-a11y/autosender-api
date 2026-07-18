@@ -360,10 +360,11 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
     `SELECT
        MIN(day_key)::text AS first_day,
        MAX(day_key)::text AS last_day,
-       COUNT(DISTINCT day_key)::int AS cached_days,
+       COUNT(DISTINCT day_key)::int AS action_days,
        COUNT(*)::int AS action_count,
        COALESCE(SUM(amount_usd), 0) AS total_usd,
-       (SELECT MIN(day_key)::text FROM agency_finance_sync_days) AS oldest_synced_day
+       (SELECT MIN(day_key)::text FROM agency_finance_sync_days) AS oldest_synced_day,
+       (SELECT COUNT(*)::int FROM agency_finance_sync_days) AS cached_days
      FROM agency_finance_actions
      WHERE male_profile_id <> '' OR TRIM(male_name) <> ''`,
   );
@@ -383,6 +384,7 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
       firstDay: String(stats.first_day || "").slice(0, 10),
       lastDay: String(stats.last_day || "").slice(0, 10),
       cachedDays: Number(stats.cached_days) || 0,
+      actionDays: Number(stats.action_days) || 0,
       actionCount: Number(stats.action_count) || 0,
       totalUsd: Number(stats.total_usd) || 0,
       oldestSyncedDay: String(stats.oldest_synced_day || "").slice(0, 10),

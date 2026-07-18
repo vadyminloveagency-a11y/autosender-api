@@ -959,6 +959,18 @@
         min-height: 0;
         max-height: none;
       }
+      #section-gold-men > .panel-card {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #section-gold-men .gold-men-table-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+      }
     }
     .mail-balance {
       font-weight: 700;
@@ -1103,8 +1115,6 @@
     }
     .gold-men-summary strong { color: #fff; }
     .gold-men-table-wrap {
-      max-height: calc(100vh - 310px);
-      min-height: 260px;
       overflow: auto;
       border: 1px solid rgba(255, 43, 58, 0.22);
       border-radius: 8px;
@@ -1139,6 +1149,16 @@
     #gold-men-table th:nth-child(4),
     #gold-men-table th:nth-child(5),
     #gold-men-table th:nth-child(6) { text-align: right; }
+    #gold-men-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #140f11;
+    }
+    #gold-men-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
     #gold-men-table td:last-child {
       color: #ff2b3a;
       font-weight: 700;
@@ -1158,6 +1178,20 @@
       padding: 0 10px;
       border-radius: 6px;
       font: 600 12px/1 var(--font);
+    }
+    .gold-men-actions input[type="date"] {
+      width: 132px;
+      min-height: 26px;
+      padding: 0 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #11151a;
+      color: var(--text);
+      font: 500 11px/1 var(--font);
+      outline: none;
+    }
+    .gold-men-actions input[type="date"]:focus {
+      border-color: rgba(255, 43, 58, 0.55);
     }
     .bonus-profiles {
       overflow: auto;
@@ -1985,8 +2019,10 @@
                   </p>
                 </div>
                 <div class="gold-men-actions">
+                  <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
+                  <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
+                  <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
                   <button type="button" id="gold-men-sync-older" class="btn-ghost">Load older 14 days</button>
-                  <button type="button" id="gold-men-sync-year" class="btn-primary">Load previous year</button>
                 </div>
               </div>
               <div class="gold-men-toolbar">
@@ -2002,10 +2038,10 @@
                     <tr>
                       <th>Man</th>
                       <th>First paid action</th>
-                      <th>Last paid action</th>
+                      <th class="sortable is-sorted" data-sort="date">Last paid action ↓</th>
                       <th>Questionnaires</th>
                       <th>Actions</th>
-                      <th>Total</th>
+                      <th class="sortable" data-sort="balance">Total</th>
                     </tr>
                   </thead>
                   <tbody id="gold-men-body"></tbody>
@@ -2385,6 +2421,7 @@
         void refreshAgencyFinanceCredsHint();
       }
       if (next === "gold-men") {
+        syncGoldMenPeriodDefaults();
         void refreshGoldMen();
       }
     }
@@ -3036,15 +3073,57 @@
 
     let goldMenLoading = false;
     let goldMenCache = [];
+    let goldMenCoverage = {};
+    const goldMenSortState = { key: "date", dir: "desc" };
+
+    function syncGoldMenPeriodDefaults() {
+      const today = kyivTodayLocal();
+      const fromEl = document.getElementById("gold-men-sync-from");
+      const toEl = document.getElementById("gold-men-sync-to");
+      if (!fromEl || !toEl) return;
+      toEl.max = today;
+      fromEl.max = today;
+      if (!toEl.value || toEl.value > today) toEl.value = today;
+      if (!fromEl.value || fromEl.value > toEl.value) {
+        const date = new Date(`${toEl.value}T00:00:00Z`);
+        date.setUTCDate(date.getUTCDate() - 29);
+        fromEl.value = date.toISOString().slice(0, 10);
+      }
+    }
+
+    function updateGoldMenSortHeaders() {
+      document.querySelectorAll("#gold-men-table th.sortable").forEach((th) => {
+        const key = th.getAttribute("data-sort");
+        const labels = { date: "Last paid action", balance: "Total" };
+        const active = goldMenSortState.key === key;
+        th.classList.toggle("is-sorted", active);
+        th.textContent = `${labels[key] || key}${sortMark(goldMenSortState.key, key, goldMenSortState.dir)}`;
+      });
+    }
+
+    function sortGoldMenRows(men) {
+      const { key, dir } = goldMenSortState;
+      const factor = dir === "asc" ? 1 : -1;
+      return [...(Array.isArray(men) ? men : [])].sort((a, b) => {
+        if (key === "balance") {
+          return ((Number(a.totalUsd) || 0) - (Number(b.totalUsd) || 0)) * factor;
+        }
+        return String(a.lastDay || "").localeCompare(String(b.lastDay || "")) * factor;
+      });
+    }
 
     function renderGoldMen(data) {
       const body = document.getElementById("gold-men-body");
       const summary = document.getElementById("gold-men-summary");
       const status = document.getElementById("gold-men-status");
       if (!body || !summary || !status) return;
-      const men = Array.isArray(data?.men) ? data.men : [];
-      goldMenCache = men;
-      const coverage = data?.coverage || {};
+      if (data) {
+        goldMenCache = Array.isArray(data.men) ? data.men : [];
+        goldMenCoverage = data.coverage || {};
+      }
+      const men = sortGoldMenRows(goldMenCache);
+      const coverage = goldMenCoverage;
+      updateGoldMenSortHeaders();
       summary.innerHTML = `
         <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
         <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
@@ -3074,7 +3153,7 @@
       status.style.display = men.length ? "none" : "block";
       status.textContent = men.length
         ? ""
-        : "No retained paid-action men yet. Load older history or open Bonuses to sync data.";
+        : "No retained paid-action men yet. Choose a period and press Load period.";
     }
 
     async function copyAllGoldMenIds() {
@@ -3152,7 +3231,7 @@
 
     function setGoldMenSyncBusy(busy) {
       goldMenLoading = busy;
-      ["gold-men-sync-older", "gold-men-sync-year", "gold-men-refresh"].forEach((id) => {
+      ["gold-men-sync-older", "gold-men-sync-period", "gold-men-refresh"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.disabled = busy;
       });
@@ -3162,6 +3241,19 @@
       return api("/letterbot/admin/gold-men/sync-older", {
         method: "POST",
         body: "{}",
+      });
+    }
+
+    function shiftGoldMenDay(dayKey, offsetDays) {
+      const date = new Date(`${dayKey}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + Number(offsetDays || 0));
+      return date.toISOString().slice(0, 10);
+    }
+
+    async function importGoldMenRange(from, to) {
+      return api("/letterbot/admin/gold-men/sync-range", {
+        method: "POST",
+        body: JSON.stringify({ from, to }),
       });
     }
 
@@ -3190,34 +3282,60 @@
       await refreshGoldMen();
     }
 
-    async function syncPreviousYearGoldMen() {
+    async function syncGoldMenPeriod() {
       if (goldMenLoading) return;
       const status = document.getElementById("gold-men-status");
-      const batches = 26;
+      let periodFrom = String(document.getElementById("gold-men-sync-from")?.value || "");
+      let periodTo = String(document.getElementById("gold-men-sync-to")?.value || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(periodFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(periodTo)) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "Choose both From and To dates.";
+        }
+        return;
+      }
+      if (periodFrom > periodTo) {
+        [periodFrom, periodTo] = [periodTo, periodFrom];
+      }
+      const today = kyivTodayLocal();
+      if (periodTo > today) periodTo = today;
+      if (periodFrom > periodTo) periodFrom = periodTo;
+      const fromEl = document.getElementById("gold-men-sync-from");
+      const toEl = document.getElementById("gold-men-sync-to");
+      if (fromEl) fromEl.value = periodFrom;
+      if (toEl) toEl.value = periodTo;
+      const ranges = [];
+      let blockTo = periodTo;
+      while (blockTo >= periodFrom) {
+        const candidate = shiftGoldMenDay(blockTo, -13);
+        const blockFrom = candidate < periodFrom ? periodFrom : candidate;
+        ranges.push({ from: blockFrom, to: blockTo });
+        blockTo = shiftGoldMenDay(blockFrom, -1);
+      }
       let importedTotal = 0;
-      let from = "";
-      let to = "";
       setGoldMenSyncBusy(true);
       try {
-        for (let i = 1; i <= batches; i += 1) {
+        for (let index = 0; index < ranges.length; index += 1) {
+          const range = ranges[index];
+          const batch = index + 1;
           if (status) {
             status.style.display = "block";
-            status.textContent = `Loading previous year… batch ${i}/${batches}`;
+            status.textContent =
+              `Loading selected period… batch ${batch}/${ranges.length} · ${range.from} → ${range.to}`;
           }
-          const result = await importOlderGoldMenBatch();
+          const result = await importGoldMenRange(range.from, range.to);
           importedTotal += Number(result.importedActions) || 0;
-          if (!to) to = result.to || "";
-          from = result.from || from;
           await refreshGoldMen({
             force: true,
             keepBusy: true,
             quiet: true,
-            statusText: `Loading previous year… batch ${i}/${batches} · ${from} → ${result.to || to}`,
+            statusText:
+              `Loading selected period… batch ${batch}/${ranges.length} · ${range.from} → ${range.to}`,
           });
         }
         if (status) {
           status.textContent =
-            `Year import done ${from || "—"} → ${to || "—"}: ${importedTotal.toLocaleString("en-US")} paid actions.`;
+            `Period import done ${periodFrom} → ${periodTo}: ${importedTotal.toLocaleString("en-US")} paid actions processed.`;
         }
       } catch (error) {
         if (status) {
@@ -4483,8 +4601,29 @@
     document.getElementById("gold-men-sync-older")?.addEventListener("click", () => {
       void syncOlderGoldMen();
     });
-    document.getElementById("gold-men-sync-year")?.addEventListener("click", () => {
-      void syncPreviousYearGoldMen();
+    document.getElementById("gold-men-sync-period")?.addEventListener("click", () => {
+      void syncGoldMenPeriod();
+    });
+    document.getElementById("gold-men-table")?.addEventListener("click", (event) => {
+      const th = event.target.closest("th.sortable[data-sort]");
+      if (!th) return;
+      const key = th.getAttribute("data-sort");
+      if (key !== "date" && key !== "balance") return;
+      const defaultDir = key === "balance" || key === "date" ? "desc" : "asc";
+      toggleSortState(goldMenSortState, key, defaultDir);
+      renderGoldMen();
+    });
+    document.getElementById("gold-men-sync-to")?.addEventListener("change", () => {
+      const today = kyivTodayLocal();
+      const toEl = document.getElementById("gold-men-sync-to");
+      const fromEl = document.getElementById("gold-men-sync-from");
+      if (toEl && toEl.value > today) toEl.value = today;
+      if (fromEl && toEl && fromEl.value > toEl.value) fromEl.value = toEl.value;
+    });
+    document.getElementById("gold-men-sync-from")?.addEventListener("change", () => {
+      const toEl = document.getElementById("gold-men-sync-to");
+      const fromEl = document.getElementById("gold-men-sync-from");
+      if (fromEl && toEl && fromEl.value > toEl.value) fromEl.value = toEl.value;
     });
     let goldMenSearchTimer = null;
     document.getElementById("gold-men-search")?.addEventListener("input", () => {
