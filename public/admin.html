@@ -1353,7 +1353,18 @@
       min-width: 1.5em;
       color: #fff;
       cursor: pointer;
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
+    }
+    #gold-men-table tbody tr {
+      cursor: pointer;
+    }
+    #gold-men-table tbody tr.is-selected {
+      background: rgba(255, 43, 58, 0.16);
+    }
+    #gold-men-table tbody tr.is-selected:nth-child(even) {
+      background: rgba(255, 43, 58, 0.2);
+    }
+    #gold-men-table tbody tr.is-selected td {
+      box-shadow: inset 3px 0 0 #ff2b3a;
     }
     #gold-q-popover {
       position: fixed;
@@ -2356,7 +2367,6 @@
                   <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
                   <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
                   <button type="button" id="gold-men-repair" class="btn-ghost">Repair incomplete</button>
-                  <button type="button" id="gold-men-sync-older" class="btn-ghost">Load older 14 days</button>
                 </div>
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
@@ -3415,7 +3425,22 @@
     const goldMenQuestionnaireCache = new Map();
     let goldMenQuestionnaireAnchor = null;
     let goldMenQuestionnairePinned = false;
+    let goldMenSelectedKey = "";
     const GOLD_MEN_PAGE_SIZE = 50;
+
+    function goldManRowKey(man) {
+      const id = String(man?.maleProfileId || "").trim();
+      if (id) return `id:${id}`;
+      return `name:${String(man?.maleName || "").trim().toLowerCase()}`;
+    }
+
+    function selectGoldMenRow(row) {
+      const body = document.getElementById("gold-men-body");
+      if (!body || !row) return;
+      body.querySelectorAll("tr.is-selected").forEach((tr) => tr.classList.remove("is-selected"));
+      row.classList.add("is-selected");
+      goldMenSelectedKey = row.getAttribute("data-gold-man-key") || "";
+    }
 
     function syncGoldMenPeriodDefaults() {
       const today = kyivTodayLocal();
@@ -3614,7 +3639,9 @@
           const name = String(man.maleName || "").trim();
           const displayName = name || "Unknown man";
           const qCount = Number(man.questionnaireCount || 0);
-          return `<tr>
+          const rowKey = goldManRowKey(man);
+          const selected = goldMenSelectedKey && goldMenSelectedKey === rowKey ? " is-selected" : "";
+          return `<tr class="${selected.trim()}" data-gold-man-key="${escapeHtml(rowKey)}" data-gold-man-index="${index}">
             <td>
               <div class="gold-man">
                 <span class="gold-man-name">${escapeHtml(displayName)}</span>
@@ -3721,16 +3748,9 @@
 
     function setGoldMenSyncBusy(busy) {
       goldMenLoading = busy;
-      ["gold-men-sync-older", "gold-men-sync-period", "gold-men-repair", "gold-men-refresh"].forEach((id) => {
+      ["gold-men-sync-period", "gold-men-repair", "gold-men-refresh"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.disabled = busy;
-      });
-    }
-
-    async function importOlderGoldMenBatch() {
-      return api("/agency-finance/gold-men/sync-older", {
-        method: "POST",
-        body: "{}",
       });
     }
 
@@ -3808,33 +3828,6 @@
         setGoldMenSyncBusy(false);
       }
       await refreshGoldMen({ force: true });
-    }
-
-    async function syncOlderGoldMen() {
-      if (goldMenLoading) return;
-      const status = document.getElementById("gold-men-status");
-      setGoldMenSyncBusy(true);
-      try {
-        if (status) {
-          status.style.display = "block";
-          status.textContent = "Loading the previous 14 days from Dream…";
-        }
-        const result = await importOlderGoldMenBatch();
-        const missing = Array.isArray(result.missingDays) ? result.missingDays.length : 0;
-        if (status) {
-          status.textContent =
-            `Added ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions` +
-            (missing ? ` · ${missing} incomplete day(s)` : " · complete");
-        }
-      } catch (error) {
-        if (status) {
-          status.style.display = "block";
-          status.textContent = error.message || String(error);
-        }
-      } finally {
-        setGoldMenSyncBusy(false);
-      }
-      await refreshGoldMen();
     }
 
     async function syncGoldMenPeriod() {
@@ -5251,9 +5244,6 @@
     document.getElementById("gold-men-copy-ids")?.addEventListener("click", () => {
       void copyAllGoldMenIds();
     });
-    document.getElementById("gold-men-sync-older")?.addEventListener("click", () => {
-      void syncOlderGoldMen();
-    });
     document.getElementById("gold-men-sync-period")?.addEventListener("click", () => {
       void syncGoldMenPeriod();
     });
@@ -5292,6 +5282,8 @@
       hideGoldMenQuestionnairesTip();
     });
     document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-gold-man-index]");
+      if (row) selectGoldMenRow(row);
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
@@ -5311,6 +5303,7 @@
       const tip = document.getElementById("gold-q-popover");
       if (tip && tip.contains(event.target)) return;
       if (event.target.closest?.(".gold-q-count")) return;
+      if (event.target.closest?.("#gold-men-body tr")) return;
       hideGoldMenQuestionnairesTip(true);
     });
     document.addEventListener("keydown", (event) => {
