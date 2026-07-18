@@ -768,20 +768,24 @@
       margin: 0 0 14px;
     }
     .bal-tab-btn {
-      min-height: 36px;
+      min-height: 34px;
+      min-width: 120px;
       padding: 0 16px;
-      border: 1px solid var(--line-strong);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--text-soft);
-      font: 600 13px/1 var(--font);
+      border: 1px solid rgba(78, 98, 108, 0.55);
+      border-radius: 7px;
+      background: #12171c;
+      color: #d7e8de;
+      font: 800 12px/1 Arial, sans-serif;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
     }
-    .bal-tab-btn:hover { filter: brightness(0.98); }
+    .bal-tab-btn:hover { border-color: rgba(4, 242, 160, 0.35); }
     .bal-tab-btn.is-active {
-      border-color: transparent;
-      background: var(--accent);
-      color: #fff;
+      border-color: rgba(4, 242, 160, 0.45);
+      background: #101816;
+      color: #04f2a0;
     }
     .bal-tab-panel { display: none; }
     .bal-tab-panel.is-active { display: block; }
@@ -792,19 +796,19 @@
       gap: 12px;
       margin: 0 0 12px;
       padding: 12px 14px;
-      border: 1px solid rgba(47, 111, 237, 0.22);
-      border-radius: 10px;
-      background: rgba(47, 111, 237, 0.06);
+      border: 1px solid rgba(4, 242, 160, 0.35);
+      border-radius: 7px;
+      background: #101816;
     }
     .bal-section-total-label {
-      color: var(--muted);
-      font: 600 12px/1 var(--font);
+      color: #8ea19c;
+      font: 800 11px/1 Arial, sans-serif;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
     }
     .bal-section-total-value {
-      color: var(--accent);
-      font: 800 22px/1 var(--font);
+      color: #04f2a0;
+      font: 800 22px/1 Arial, sans-serif;
       font-variant-numeric: tabular-nums;
     }
     .bonus-profiles {
