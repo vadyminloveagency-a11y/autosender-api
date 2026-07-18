@@ -167,12 +167,14 @@ function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 
   return url;
 }
 
+const MAX_BONUS_PAGES = 500;
+
 function maxPaginationPage(html) {
   let max = 1;
   for (const match of String(html || "").matchAll(/(?:[?&]|&amp;)page=(\d+)/gi)) {
     max = Math.max(max, Number(match[1]) || 1);
   }
-  return Math.min(max, 200);
+  return Math.min(max, MAX_BONUS_PAGES);
 }
 
 /** Official Dream table total from detail view footer. */
@@ -388,7 +390,11 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
   const cacheKey = `${day}|${day}|${pid}`;
   const cached = detailCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < DETAIL_CACHE_TTL_MS) {
-    return cached.actions;
+    return {
+      actions: cached.actions,
+      officialTotalUsd:
+        cached.officialTotalUsd == null ? null : Number(cached.officialTotalUsd),
+    };
   }
 
   let cookieHeader = await getCookieHeader();
@@ -466,7 +472,7 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
   let emptyStreak = 0;
   for (
     let page = detectedPages + 1;
-    page <= 200 &&
+    page <= MAX_BONUS_PAGES &&
     (targetTotal == null ||
       Math.abs(sumActionsUsd([...byKey.values()]) - targetTotal) >= 0.02);
     page += 1
@@ -502,8 +508,10 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
   }
 
   const actions = [...byKey.values()];
-  detailCache.set(cacheKey, { at: Date.now(), actions });
-  return actions;
+  const officialTotalUsd =
+    targetTotal == null ? null : Number(Number(targetTotal).toFixed(2));
+  detailCache.set(cacheKey, { at: Date.now(), actions, officialTotalUsd });
+  return { actions, officialTotalUsd };
 }
 
 export async function fetchBonusActionsRange(
@@ -525,7 +533,8 @@ export async function fetchBonusActionsRange(
 
   const pid = Number(profileId) || 0;
   if (startDay === endDay) {
-    return fetchBonusActionsOneDay(startDay, { force, profileId: pid });
+    const detail = await fetchBonusActionsOneDay(startDay, { force, profileId: pid });
+    return detail.actions;
   }
 
   const cacheKey = `${startDay}|${endDay}|${pid}`;
@@ -548,7 +557,8 @@ export async function fetchBonusActionsRange(
     const results = await Promise.all(
       batch.map(async (day) => {
         try {
-          return await fetchBonusActionsOneDay(day, { force, profileId: pid });
+          const detail = await fetchBonusActionsOneDay(day, { force, profileId: pid });
+          return detail.actions;
         } catch (error) {
           errors.push(`${day}: ${error?.message || error}`);
           return [];
@@ -569,12 +579,18 @@ export async function fetchBonusActionsRange(
     seen.add(key);
     return true;
   });
-  detailCache.set(cacheKey, { at: Date.now(), actions });
+  detailCache.set(cacheKey, { at: Date.now(), actions, officialTotalUsd: null });
   return actions;
 }
 
-export async function fetchBonusActions(dayKey, options = {}) {
+/** Full day detail including Dream Grand Total used for completeness checks. */
+export async function fetchBonusActionsDayDetail(dayKey, options = {}) {
   return fetchBonusActionsOneDay(dayKey, options);
+}
+
+export async function fetchBonusActions(dayKey, options = {}) {
+  const detail = await fetchBonusActionsOneDay(dayKey, options);
+  return detail.actions;
 }
 
 export function clearAgencyFinanceCaches() {

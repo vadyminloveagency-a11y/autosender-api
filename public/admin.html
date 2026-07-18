@@ -1193,6 +1193,11 @@
     .gold-men-actions input[type="date"]:focus {
       border-color: rgba(255, 43, 58, 0.55);
     }
+    .gold-men-actions input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.85;
+      cursor: pointer;
+    }
     .bonus-profiles {
       overflow: auto;
       max-height: calc(100vh - 340px);
@@ -2022,6 +2027,7 @@
                   <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
                   <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
                   <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
+                  <button type="button" id="gold-men-repair" class="btn-ghost">Repair incomplete</button>
                   <button type="button" id="gold-men-sync-older" class="btn-ghost">Load older 14 days</button>
                 </div>
               </div>
@@ -3128,6 +3134,9 @@
         <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
         <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
         <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>
+        <span>Dream days total: <strong>${formatBalanceUsd(coverage.officialTotalUsd)}</strong></span>
+        <span>Missing vs Dream: <strong>${formatBalanceUsd(coverage.missingUsd)}</strong></span>
+        <span>Incomplete days: <strong>${Number(coverage.incompleteDays || 0).toLocaleString("en-US")}</strong></span>
         <span>Stored history: <strong>${escapeHtml(coverage.firstDay || "—")} → ${escapeHtml(coverage.lastDay || "—")}</strong></span>
         <span>Cached days: <strong>${Number(coverage.cachedDays || 0).toLocaleString("en-US")}</strong></span>`;
       body.innerHTML = men
@@ -3231,7 +3240,7 @@
 
     function setGoldMenSyncBusy(busy) {
       goldMenLoading = busy;
-      ["gold-men-sync-older", "gold-men-sync-period", "gold-men-refresh"].forEach((id) => {
+      ["gold-men-sync-older", "gold-men-sync-period", "gold-men-repair", "gold-men-refresh"].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.disabled = busy;
       });
@@ -3257,6 +3266,61 @@
       });
     }
 
+    async function repairIncompleteGoldMen() {
+      if (goldMenLoading) return;
+      const status = document.getElementById("gold-men-status");
+      setGoldMenSyncBusy(true);
+      try {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "Repairing incomplete days against Dream Grand Total…";
+        }
+        let rounds = 0;
+        let repairedTotal = 0;
+        while (rounds < 40) {
+          const incompleteBefore = Number(goldMenCoverage.incompleteDays || 0);
+          if (incompleteBefore <= 0) break;
+          rounds += 1;
+          if (status) {
+            status.textContent =
+              `Repairing incomplete days… round ${rounds} · ${incompleteBefore} left`;
+          }
+          const result = await api("/agency-finance/gold-men/repair-incomplete", {
+            method: "POST",
+            body: JSON.stringify({ limit: 14 }),
+          });
+          repairedTotal += Number(result.repaired) || 0;
+          await refreshGoldMen({
+            force: true,
+            keepBusy: true,
+            quiet: true,
+            statusText:
+              `Repairing incomplete days… round ${rounds} · repaired ${repairedTotal}`,
+          });
+          const incompleteAfter = Number(goldMenCoverage.incompleteDays || 0);
+          if (!(Array.isArray(result.days) && result.days.length)) break;
+          if (incompleteAfter >= incompleteBefore && (Number(result.repaired) || 0) === 0) {
+            break;
+          }
+        }
+        const remaining = Number(goldMenCoverage.incompleteDays || 0);
+        if (status) {
+          status.textContent =
+            remaining > 0
+              ? `Repair paused: ${repairedTotal} days fixed, ${remaining} still incomplete. Re-run Repair or Load period.`
+              : `Repair done: ${repairedTotal} days matched Dream Grand Total.`;
+        }
+      } catch (error) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = error.message || String(error);
+        }
+      } finally {
+        setGoldMenSyncBusy(false);
+      }
+      await refreshGoldMen({ force: true });
+    }
+
     async function syncOlderGoldMen() {
       if (goldMenLoading) return;
       const status = document.getElementById("gold-men-status");
@@ -3267,9 +3331,11 @@
           status.textContent = "Loading the previous 14 days from Dream…";
         }
         const result = await importOlderGoldMenBatch();
+        const missing = Array.isArray(result.missingDays) ? result.missingDays.length : 0;
         if (status) {
           status.textContent =
-            `Added ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions.`;
+            `Added ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions` +
+            (missing ? ` · ${missing} incomplete day(s)` : " · complete");
         }
       } catch (error) {
         if (status) {
@@ -3325,17 +3391,19 @@
           }
           const result = await importGoldMenRange(range.from, range.to);
           importedTotal += Number(result.importedActions) || 0;
+          const missing = Array.isArray(result.missingDays) ? result.missingDays.length : 0;
           await refreshGoldMen({
             force: true,
             keepBusy: true,
             quiet: true,
             statusText:
-              `Loading selected period… batch ${batch}/${ranges.length} · ${range.from} → ${range.to}`,
+              `Loading selected period… batch ${batch}/${ranges.length} · ${range.from} → ${range.to}` +
+              (missing ? ` · ${missing} incomplete` : ""),
           });
         }
         if (status) {
           status.textContent =
-            `Period import done ${periodFrom} → ${periodTo}: ${importedTotal.toLocaleString("en-US")} paid actions processed.`;
+            `Period import done ${periodFrom} → ${periodTo}: ${importedTotal.toLocaleString("en-US")} paid actions processed. Use Repair incomplete if gaps remain.`;
         }
       } catch (error) {
         if (status) {
@@ -4603,6 +4671,9 @@
     });
     document.getElementById("gold-men-sync-period")?.addEventListener("click", () => {
       void syncGoldMenPeriod();
+    });
+    document.getElementById("gold-men-repair")?.addEventListener("click", () => {
+      void repairIncompleteGoldMen();
     });
     document.getElementById("gold-men-table")?.addEventListener("click", (event) => {
       const th = event.target.closest("th.sortable[data-sort]");

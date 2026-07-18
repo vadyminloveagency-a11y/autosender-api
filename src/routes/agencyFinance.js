@@ -13,7 +13,10 @@ import {
   clearAgencyFinanceCaches,
   fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
-import { loadCachedFinanceActionsRange } from "../agencyFinanceActionsCache.js";
+import {
+  loadCachedFinanceActionsRange,
+  repairIncompleteFinanceDays,
+} from "../agencyFinanceActionsCache.js";
 import {
   listAgencyFinanceActions,
   listAgencyFinanceDaySyncs,
@@ -164,8 +167,9 @@ router.post("/gold-men/sync-older", adminMiddleware, async (_req, res) => {
       ? shiftIsoDay(current.coverage.oldestSyncedDay, -1)
       : today;
     const from = shiftIsoDay(to, -13);
+    // Force re-fetch so already-cached days can heal against Dream Grand Total.
     const synced = await loadCachedFinanceActionsRange(from, to, {
-      forceCurrent: true,
+      force: true,
     });
     return res.json({
       ok: true,
@@ -174,6 +178,8 @@ router.post("/gold-men/sync-older", adminMiddleware, async (_req, res) => {
       importedActions: Array.isArray(synced.actions) ? synced.actions.length : 0,
       missingDays: synced.missingDays || [],
       complete: Boolean(synced.complete),
+      officialTotalUsd: synced.officialTotalUsd,
+      actionsTotalUsd: synced.actionsTotalUsd,
     });
   } catch (error) {
     return res.status(500).json({
@@ -201,7 +207,7 @@ router.post("/gold-men/sync-range", adminMiddleware, async (req, res) => {
       });
     }
     const synced = await loadCachedFinanceActionsRange(range.from, range.to, {
-      forceCurrent: true,
+      force: true,
     });
     return res.json({
       ok: true,
@@ -210,6 +216,31 @@ router.post("/gold-men/sync-range", adminMiddleware, async (req, res) => {
       importedActions: Array.isArray(synced.actions) ? synced.actions.length : 0,
       missingDays: synced.missingDays || [],
       complete: Boolean(synced.complete),
+      officialTotalUsd: synced.officialTotalUsd,
+      actionsTotalUsd: synced.actionsTotalUsd,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || String(error),
+    });
+  }
+});
+
+router.post("/gold-men/repair-incomplete", adminMiddleware, async (req, res) => {
+  try {
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.status(400).json({
+        ok: false,
+        error: "Save the Dream agency login in Settings first.",
+      });
+    }
+    const limit = Math.min(62, Math.max(1, Number(req.body?.limit) || 14));
+    const repaired = await repairIncompleteFinanceDays({ limit });
+    return res.json({
+      ok: true,
+      ...repaired,
     });
   } catch (error) {
     return res.status(500).json({

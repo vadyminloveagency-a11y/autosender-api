@@ -308,6 +308,21 @@ export async function listAgencyFinanceDaySyncs(fromDay, toDay) {
   }));
 }
 
+/** Oldest incomplete sync days first — used by Gold Men repair. */
+export async function listIncompleteAgencyFinanceDays({ limit = 14 } = {}) {
+  const safeLimit = Math.min(62, Math.max(1, Number(limit) || 14));
+  const db = getPool();
+  const result = await db.query(
+    `SELECT day_key::text AS day_key
+     FROM agency_finance_sync_days
+     WHERE is_complete = FALSE
+     ORDER BY day_key ASC
+     LIMIT $1`,
+    [safeLimit],
+  );
+  return result.rows.map((row) => String(row.day_key).slice(0, 10));
+}
+
 /** Aggregate every retained paid action by Dream male profile. */
 export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
   const db = getPool();
@@ -358,17 +373,22 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
 
   const coverage = await db.query(
     `SELECT
-       MIN(day_key)::text AS first_day,
-       MAX(day_key)::text AS last_day,
-       COUNT(DISTINCT day_key)::int AS action_days,
+       MIN(a.day_key)::text AS first_day,
+       MAX(a.day_key)::text AS last_day,
+       COUNT(DISTINCT a.day_key)::int AS action_days,
        COUNT(*)::int AS action_count,
-       COALESCE(SUM(amount_usd), 0) AS total_usd,
+       COALESCE(SUM(a.amount_usd), 0) AS total_usd,
        (SELECT MIN(day_key)::text FROM agency_finance_sync_days) AS oldest_synced_day,
-       (SELECT COUNT(*)::int FROM agency_finance_sync_days) AS cached_days
-     FROM agency_finance_actions
-     WHERE male_profile_id <> '' OR TRIM(male_name) <> ''`,
+       (SELECT COUNT(*)::int FROM agency_finance_sync_days) AS cached_days,
+       (SELECT COUNT(*)::int FROM agency_finance_sync_days WHERE is_complete = FALSE) AS incomplete_days,
+       (SELECT COALESCE(SUM(official_total_usd), 0) FROM agency_finance_sync_days) AS official_total_usd,
+       (SELECT COALESCE(SUM(actions_total_usd), 0) FROM agency_finance_sync_days) AS synced_actions_total_usd
+     FROM agency_finance_actions a
+     WHERE a.male_profile_id <> '' OR TRIM(a.male_name) <> ''`,
   );
   const stats = coverage.rows[0] || {};
+  const totalUsd = Number(stats.total_usd) || 0;
+  const officialTotalUsd = Number(stats.official_total_usd) || 0;
   return {
     men: result.rows.map((row) => ({
       maleProfileId: String(row.male_profile_id || ""),
@@ -384,10 +404,15 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
       firstDay: String(stats.first_day || "").slice(0, 10),
       lastDay: String(stats.last_day || "").slice(0, 10),
       cachedDays: Number(stats.cached_days) || 0,
+      incompleteDays: Number(stats.incomplete_days) || 0,
       actionDays: Number(stats.action_days) || 0,
       actionCount: Number(stats.action_count) || 0,
-      totalUsd: Number(stats.total_usd) || 0,
+      totalUsd,
+      officialTotalUsd,
+      syncedActionsTotalUsd: Number(stats.synced_actions_total_usd) || 0,
+      missingUsd: Number(Math.max(0, officialTotalUsd - totalUsd).toFixed(2)),
       oldestSyncedDay: String(stats.oldest_synced_day || "").slice(0, 10),
     },
   };
 }
+

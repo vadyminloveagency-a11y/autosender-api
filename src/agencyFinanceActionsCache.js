@@ -3,11 +3,12 @@ import {
   getAgencyFinanceDaySync,
   listAgencyFinanceActions,
   listAgencyFinanceDaySyncs,
+  listIncompleteAgencyFinanceDays,
   markAgencyFinanceDaySyncError,
   saveAgencyFinanceDay,
 } from "./agencyFinanceActionsStore.js";
 import {
-  fetchBonusActions,
+  fetchBonusActionsDayDetail,
   fetchBonusesByGirl,
 } from "./dreamAgencyFinance.js";
 import { dreamDayKey } from "./dreamDay.js";
@@ -51,7 +52,8 @@ function actionKey(action) {
     .digest("hex");
 }
 
-function shouldRefreshDay(day, state, { forceCurrent = false } = {}) {
+function shouldRefreshDay(day, state, { force = false, forceCurrent = false } = {}) {
+  if (force) return true;
   if (!state) return true;
   const now = Date.now();
   const age = now - new Date(state.syncedAt || 0).getTime();
@@ -70,27 +72,43 @@ function shouldRefreshDay(day, state, { forceCurrent = false } = {}) {
   return !Number.isFinite(age) || age >= INCOMPLETE_RETRY_TTL_MS;
 }
 
-async function syncOneDay(day, { forceCurrent = false } = {}) {
+async function resolveOfficialTotalUsd(day, detail, { forceDream = false } = {}) {
+  if (detail?.officialTotalUsd != null && Number.isFinite(Number(detail.officialTotalUsd))) {
+    return Number(Number(detail.officialTotalUsd).toFixed(2));
+  }
+  try {
+    const grouped = await fetchBonusesByGirl(day, { force: forceDream, profileId: 0 });
+    return Number(
+      (Array.isArray(grouped) ? grouped : [])
+        .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+        .toFixed(2),
+    );
+  } catch (_) {
+    return Number(
+      (Array.isArray(detail?.actions) ? detail.actions : [])
+        .reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0)
+        .toFixed(2),
+    );
+  }
+}
+
+async function syncOneDay(day, { force = false, forceCurrent = false } = {}) {
   const existing = await getAgencyFinanceDaySync(day);
-  if (!shouldRefreshDay(day, existing, { forceCurrent })) return existing;
+  if (!shouldRefreshDay(day, existing, { force, forceCurrent })) return existing;
   if (syncLocks.has(day)) return syncLocks.get(day);
 
   const task = (async () => {
     try {
-      const forceDream = day === dreamDayKey() || !existing;
-      const [actions, grouped] = await Promise.all([
-        fetchBonusActions(day, { force: forceDream }),
-        fetchBonusesByGirl(day, { force: forceDream, profileId: 0 }),
-      ]);
-      const normalized = (Array.isArray(actions) ? actions : []).map((action) => ({
-        ...action,
-        actionKey: actionKey(action),
-      }));
-      const officialTotalUsd = Number(
-        (Array.isArray(grouped) ? grouped : [])
-          .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
-          .toFixed(2),
+      // Always hit Dream on an intentional refresh so incomplete/wrong days can heal.
+      const forceDream = true;
+      const detail = await fetchBonusActionsDayDetail(day, { force: forceDream });
+      const normalized = (Array.isArray(detail.actions) ? detail.actions : []).map(
+        (action) => ({
+          ...action,
+          actionKey: actionKey(action),
+        }),
       );
+      const officialTotalUsd = await resolveOfficialTotalUsd(day, detail, { forceDream });
       const actionsTotalUsd = Number(
         normalized
           .reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0)
@@ -124,7 +142,7 @@ async function syncOneDay(day, { forceCurrent = false } = {}) {
 export async function loadCachedFinanceActionsRange(
   fromDay,
   toDay = fromDay,
-  { profileId = "", forceCurrent = false } = {},
+  { profileId = "", force = false, forceCurrent = false } = {},
 ) {
   const from = validDay(fromDay);
   const to = validDay(toDay);
@@ -136,7 +154,7 @@ export async function loadCachedFinanceActionsRange(
     await Promise.all(
       days
         .slice(index, index + 2)
-        .map((day) => syncOneDay(day, { forceCurrent })),
+        .map((day) => syncOneDay(day, { force, forceCurrent })),
     );
   }
 
@@ -158,6 +176,32 @@ export async function loadCachedFinanceActionsRange(
     ),
     actionsTotalUsd: Number(
       actions.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0).toFixed(2),
+    ),
+  };
+}
+
+/** Re-fetch incomplete cached days against Dream Grand Total, oldest first. */
+export async function repairIncompleteFinanceDays({ limit = 14 } = {}) {
+  const days = await listIncompleteAgencyFinanceDays({
+    limit: Math.min(62, Math.max(1, Number(limit) || 14)),
+  });
+  const results = [];
+  for (let index = 0; index < days.length; index += 2) {
+    const batch = days.slice(index, index + 2);
+    const synced = await Promise.all(
+      batch.map((day) => syncOneDay(day, { force: true })),
+    );
+    results.push(...synced);
+  }
+  return {
+    days: results.map((row) => row?.day).filter(Boolean),
+    repaired: results.filter((row) => row?.complete).length,
+    stillIncomplete: results.filter((row) => row && !row.complete).length,
+    officialTotalUsd: Number(
+      results.reduce((sum, row) => sum + (Number(row?.officialTotalUsd) || 0), 0).toFixed(2),
+    ),
+    actionsTotalUsd: Number(
+      results.reduce((sum, row) => sum + (Number(row?.actionsTotalUsd) || 0), 0).toFixed(2),
     ),
   };
 }
