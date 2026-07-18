@@ -4,6 +4,7 @@ import { decryptSecret } from "../cryptoUtil.js";
 import { dreamLogin } from "../dreamLogin.js";
 import { getDreamCredentials, getUserById } from "../letterbotStore.js";
 import { mapAgencyProfilesByFemaleId } from "../agencyProfileStore.js";
+import { kyivDayKey, listMailingDailyByProfile } from "../mailingDailyStore.js";
 import {
   ensureSenderReadsTables,
   getSenderReadsJob,
@@ -441,6 +442,15 @@ function summarizeSenderMailingJob(userId, storeProfileIdValue, state, user = {}
 async function listActiveSenderMailingJobs() {
   const byKey = new Map();
   const profileMap = await mapAgencyProfilesByFemaleId().catch(() => new Map());
+  const dailyRows = await listMailingDailyByProfile(kyivDayKey()).catch(() => []);
+  const dailyByProfileAndChannel = new Map(
+    dailyRows
+      .filter((row) => row.product === "read" || row.product === "online")
+      .map((row) => [
+        `${String(row.profileId)}:${row.product}`,
+        Number(row.letters) || 0,
+      ]),
+  );
 
   const rows = await listRunningSenderReadsJobsWithUsers();
   for (const row of rows) {
@@ -490,7 +500,16 @@ async function listActiveSenderMailingJobs() {
     );
   }
 
-  return [...byKey.values()].sort((a, b) => {
+  return [...byKey.values()].map((job) => ({
+    ...job,
+    // "Letters today" survives worker and Render restarts.
+    daySent: Math.max(
+      Number(job.daySent) || 0,
+      dailyByProfileAndChannel.get(
+        `${String(job.profileId)}:${job.channel === "online" ? "online" : "read"}`,
+      ) || 0,
+    ),
+  })).sort((a, b) => {
     const au = Number(a.updatedAt) || 0;
     const bu = Number(b.updatedAt) || 0;
     return bu - au;

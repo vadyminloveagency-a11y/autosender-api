@@ -425,6 +425,12 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
 async function listActiveMailingJobs() {
   const byKey = new Map();
   const profileMap = await mapAgencyProfilesByFemaleId().catch(() => new Map());
+  const dailyRows = await listMailingDailyByProfile(kyivDayKey()).catch(() => []);
+  const dailyLetterBotByProfile = new Map(
+    dailyRows
+      .filter((row) => row.product === "letterbot")
+      .map((row) => [String(row.profileId), Number(row.letters) || 0]),
+  );
 
   const rows = await listRunningLetterBotJobsWithUsers();
   for (const row of rows) {
@@ -466,7 +472,14 @@ async function listActiveMailingJobs() {
     );
   }
 
-  return [...byKey.values()].sort((a, b) => {
+  return [...byKey.values()].map((job) => ({
+    ...job,
+    // "Letters today" is the durable daily total, not the current worker run.
+    daySent: Math.max(
+      Number(job.daySent) || 0,
+      dailyLetterBotByProfile.get(String(job.profileId)) || 0,
+    ),
+  })).sort((a, b) => {
     const au = Number(a.updatedAt) || 0;
     const bu = Number(b.updatedAt) || 0;
     return bu - au;
