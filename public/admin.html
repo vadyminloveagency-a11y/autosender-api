@@ -947,12 +947,20 @@
       #section-balances .mail-calendar-layout {
         flex: 1 1 auto;
         min-height: 0;
+        flex-direction: column;
         flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 10px;
         margin-bottom: 0;
         overflow: hidden;
       }
+      #section-balances .mail-cal {
+        width: min(220px, 100%);
+        flex: 0 0 auto;
+      }
       #section-balances .mail-day-panel {
-        height: 100%;
+        height: auto;
+        flex: 1 1 auto;
         min-height: 0;
         display: flex;
         flex-direction: column;
@@ -1432,23 +1440,30 @@
     .bonus-actions-table tbody tr:hover {
       background: rgba(255, 43, 58, 0.08);
     }
-    .bonus-actions-table td:nth-child(7) {
+    .bonus-actions-table td.bonus-dollars {
       color: #ff2b3a;
       font-weight: 700;
     }
     .bonus-actions-table th,
     .bonus-actions-table td { text-align: center; }
-    .bonus-actions-table th:nth-child(2),
-    .bonus-actions-table td:nth-child(2),
-    .bonus-actions-table th:nth-child(4),
-    .bonus-actions-table td:nth-child(4) { text-align: left; }
+    .bonus-actions-table th.bonus-col-name,
+    .bonus-actions-table td.bonus-col-name { text-align: left; }
+    .bonus-when {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      line-height: 1.15;
+    }
     .bonus-when-time { color: #fff; font-weight: 600; }
-    .bonus-when-date { color: var(--muted); margin-left: 6px; }
+    .bonus-when-date { color: var(--muted); font-size: 11px; margin-left: 0; }
     .bonus-op-none { color: rgba(152, 161, 170, 0.35); }
     .bonus-type-badge {
       display: inline-flex;
       align-items: center;
-      padding: 3px 9px;
+      justify-content: center;
+      min-width: 118px;
+      padding: 4px 10px;
       border-radius: 999px;
       border: 1px solid rgba(78, 98, 108, 0.45);
       background: rgba(255, 255, 255, 0.03);
@@ -1459,6 +1474,12 @@
     .bonus-type-badge.type-letter { border-color: rgba(255, 43, 58, 0.45); }
     .bonus-type-badge.type-chat { border-color: rgba(86, 156, 214, 0.55); }
     .bonus-type-badge.type-video { border-color: rgba(197, 134, 192, 0.55); }
+    .bonus-actions-table th.bonus-col-operator,
+    .bonus-actions-table td.bonus-col-operator {
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .bonus-actions-table tfoot .bonus-total-row td {
       border-bottom: 0;
       border-top: 1px solid rgba(255, 43, 58, 0.35);
@@ -1468,7 +1489,7 @@
       position: sticky;
       bottom: 0;
     }
-    .bonus-actions-table tfoot .bonus-total-row td:nth-child(2) { color: #ff2b3a; }
+    .bonus-actions-table tfoot .bonus-total-row td.bonus-dollars { color: #ff2b3a; }
     .bonus-actions-table tfoot .bonus-total-row td:first-child { text-align: right; }
     .scan-btn {
       border: 1px solid rgba(255, 43, 58, 0.45);
@@ -4236,19 +4257,27 @@
 
     function bonusWhenHtml(row) {
       if (!row.whenTime && !row.whenDate) return escapeHtml(row.when || "—");
-      return `<span class="bonus-when-time">${escapeHtml(row.whenTime || "")}</span><span class="bonus-when-date">${escapeHtml(
-        row.whenDate || "",
-      )}</span>`;
+      return `<span class="bonus-when"><span class="bonus-when-time">${escapeHtml(
+        row.whenTime || "",
+      )}</span><span class="bonus-when-date">${escapeHtml(row.whenDate || "")}</span></span>`;
     }
 
     function bonusTypeBadge(type) {
-      const label = String(type || "Paid action").trim();
-      const key = label.toLowerCase();
+      const raw = String(type || "Paid action").trim();
+      const key = raw.toLowerCase();
       let variant = "";
-      if (key.includes("video")) variant = " type-video";
-      else if (key.includes("chat")) variant = " type-chat";
-      else if (key.includes("letter")) variant = " type-letter";
-      return `<span class="bonus-type-badge${variant}">${escapeHtml(label)}</span>`;
+      let label = raw;
+      if (key.includes("video")) {
+        variant = " type-video";
+        label = "Video";
+      } else if (key.includes("chat")) {
+        variant = " type-chat";
+        label = "Chat";
+      } else if (key.includes("letter")) {
+        variant = " type-letter";
+        label = "Letter";
+      }
+      return `<span class="bonus-type-badge${variant}" title="${escapeHtml(raw)}">${escapeHtml(label)}</span>`;
     }
 
     function parseBonusWhen(value) {
@@ -4368,24 +4397,25 @@
 
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
+      const showOperator = actions.some((row) => String(row.operator || "").trim());
       const bodyRows = actions
         .map(
           (row) => `
             <tr>
               <td>${escapeHtml(row.manId || "—")}</td>
-              <td>${escapeHtml(row.manName || "—")}</td>
+              <td class="bonus-col-name">${escapeHtml(row.manName || "—")}</td>
               <td>${escapeHtml(row.girlId || "—")}</td>
-              <td>${escapeHtml(row.girlName || "—")}</td>
+              <td class="bonus-col-name">${escapeHtml(row.girlName || "—")}</td>
               <td>${bonusWhenHtml(row)}</td>
               <td>${bonusTypeBadge(row.type)}</td>
-              <td>${formatBalanceUsd(row.amountUsd)}</td>
-              <td>${row.operatorHtml}</td>
+              <td class="bonus-dollars">${formatBalanceUsd(row.amountUsd)}</td>
+              ${showOperator ? `<td class="bonus-col-operator">${row.operatorHtml}</td>` : ""}
             </tr>`,
         )
         .join("");
-      const th = (key, label) => {
+      const th = (key, label, extraClass = "") => {
         const active = bonusSortState.key === key;
-        return `<th class="sortable${active ? " is-sorted" : ""}" data-sort="${key}">${label}${sortMark(
+        return `<th class="sortable${active ? " is-sorted" : ""}${extraClass ? ` ${extraClass}` : ""}" data-sort="${key}">${label}${sortMark(
           bonusSortState.key,
           key,
           bonusSortState.dir,
@@ -4396,21 +4426,21 @@
           <thead>
             <tr>
               ${th("man", "Man ID")}
-              ${th("man", "Man Name")}
+              ${th("man", "Man Name", "bonus-col-name")}
               ${th("questionnaire", "Lady ID")}
-              ${th("questionnaire", "Lady Name")}
+              ${th("questionnaire", "Lady Name", "bonus-col-name")}
               ${th("date", "Date")}
               ${th("type", "Type")}
               ${th("amount", "Dollars")}
-              ${th("operator", "Operator")}
+              ${showOperator ? th("operator", "Operator", "bonus-col-operator") : ""}
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
           <tfoot>
             <tr class="bonus-total-row">
               <td colspan="6">Total · ${actions.length.toLocaleString("en-US")} actions</td>
-              <td>${formatBalanceUsd(totalUsd)}</td>
-              <td></td>
+              <td class="bonus-dollars">${formatBalanceUsd(totalUsd)}</td>
+              ${showOperator ? "<td></td>" : ""}
             </tr>
           </tfoot>
         </table>`;
