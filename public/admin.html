@@ -89,16 +89,24 @@
       padding: 28px 16px;
       background: transparent;
     }
+    body.auth-page #admin-shared-ambient::after {
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255, 40, 55, 0.1), transparent 42%),
+        rgba(5, 8, 12, 0.42);
+    }
     .auth-card {
       width: 100%;
       max-width: 360px;
       padding: 32px 28px 26px;
-      border: 1px solid rgba(4, 242, 160, 0.22);
+      border: 1px solid rgba(255, 43, 58, 0.3);
       border-radius: 16px;
-      background: rgba(8, 12, 20, 0.58);
+      background: rgba(12, 8, 10, 0.62);
       backdrop-filter: blur(10px) saturate(1.08);
       -webkit-backdrop-filter: blur(10px) saturate(1.08);
-      box-shadow: var(--shadow);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 43, 58, 0.1),
+        0 0 32px rgba(255, 43, 58, 0.07);
     }
     .auth-title {
       margin: 0 0 6px;
@@ -115,7 +123,8 @@
       border-radius: 50%;
       /* Zoom into the cat emblem, cropping out the in-image caption. */
       background: #05060a url("/inlove-logo.png") 53.6% 33.4% / 260% auto no-repeat;
-      border: 1px solid rgba(4, 242, 160, 0.18);
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      box-shadow: 0 0 24px rgba(255, 43, 58, 0.18);
       user-select: none;
     }
     .auth-form {
@@ -138,16 +147,16 @@
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
     .auth-field input:focus {
-      border-color: rgba(4, 242, 160, 0.55);
-      box-shadow: 0 0 0 3px rgba(4, 242, 160, 0.12);
-      background: rgba(10, 16, 20, 0.9);
+      border-color: rgba(255, 43, 58, 0.6);
+      box-shadow: 0 0 0 3px rgba(255, 43, 58, 0.12);
+      background: rgba(16, 10, 12, 0.9);
     }
     .auth-field label {
       position: absolute;
       top: -8px;
       left: 12px;
       padding: 0 6px;
-      background: rgba(8, 12, 20, 0.95);
+      background: rgba(12, 8, 10, 0.95);
       color: var(--muted);
       font: 500 12px/1 var(--font);
       pointer-events: none;
@@ -164,11 +173,11 @@
       border: 0;
       border-radius: 8px;
       background: transparent;
-      color: var(--accent);
+      color: #ff4757;
       cursor: pointer;
       transform: translateY(-50%);
     }
-    .auth-eye:hover { background: var(--accent-soft); }
+    .auth-eye:hover { background: rgba(255, 43, 58, 0.14); }
     .auth-eye svg {
       display: block;
       width: 18px;
@@ -180,32 +189,32 @@
       width: 100%;
       min-height: 36px;
       margin-top: 4px;
-      border: 1px solid rgba(4, 242, 160, 0.45);
+      border: 1px solid rgba(255, 43, 58, 0.55);
       border-radius: 7px;
-      background: #101816;
-      color: #04f2a0;
+      background: #180d0f;
+      color: #ff4757;
       font: 800 13px/1 Arial, sans-serif;
       cursor: pointer;
       box-shadow: none;
     }
     .auth-submit:hover:not(:disabled) {
       filter: none;
-      background: #14201a;
-      border-color: rgba(4, 242, 160, 0.7);
-      color: #6ff5c0;
+      background: #221114;
+      border-color: rgba(255, 43, 58, 0.8);
+      color: #ff7a85;
     }
     .auth-submit:disabled { opacity: 0.45; cursor: wait; }
     .auth-save-credentials {
       width: 100%;
       min-height: 34px;
-      border: 1px solid rgba(4, 242, 160, 0.35);
+      border: 1px solid rgba(255, 43, 58, 0.35);
       border-radius: 7px;
-      background: #1a1510;
-      color: var(--ok);
+      background: #140a0c;
+      color: #e6aeb3;
       font: 800 12px/1 Arial, sans-serif;
       cursor: pointer;
     }
-    .auth-save-credentials:hover:not(:disabled) { background: var(--ok-soft); }
+    .auth-save-credentials:hover:not(:disabled) { background: rgba(255, 43, 58, 0.12); }
     .auth-status {
       margin: 12px 0 0;
       min-height: 18px;
@@ -230,7 +239,7 @@
       padding: 0;
       border: 0;
       background: transparent;
-      color: var(--accent);
+      color: #ff4757;
       font: 500 13px/1.4 var(--font);
       cursor: pointer;
       text-align: center;
