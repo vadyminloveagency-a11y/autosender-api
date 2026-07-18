@@ -884,12 +884,88 @@
       font: 600 13px/1 var(--font);
       box-sizing: border-box;
     }
-    .bal-filters-row select {
+    .bal-profile-picker {
+      position: relative;
       flex: 0 1 auto;
-      width: auto;
-      min-width: 170px;
-      max-width: 280px;
-      padding-right: 26px;
+      min-width: 200px;
+      max-width: 320px;
+    }
+    .bal-profile-toggle {
+      width: 100%;
+      justify-content: space-between;
+      gap: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bal-profile-toggle.is-open {
+      border-color: rgba(255, 43, 58, 0.55);
+      color: #ff2b3a;
+    }
+    .bal-profile-popover {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 60;
+      display: none;
+      width: min(320px, 80vw);
+      padding: 8px;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      border-radius: 8px;
+      background: #0d1317;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    }
+    .bal-profile-popover.is-open { display: block; }
+    #bal-profile-search {
+      width: 100%;
+      min-height: 30px;
+      height: 30px;
+      margin: 0 0 6px;
+      border: 1px solid rgba(78, 98, 108, 0.55);
+      border-radius: 6px;
+      background: #0c1218;
+      color: #dde3e9;
+      padding: 0 8px;
+      font: 500 13px/1 var(--font);
+      box-sizing: border-box;
+    }
+    #bal-profile-search:focus {
+      outline: none;
+      border-color: rgba(255, 43, 58, 0.55);
+    }
+    .bal-profile-list {
+      max-height: 220px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .bal-profile-option {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      width: 100%;
+      padding: 7px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #dde3e9;
+      text-align: left;
+      cursor: pointer;
+      font: 500 12px/1.2 var(--font);
+    }
+    .bal-profile-option:hover,
+    .bal-profile-option.is-active {
+      background: rgba(255, 43, 58, 0.14);
+    }
+    .bal-profile-option-name {
+      color: #fff;
+      font-weight: 600;
+    }
+    .bal-profile-option-id {
+      color: var(--muted);
+      font-size: 11px;
     }
     .bal-filters-row input[type="date"] {
       flex: 0 1 140px;
@@ -2206,9 +2282,14 @@
               <div class="bal-filters">
                 <div class="bal-filters-row">
                   <button type="button" id="bal-cal-toggle" class="btn-ghost" aria-haspopup="true" aria-expanded="false">Calendar</button>
-                  <select id="bal-filter-profile" aria-label="Questionnaire">
-                    <option value="">All questionnaires</option>
-                  </select>
+                  <div class="bal-profile-picker" id="bal-profile-picker">
+                    <button type="button" id="bal-profile-toggle" class="btn-ghost bal-profile-toggle" aria-haspopup="listbox" aria-expanded="false">All profiles</button>
+                    <div id="bal-profile-popover" class="bal-profile-popover" hidden>
+                      <input id="bal-profile-search" type="search" placeholder="Search by ID…" autocomplete="off" aria-label="Search profile by ID">
+                      <div id="bal-profile-list" class="bal-profile-list" role="listbox"></div>
+                    </div>
+                    <input type="hidden" id="bal-filter-profile" value="">
+                  </div>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
                 </div>
                 <div id="bal-cal-popover" class="bal-cal-popover" hidden>
@@ -3949,6 +4030,7 @@
     function syncBalFilterInputs() {
       const profileEl = document.getElementById("bal-filter-profile");
       if (profileEl) profileEl.value = balCalState.profileId || "";
+      syncBalProfileToggleLabel();
       const toggle = document.getElementById("bal-cal-toggle");
       if (toggle) {
         const from = balCalState.fromDate || balCalState.selectedDate || "";
@@ -3959,25 +4041,102 @@
       }
     }
 
-    function fillBalProfileOptions() {
-      const select = document.getElementById("bal-filter-profile");
-      if (!select) return;
-      const current = balCalState.profileId || select.value || "";
-      const options = [`<option value="">All questionnaires</option>`];
+    function listBalFilterProfiles() {
       const seen = new Set();
+      const rows = [];
       for (const profile of cachedProfiles) {
         const id = String(profile.femaleProfileId || "").trim();
         if (!id || seen.has(id)) continue;
         seen.add(id);
         const name =
           String(profile.displayName || profile.dreamUsername || "").trim() || `Profile ${id}`;
-        options.push(
-          `<option value="${escapeHtml(id)}">${escapeHtml(name)} · ${escapeHtml(id)}</option>`,
-        );
+        rows.push({ id, name });
       }
-      select.innerHTML = options.join("");
-      select.value = seen.has(current) || current === "" ? current : "";
-      balCalState.profileId = select.value || "";
+      rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+      return rows;
+    }
+
+    function syncBalProfileToggleLabel() {
+      const toggle = document.getElementById("bal-profile-toggle");
+      if (!toggle) return;
+      const id = String(balCalState.profileId || "").trim();
+      if (!id) {
+        toggle.textContent = "All profiles";
+        return;
+      }
+      const match = listBalFilterProfiles().find((row) => row.id === id);
+      toggle.textContent = match ? `${match.name} · ${match.id}` : `ID ${id}`;
+    }
+
+    function setBalProfilePickerOpen(open) {
+      const popover = document.getElementById("bal-profile-popover");
+      const toggle = document.getElementById("bal-profile-toggle");
+      const search = document.getElementById("bal-profile-search");
+      if (!popover || !toggle) return;
+      popover.hidden = !open;
+      popover.classList.toggle("is-open", open);
+      toggle.classList.toggle("is-open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        if (search) {
+          search.value = "";
+          requestAnimationFrame(() => search.focus());
+        }
+        renderBalProfileList();
+      }
+    }
+
+    function renderBalProfileList() {
+      const list = document.getElementById("bal-profile-list");
+      if (!list) return;
+      const query = String(document.getElementById("bal-profile-search")?.value || "")
+        .trim()
+        .toLowerCase();
+      const current = String(balCalState.profileId || "").trim();
+      const rows = listBalFilterProfiles().filter((row) => {
+        if (!query) return true;
+        return row.id.toLowerCase().includes(query) || row.name.toLowerCase().includes(query);
+      });
+      const items = [
+        `<button type="button" class="bal-profile-option${!current ? " is-active" : ""}" data-profile-id="" role="option">
+          <span class="bal-profile-option-name">All profiles</span>
+        </button>`,
+      ];
+      for (const row of rows) {
+        items.push(`<button type="button" class="bal-profile-option${
+          current === row.id ? " is-active" : ""
+        }" data-profile-id="${escapeHtml(row.id)}" role="option">
+          <span class="bal-profile-option-name">${escapeHtml(row.name)}</span>
+          <span class="bal-profile-option-id">ID ${escapeHtml(row.id)}</span>
+        </button>`);
+      }
+      if (!rows.length && query) {
+        items.push(`<div class="bal-profile-option-id" style="padding:8px">No profiles match this ID</div>`);
+      }
+      list.innerHTML = items.join("");
+    }
+
+    function fillBalProfileOptions() {
+      const profileEl = document.getElementById("bal-filter-profile");
+      const rows = listBalFilterProfiles();
+      const current = String(balCalState.profileId || profileEl?.value || "").trim();
+      const valid = !current || rows.some((row) => row.id === current);
+      balCalState.profileId = valid ? current : "";
+      if (profileEl) profileEl.value = balCalState.profileId;
+      syncBalProfileToggleLabel();
+      const popover = document.getElementById("bal-profile-popover");
+      if (popover && !popover.hidden) renderBalProfileList();
+    }
+
+    function applyBalProfileFilter(profileId) {
+      balCalState.profileId = String(profileId || "").trim();
+      const profileEl = document.getElementById("bal-filter-profile");
+      if (profileEl) profileEl.value = balCalState.profileId;
+      persistBalFilters();
+      syncBalProfileToggleLabel();
+      setBalProfilePickerOpen(false);
+      balCalState.bonusesLoadedFor = "";
+      void refreshBalances({ quiet: true });
     }
 
     function setBalRange(from, to) {
@@ -5068,6 +5227,36 @@
       persistBalFilters();
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
+    });
+    document.getElementById("bal-profile-toggle")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const popover = document.getElementById("bal-profile-popover");
+      setBalProfilePickerOpen(popover ? popover.hidden : false);
+    });
+    document.getElementById("bal-profile-popover")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const option = event.target.closest("[data-profile-id]");
+      if (!option) return;
+      applyBalProfileFilter(option.getAttribute("data-profile-id") || "");
+    });
+    document.getElementById("bal-profile-search")?.addEventListener("input", () => {
+      renderBalProfileList();
+    });
+    document.getElementById("bal-profile-search")?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const first = document.querySelector("#bal-profile-list [data-profile-id]");
+      if (!first) return;
+      event.preventDefault();
+      applyBalProfileFilter(first.getAttribute("data-profile-id") || "");
+    });
+    document.addEventListener("click", (event) => {
+      const popover = document.getElementById("bal-profile-popover");
+      if (!popover || popover.hidden) return;
+      if (event.target.closest?.("#bal-profile-picker")) return;
+      setBalProfilePickerOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setBalProfilePickerOpen(false);
     });
 
     document.getElementById("gold-men-refresh")?.addEventListener("click", () => {
