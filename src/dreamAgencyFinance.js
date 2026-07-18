@@ -169,7 +169,7 @@ function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 
 
 function maxPaginationPage(html) {
   let max = 1;
-  for (const match of String(html || "").matchAll(/[?&]page=(\d+)/gi)) {
+  for (const match of String(html || "").matchAll(/(?:[?&]|&amp;)page=(\d+)/gi)) {
     max = Math.max(max, Number(match[1]) || 1);
   }
   return Math.min(max, 200);
@@ -180,8 +180,6 @@ export function parseBonusGrandTotal(html) {
   const text = stripTags(html);
   const grand = text.match(/Grand\s*Total[^$]*\$\s*([0-9.,]+)/i);
   if (grand) return parseMoney(grand[1]);
-  const pageTotal = text.match(/Page\s*Total[^$]*\$\s*([0-9.,]+)/i);
-  if (pageTotal) return parseMoney(pageTotal[1]);
   return null;
 }
 

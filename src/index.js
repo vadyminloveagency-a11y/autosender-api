@@ -15,6 +15,8 @@ import { ensureLetterBotTables } from "./letterbotStore.js";
 import { ensureSenderReadsTables } from "./senderReadsStore.js";
 import { ensureMailingDailyTables } from "./mailingDailyStore.js";
 import { ensureAgencyFinanceTables } from "./agencyFinanceStore.js";
+import { ensureAgencyFinanceActionTables } from "./agencyFinanceActionsStore.js";
+import { refreshCurrentFinanceActionsCache } from "./agencyFinanceActionsCache.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -55,6 +57,7 @@ async function start() {
   await ensureSenderReadsTables();
   await ensureMailingDailyTables();
   await ensureAgencyFinanceTables();
+  await ensureAgencyFinanceActionTables();
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port}`);
   });
@@ -65,6 +68,13 @@ async function start() {
   restoreRunningSenderReadsJobs().catch((error) => {
     console.error("SenderReads restore failed:", error?.message || error);
   });
+  const financeRefresh = () =>
+    refreshCurrentFinanceActionsCache().catch((error) => {
+      console.error("Agency finance cache refresh failed:", error?.message || error);
+    });
+  setTimeout(financeRefresh, 15_000);
+  const financeTimer = setInterval(financeRefresh, 5 * 60_000);
+  financeTimer.unref?.();
 }
 
 start().catch((error) => {

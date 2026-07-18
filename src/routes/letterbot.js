@@ -35,8 +35,12 @@ import {
 import {
   clearAgencyFinanceCaches,
   fetchBonusesByGirlRange,
-  fetchBonusActionsRange,
 } from "../dreamAgencyFinance.js";
+import { loadCachedFinanceActionsRange } from "../agencyFinanceActionsCache.js";
+import {
+  listAgencyFinanceActions,
+  listAgencyFinanceDaySyncs,
+} from "../agencyFinanceActionsStore.js";
 import { dreamDayKey } from "../dreamDay.js";
 
 const router = express.Router();
@@ -697,6 +701,7 @@ function parseFinanceDateRange(query, today) {
     to,
     date: from === to ? from : `${from}…${to}`,
     profileId: /^\d+$/.test(profileId) ? profileId : "",
+    daySpan,
   };
 }
 
@@ -720,11 +725,39 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
       });
     }
 
+    const cachedSyncs = await listAgencyFinanceDaySyncs(range.from, range.to).catch(
+      () => [],
+    );
+    const canUsePostgres =
+      cachedSyncs.length === range.daySpan &&
+      cachedSyncs.every((row) => row.complete);
+    const bonusRowsPromise = canUsePostgres
+      ? listAgencyFinanceActions(range.from, range.to, range.profileId).then((actions) => {
+          const byProfile = new Map();
+          for (const action of actions) {
+            const key = String(action.femaleProfileId || "");
+            if (!key) continue;
+            if (!byProfile.has(key)) {
+              byProfile.set(key, {
+                profileId: key,
+                name: action.femaleName || "",
+                amount: 0,
+              });
+            }
+            byProfile.get(key).amount += Number(action.amountUsd) || 0;
+          }
+          return [...byProfile.values()].map((row) => ({
+            ...row,
+            amount: Number(row.amount.toFixed(2)),
+          }));
+        })
+      : fetchBonusesByGirlRange(range.from, range.to, {
+          force: Boolean(req.query?.force),
+          profileId: range.profileId || 0,
+        });
+
     const [bonusRows, profileMap, dayAssignments] = await Promise.all([
-      fetchBonusesByGirlRange(range.from, range.to, {
-        force: Boolean(req.query?.force),
-        profileId: range.profileId || 0,
-      }),
+      bonusRowsPromise,
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
       listAssignmentsForDreamDayRange(range.from, range.to).catch(() => []),
     ]);
@@ -771,6 +804,7 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
       totalUsd: Number(
         profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
       ),
+      source: canUsePostgres ? "postgres" : "dream",
       profiles,
       error: null,
     });
@@ -878,18 +912,15 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
       });
     }
 
-    const [actions, bonusRows, profileMap, dayAssignments] = await Promise.all([
-      fetchBonusActionsRange(range.from, range.to, {
-        force: Boolean(req.query?.force),
-        profileId: range.profileId || 0,
+    const [cachedFinance, profileMap, dayAssignments] = await Promise.all([
+      loadCachedFinanceActionsRange(range.from, range.to, {
+        profileId: range.profileId,
+        forceCurrent: Boolean(req.query?.refreshCurrent),
       }),
-      fetchBonusesByGirlRange(range.from, range.to, {
-        force: Boolean(req.query?.force),
-        profileId: range.profileId || 0,
-      }).catch(() => []),
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
       listAssignmentsForDreamDayRange(range.from, range.to).catch(() => []),
     ]);
+    const actions = cachedFinance.actions;
 
     const assignmentsByProfile = new Map();
     for (const item of dayAssignments) {
@@ -952,16 +983,13 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
     const actionsSumUsd = Number(
       profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
     );
-    let officialTotalUsd = Number(
-      (Array.isArray(bonusRows) ? bonusRows : [])
-        .filter((row) => !range.profileId || String(row.profileId) === range.profileId)
-        .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
-        .toFixed(2),
-    );
-    // Prefer actions sum when it matches Dream Group-by-Girl; otherwise keep official total.
+    const officialTotalUsd = range.profileId
+      ? actionsSumUsd
+      : Number(cachedFinance.officialTotalUsd) || actionsSumUsd;
     const totalsMatch =
-      officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05;
-    const totalUsd = totalsMatch && actionsSumUsd > 0 ? actionsSumUsd : officialTotalUsd || actionsSumUsd;
+      cachedFinance.complete &&
+      Math.abs(actionsSumUsd - officialTotalUsd) < 0.05;
+    const totalUsd = officialTotalUsd || actionsSumUsd;
 
     return res.json({
       ok: true,
@@ -973,11 +1001,13 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
       configured: true,
       totalUsd,
       actionsSumUsd,
-      listIncomplete: Boolean(officialTotalUsd > 0 && !totalsMatch),
+      listIncomplete: !totalsMatch,
+      missingDays: cachedFinance.missingDays,
+      source: "postgres",
       profiles,
       error: totalsMatch
         ? null
-        : `Action list sum $${actionsSumUsd.toFixed(2)} != Dream total $${officialTotalUsd.toFixed(2)} — keep refreshing`,
+        : `Cached action list is incomplete for: ${cachedFinance.missingDays.join(", ")}`,
     });
   } catch (error) {
     return res.status(500).json({

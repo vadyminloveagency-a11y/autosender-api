@@ -653,6 +653,43 @@
     .mail-day-panel {
       flex: 1 1 280px;
       min-width: 0;
+      position: relative;
+    }
+    .bal-loading-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      border-radius: 10px;
+      background: rgba(6, 12, 16, 0.78);
+      backdrop-filter: blur(2px);
+    }
+    .bal-loading-overlay.is-active {
+      display: flex;
+    }
+    .bal-spinner {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 3px solid rgba(4, 242, 160, 0.18);
+      border-top-color: var(--accent-strong);
+      animation: bal-spin 0.75s linear infinite;
+    }
+    @keyframes bal-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .bal-loading-text {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-align: center;
     }
     .mail-cal-head {
       display: flex;
@@ -1795,6 +1832,11 @@
                     <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
                     <div id="bonus-profiles" class="bonus-profiles hidden"></div>
                   </div>
+
+                  <div id="bal-loading" class="bal-loading-overlay" aria-hidden="true">
+                    <div class="bal-spinner"></div>
+                    <div id="bal-loading-text" class="bal-loading-text"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2832,7 +2874,7 @@
       return `${from}|${to}|${balCalState.profileId || ""}`;
     }
 
-    function balQueryString({ force = true } = {}) {
+    function balQueryString({ force = false } = {}) {
       const from = balCalState.fromDate || balCalState.selectedDate || kyivTodayLocal();
       const to = balCalState.toDate || from;
       const params = new URLSearchParams({ from, to });
@@ -3288,23 +3330,24 @@
 
     function eachLocalDayKey(fromDate, toDate) {
       const days = [];
-      let cur = fromDate;
-      while (cur <= toDate) {
-        days.push(cur);
-        const [y, m, d] = cur.split("-").map(Number);
-        const next = new Date(Date.UTC(y, m - 1, d + 1));
-        cur = next.toISOString().slice(0, 10);
+      let current = fromDate;
+      while (current <= toDate) {
+        days.push(current);
+        const [year, month, day] = current.split("-").map(Number);
+        current = new Date(Date.UTC(year, month - 1, day + 1))
+          .toISOString()
+          .slice(0, 10);
       }
       return days;
     }
 
-    function mergeBonusProfiles(targetMap, profiles) {
+    function mergeBonusProfiles(target, profiles) {
       for (const profile of Array.isArray(profiles) ? profiles : []) {
-        const key = String(profile.profileId || "");
-        if (!key) continue;
-        if (!targetMap.has(key)) {
-          targetMap.set(key, {
-            profileId: key,
+        const profileId = String(profile.profileId || "");
+        if (!profileId) continue;
+        if (!target.has(profileId)) {
+          target.set(profileId, {
+            profileId,
             displayName: profile.displayName || "",
             dreamUsername: profile.dreamUsername || "",
             photoUrl: profile.photoUrl || "",
@@ -3312,7 +3355,7 @@
             actions: [],
           });
         }
-        const entry = targetMap.get(key);
+        const entry = target.get(profileId);
         const seen = new Set(
           entry.actions.map(
             (action) =>
@@ -3320,12 +3363,30 @@
           ),
         );
         for (const action of Array.isArray(profile.actions) ? profile.actions : []) {
-          const actionKey = `${action.type}|${action.maleProfileId}|${action.occurredAt}|${action.amountUsd}`;
-          if (seen.has(actionKey)) continue;
-          seen.add(actionKey);
+          const key = `${action.type}|${action.maleProfileId}|${action.occurredAt}|${action.amountUsd}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           entry.actions.push(action);
           entry.balanceUsd += Number(action.amountUsd) || 0;
         }
+      }
+    }
+
+    function showBalSpinner(text = "") {
+      const overlay = document.getElementById("bal-loading");
+      const label = document.getElementById("bal-loading-text");
+      if (label) label.textContent = text;
+      if (overlay) {
+        overlay.classList.add("is-active");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+    }
+
+    function hideBalSpinner() {
+      const overlay = document.getElementById("bal-loading");
+      if (overlay) {
+        overlay.classList.remove("is-active");
+        overlay.setAttribute("aria-hidden", "true");
       }
     }
 
@@ -3341,58 +3402,55 @@
       if (titleEl) titleEl.textContent = `Bonuses · ${label}`;
       try {
         const profileId = balCalState.profileId || "";
-        const officialParams = new URLSearchParams({ from, to, force: "1" });
-        if (profileId) officialParams.set("profileId", profileId);
-        const officialPromise = api(
-          `/letterbot/admin/balances-by-profile?${officialParams.toString()}`,
-        ).catch(() => ({ totalUsd: 0, configured: true }));
+        const totalParams = new URLSearchParams({ from, to });
+        if (profileId) totalParams.set("profileId", profileId);
+        const totalPromise = api(
+          `/letterbot/admin/balances-by-profile?${totalParams.toString()}`,
+        ).catch(() => ({ totalUsd: 0 }));
 
         const days = eachLocalDayKey(from, to);
-        const byProfile = new Map();
+        const merged = new Map();
+        const incompleteDays = [];
         let configured = true;
-        let lastError = "";
-        for (let i = 0; i < days.length; i += 1) {
-          const day = days[i];
-          if (!quiet) {
-            setStatus(`Loading paid actions ${i + 1}/${days.length} (${day})...`);
+        for (let index = 0; index < days.length; index += 1) {
+          const day = days[index];
+          if (!quiet && days.length > 1) {
+            showBalSpinner(`${index + 1} / ${days.length}`);
           }
-          const params = new URLSearchParams({ from: day, to: day, force: "1" });
+          const params = new URLSearchParams({ from: day, to: day });
           if (profileId) params.set("profileId", profileId);
           const data = await api(`/letterbot/admin/bonuses-actions?${params.toString()}`);
           if (data.configured === false) configured = false;
-          if (data.error) lastError = String(data.error);
-          mergeBonusProfiles(byProfile, data.profiles || []);
+          if (data.listIncomplete) incompleteDays.push(day);
+          mergeBonusProfiles(merged, data.profiles || []);
         }
 
-        const profiles = [...byProfile.values()].map((entry) => ({
+        const profiles = [...merged.values()].map((entry) => ({
           ...entry,
           balanceUsd: Number(entry.balanceUsd.toFixed(2)),
         }));
         const actionsSumUsd = Number(
           profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
         );
-        const official = await officialPromise;
+        const official = await totalPromise;
         const officialTotalUsd = Number(official.totalUsd) || 0;
         const totalsMatch =
-          officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05;
-        const totalUsd =
-          totalsMatch && actionsSumUsd > 0
-            ? actionsSumUsd
-            : officialTotalUsd || actionsSumUsd;
+          incompleteDays.length === 0 &&
+          (officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05);
 
         balCalState.bonusesLoadedFor = balCacheKey();
         renderBonusActions(profiles, label, {
           configured,
           error: totalsMatch
-            ? lastError || null
-            : `Loaded $${actionsSumUsd.toFixed(2)} of Dream total $${officialTotalUsd.toFixed(2)} — refresh again`,
-          totalUsd,
-          listIncomplete: Boolean(officialTotalUsd > 0 && !totalsMatch),
+            ? null
+            : `Incomplete cached days: ${incompleteDays.join(", ") || "total mismatch"}`,
+          totalUsd: officialTotalUsd || actionsSumUsd,
+          listIncomplete: !totalsMatch,
           actionsSumUsd,
         });
         if (!quiet) {
           setStatus(
-            totalsMatch ? "" : "Action list still incomplete vs Dream total",
+            totalsMatch ? "" : "Some days are not fully cached yet",
             totalsMatch ? "" : "error",
           );
         }
@@ -3419,24 +3477,13 @@
       renderBalCalendarGrid();
       void refreshVisibleMonthTotal();
       const label = balRangeLabel();
-      if (!quiet) {
-        const from = balCalState.fromDate || balCalState.selectedDate;
-        const to = balCalState.toDate || from;
-        const multi = from && to && from !== to;
-        setStatus(
-          balCalState.activeTab === "bonuses"
-            ? multi
-              ? "Loading paid actions for the selected period..."
-              : "Loading paid actions..."
-            : "Loading balances...",
-        );
-      }
+      if (!quiet) showBalSpinner();
       try {
         if (balCalState.activeTab === "bonuses") {
-          await refreshBonusActions({ quiet: true });
+          await refreshBonusActions({ quiet });
         } else {
           const data = await api(
-            `/letterbot/admin/balances-by-profile?${balQueryString({ force: true })}`,
+            `/letterbot/admin/balances-by-profile?${balQueryString({ force: false })}`,
           );
           if (data.today) balCalState.today = String(data.today).slice(0, 10);
           renderBalCalendarGrid();
@@ -3457,6 +3504,8 @@
           renderBalanceProfiles([], label, { error: error.message });
         }
         if (!quiet) setStatus(error.message, "error");
+      } finally {
+        if (!quiet) hideBalSpinner();
       }
     }
 
