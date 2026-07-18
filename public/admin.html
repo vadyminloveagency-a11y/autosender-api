@@ -1435,6 +1435,10 @@
       text-align: center;
     }
     .bonus-actions-table th:last-child { text-align: center; }
+    .bonus-actions-table th:nth-child(2),
+    .bonus-actions-table td:nth-child(2),
+    .bonus-actions-table th:nth-child(3),
+    .bonus-actions-table td:nth-child(3),
     .bonus-actions-table th:nth-child(5),
     .bonus-actions-table td:nth-child(5) { text-align: center; }
     .bonus-actions-table .bonus-total-row td {
@@ -4343,8 +4347,8 @@
           <thead>
             <tr>
               ${th("type", "Type of Bonus")}
-              ${th("man", "By Whom")}
-              ${th("questionnaire", "To")}
+              ${th("man", "Men")}
+              ${th("questionnaire", "Lady")}
               ${th("operator", "Operator")}
               ${th("date", "Date")}
               ${th("amount", "Amount")}
