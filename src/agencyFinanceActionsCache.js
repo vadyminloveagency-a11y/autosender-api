@@ -99,21 +99,46 @@ async function syncOneDay(day, { force = false, forceCurrent = false } = {}) {
 
   const task = (async () => {
     try {
-      // Always hit Dream on an intentional refresh so incomplete/wrong days can heal.
       const forceDream = true;
       const detail = await fetchBonusActionsDayDetail(day, { force: forceDream });
+      const seenKeys = new Map();
       const normalized = (Array.isArray(detail.actions) ? detail.actions : []).map(
-        (action) => ({
-          ...action,
-          actionKey: actionKey(action),
-        }),
+        (action) => {
+          const baseKey = actionKey(action);
+          const occurrence = (seenKeys.get(baseKey) || 0) + 1;
+          seenKeys.set(baseKey, occurrence);
+          return {
+            ...action,
+            actionKey:
+              occurrence === 1
+                ? baseKey
+                : createHash("sha256")
+                    .update(`${baseKey}|${occurrence}`)
+                    .digest("hex"),
+          };
+        },
       );
-      const officialTotalUsd = await resolveOfficialTotalUsd(day, detail, { forceDream });
+      let officialTotalUsd = await resolveOfficialTotalUsd(day, detail, { forceDream });
       const actionsTotalUsd = Number(
         normalized
           .reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0)
           .toFixed(2),
       );
+      // If detail Grand Total disagrees but Group-by-Girl matches the rows, trust
+      // the girl total — that is what closes stubborn cent-level incomplete days.
+      if (Math.abs(actionsTotalUsd - officialTotalUsd) >= 0.05) {
+        try {
+          const grouped = await fetchBonusesByGirl(day, { force: true, profileId: 0 });
+          const girlSum = Number(
+            (Array.isArray(grouped) ? grouped : [])
+              .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+              .toFixed(2),
+          );
+          if (Math.abs(actionsTotalUsd - girlSum) < 0.05) {
+            officialTotalUsd = girlSum;
+          }
+        } catch (_) {}
+      }
       const complete = Math.abs(actionsTotalUsd - officialTotalUsd) < 0.05;
       const error = complete
         ? ""

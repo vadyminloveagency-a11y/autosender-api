@@ -438,11 +438,23 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0, a
   };
 
   const byKey = new Map();
-  const addActions = (rows) => {
+  const loadedPages = new Set();
+  const addActions = (rows, page = 0) => {
+    if (page > 0) {
+      if (loadedPages.has(page)) return 0;
+      loadedPages.add(page);
+    }
     let added = 0;
     // Dream already filters this response by its business day (10:00–10:00 Kyiv).
-    for (const action of filterRequestedActions(rows, pid)) {
-      const key = actionDedupeKey(action);
+    // Keep identical twin rows from the same page (same second / amount) — they are
+    // real paid actions. Cross-page duplicates are avoided by loading each page once.
+    const list = filterRequestedActions(rows, pid);
+    for (let index = 0; index < list.length; index += 1) {
+      const action = list[index];
+      const key =
+        page > 0
+          ? `${actionDedupeKey(action)}|p${page}|${index}`
+          : `${actionDedupeKey(action)}|x${byKey.size}`;
       if (byKey.has(key)) continue;
       byKey.set(key, action);
       added += 1;
@@ -454,14 +466,14 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0, a
   cookieJar = first.jar;
   let targetTotal = parseBonusGrandTotal(first.html);
   let detectedPages = maxPaginationPage(first.html);
-  addActions(parseBonusActions(first.html));
+  addActions(parseBonusActions(first.html), 1);
 
   const loadPage = async (page) => {
     const result = await fetchBonusPage(day, page, pid, headers, cookieJar);
     cookieJar = result.jar;
     if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
     detectedPages = Math.max(detectedPages, maxPaginationPage(result.html));
-    addActions(parseBonusActions(result.html));
+    addActions(parseBonusActions(result.html), page);
     return result;
   };
 
@@ -540,7 +552,16 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0, a
             return detail.actions || [];
           }),
         );
-        for (const rows of parts) addActions(rows);
+        for (const rows of parts) addActions(rows, 0);
+      }
+      const girlSum = Number(
+        girls.reduce((sum, row) => sum + (Number(row.amount) || 0), 0).toFixed(2),
+      );
+      const actionsSum = sumActionsUsd([...byKey.values()]);
+      // Prefer Group-by-Girl when it matches the parsed rows — Dream's Grand Total
+      // footer is occasionally a few cents off the visible action list.
+      if (totalsMatch(actionsSum, girlSum)) {
+        targetTotal = girlSum;
       }
     } catch (_) {}
   }

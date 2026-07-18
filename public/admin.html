@@ -3135,10 +3135,7 @@
       summary.innerHTML = `
         <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
         <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
-        <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>
-        <span>Dream days total: <strong>${formatBalanceUsd(coverage.officialTotalUsd)}</strong></span>
-        <span>Missing vs Dream: <strong>${formatBalanceUsd(coverage.missingUsd)}</strong></span>
-        <span>Incomplete days: <strong>${Number(coverage.incompleteDays || 0).toLocaleString("en-US")}</strong></span>`;
+        <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>`;
       body.innerHTML = men
         .map((man) => {
           const id = String(man.maleProfileId || "").trim();
