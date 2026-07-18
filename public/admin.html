@@ -2724,7 +2724,7 @@
       setupDragAndDrop();
       setStatus("");
       void (async () => {
-        await refreshAccountManager({ quiet: true });
+        await refreshAccountManager({ quiet: true, syncDream: true });
         void refreshMailings({ quiet: true });
         void refreshMailCalendar({ quiet: true });
       })();
@@ -2820,6 +2820,14 @@
       return `<div class="account-avatar placeholder">${fallback}</div>`;
     }
 
+    function accountSubtitle(profile) {
+      const id = profile.femaleProfileId ? `ID ${profile.femaleProfileId}` : "No ID";
+      const login = profile.hasDreamLogin
+        ? profile.dreamUsername || "Dream"
+        : id;
+      return `${login} · ${profile.inboxMenCount || 0} in DB`;
+    }
+
     function renderAccountManager() {
       const listEl = document.getElementById("accounts-list");
       const gridEl = document.getElementById("operators-grid");
@@ -2829,12 +2837,12 @@
       document.getElementById("operators-count").textContent = `(${cachedOperators.length})`;
 
       if (!cachedProfiles.length) {
-        listEl.innerHTML = `<div class="empty-state">No accounts yet. Add a Dream profile.</div>`;
+        listEl.innerHTML = `<div class="empty-state">No accounts yet. Sync from Dream or add a profile.</div>`;
       } else if (!unassigned.length) {
         listEl.innerHTML = `<div class="empty-state">All accounts are assigned. Drag here from an operator to unassign.</div>`;
       } else {
         listEl.innerHTML = unassigned.map((profile) => {
-          const sub = `${profile.dreamUsername || "Dream"} · ${profile.inboxMenCount || 0} in DB`;
+          const sub = accountSubtitle(profile);
           return `
             <div class="account-card"
               draggable="true"
@@ -2870,7 +2878,13 @@
                   ${avatarHtml(profile)}
                   <div class="account-meta">
                     <p class="account-name">${escapeHtml(profileTitle(profile))}</p>
-                    <p class="account-sub">${escapeHtml(profile.dreamUsername || "Dream")}</p>
+                    <p class="account-sub">${escapeHtml(
+                      profile.hasDreamLogin
+                        ? profile.dreamUsername || "Dream"
+                        : profile.femaleProfileId
+                          ? `ID ${profile.femaleProfileId}`
+                          : "Dream",
+                    )}</p>
                   </div>
                   <button type="button" class="linked-edit profile-edit-btn" data-profile-id="${profile.id}" title="Edit profile" aria-label="Edit profile">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a1 1 0 0 0 0-1.41l-2.51-2.51a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.99-1.66z"/></svg>
@@ -2977,9 +2991,25 @@
       }, true);
     }
 
-    async function refreshAccountManager({ quiet = false } = {}) {
-      if (!quiet) setStatus("Loading accounts...");
+    async function refreshAccountManager({ quiet = false, syncDream = false, forceDream = false } = {}) {
+      const doSync = Boolean(syncDream || forceDream);
+      if (!quiet) setStatus(doSync ? "Syncing Dream accounts..." : "Loading accounts...");
       try {
+        if (doSync) {
+          try {
+            const sync = await api("/profiles/admin/sync-dream", {
+              method: "POST",
+              body: JSON.stringify({ force: Boolean(forceDream) }),
+            });
+            if (!quiet && sync?.configured === false) {
+              setStatus("Save agency login in Balances to sync Active Dream profiles", "error");
+            } else if (!quiet && sync?.ok && Number(sync.created || 0) > 0) {
+              setStatus(`Synced ${sync.count || 0} Active profiles (+${sync.created} new)`, "ok");
+            }
+          } catch (syncError) {
+            if (!quiet) setStatus(syncError.message, "error");
+          }
+        }
         const [opsData, profilesData] = await Promise.all([
           api("/auth/operators"),
           api("/profiles/admin/list"),
@@ -2988,7 +3018,13 @@
         cachedProfiles = Array.isArray(profilesData.profiles) ? profilesData.profiles : [];
         renderAccountManager();
         fillBalProfileOptions();
-        if (!quiet) setStatus("");
+        if (!quiet) {
+          const hint = document.getElementById("status");
+          const text = String(hint?.textContent || "");
+          if (!text || text === "Syncing Dream accounts..." || text === "Loading accounts...") {
+            setStatus("");
+          }
+        }
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
       }
@@ -5051,7 +5087,7 @@
     });
 
     document.getElementById("refresh-accounts-btn").addEventListener("click", () => {
-      void refreshAccountManager();
+      void refreshAccountManager({ forceDream: true });
     });
     document.getElementById("create-profile-btn").addEventListener("click", () => {
       void createProfile();

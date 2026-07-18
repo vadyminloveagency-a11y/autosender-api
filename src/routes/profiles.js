@@ -11,6 +11,7 @@ import {
   listProfileAssignmentsForUserDay,
   listProfileAssignmentHistoryForUser,
   updateAgencyProfile,
+  upsertAgencySyncedProfiles,
   verifyAndResolveDreamProfile,
 } from "../agencyProfileStore.js";
 import { encryptSecret } from "../cryptoUtil.js";
@@ -19,9 +20,11 @@ import { syncInboxMenItems } from "../inboxSync.js";
 import { upsertDreamCredentials } from "../letterbotStore.js";
 import { getPool } from "../db.js";
 import {
+  fetchAgencyProfiles,
   fetchBonusActions,
   fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
+import { getAgencyFinanceCredentials } from "../agencyFinanceStore.js";
 import { dreamDayKey } from "../dreamDay.js";
 
 const router = express.Router();
@@ -41,10 +44,19 @@ function mapPublicProfile(row) {
   };
 }
 
+function hasDreamLadyLogin(username, password) {
+  const user = String(username || "").trim();
+  const pass = String(password || "");
+  if (!user || !pass) return false;
+  if (/^agency:\d+$/i.test(user)) return false;
+  return true;
+}
+
 function mapAdminProfile(profile, password = "") {
   return {
     ...profile,
     password: password || null,
+    hasDreamLogin: hasDreamLadyLogin(profile?.dreamUsername, password),
   };
 }
 
@@ -114,6 +126,39 @@ router.get("/admin/list", adminMiddleware, async (_req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ ok: false, error: error?.message || "Failed to load profiles" });
+  }
+});
+
+/** Pull Active Dream agency questionnaires into Account Manager. */
+router.post("/admin/sync-dream", adminMiddleware, async (req, res) => {
+  try {
+    const creds = await getAgencyFinanceCredentials();
+    if (!creds.configured) {
+      return res.json({
+        ok: true,
+        configured: false,
+        created: 0,
+        updated: 0,
+        count: 0,
+        error: "Agency finance login not configured",
+      });
+    }
+    const force = Boolean(req.body?.force);
+    const dreamProfiles = await fetchAgencyProfiles({ status: "active", force });
+    const result = await upsertAgencySyncedProfiles(dreamProfiles);
+    return res.json({
+      ok: true,
+      configured: true,
+      created: result.created,
+      updated: result.updated,
+      count: dreamProfiles.length,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Failed to sync Dream profiles",
+    });
   }
 });
 

@@ -435,6 +435,67 @@ export async function createAgencyProfile({ username, password, displayName, ass
   return row;
 }
 
+/**
+ * Upsert Dream agency Active questionnaires into Account Manager.
+ * Does not overwrite real lady Dream logins — only creates placeholders
+ * or refreshes display_name when matched by female_profile_id.
+ */
+export async function upsertAgencySyncedProfiles(items = []) {
+  await ensureAgencyProfileTables();
+  const db = getPool();
+  const emptyEnc = encryptSecret("");
+  let created = 0;
+  let updated = 0;
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const femaleProfileId = Number(item.profileId || item.femaleProfileId || 0);
+    if (!femaleProfileId) continue;
+    const displayName =
+      String(item.name || item.displayName || "").trim() || `Profile ${femaleProfileId}`;
+    const placeholderUser = `agency:${femaleProfileId}`;
+
+    const byFemale = await db.query(
+      `SELECT id, display_name FROM agency_profiles WHERE female_profile_id = $1 LIMIT 1`,
+      [femaleProfileId],
+    );
+    if (byFemale.rows[0]) {
+      if (String(byFemale.rows[0].display_name || "") !== displayName) {
+        await db.query(
+          `UPDATE agency_profiles SET display_name = $2, updated_at = NOW() WHERE id = $1`,
+          [byFemale.rows[0].id, displayName],
+        );
+        updated += 1;
+      }
+      continue;
+    }
+
+    const byUser = await db.query(
+      `SELECT id FROM agency_profiles WHERE dream_username = $1 LIMIT 1`,
+      [placeholderUser],
+    );
+    if (byUser.rows[0]) {
+      await db.query(
+        `UPDATE agency_profiles
+         SET female_profile_id = $2, display_name = $3, updated_at = NOW()
+         WHERE id = $1`,
+        [byUser.rows[0].id, femaleProfileId, displayName],
+      );
+      updated += 1;
+      continue;
+    }
+
+    await db.query(
+      `INSERT INTO agency_profiles (
+         female_profile_id, display_name, dream_username, password_enc, assigned_user_id, updated_at
+       ) VALUES ($1, $2, $3, $4, NULL, NOW())`,
+      [femaleProfileId, displayName, placeholderUser, emptyEnc],
+    );
+    created += 1;
+  }
+
+  return { created, updated };
+}
+
 export async function updateAgencyProfile(id, patch = {}) {
   const existing = await getAgencyProfileById(id);
   if (!existing) return null;
