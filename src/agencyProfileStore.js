@@ -220,6 +220,47 @@ export async function listProfileAssignmentsForUserDay(userId, dayKey) {
   }));
 }
 
+/** All assignment intervals that overlap a Dream business day (admin finance views). */
+export async function listAssignmentsForDreamDay(dayKey) {
+  const day = String(dayKey || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  const db = getPool();
+  const result = await db.query(
+    `SELECT
+       h.agency_profile_id,
+       h.female_profile_id,
+       h.display_name,
+       h.assigned_at,
+       h.unassigned_at,
+       h.user_id,
+       u.name AS operator_name,
+       u.email AS operator_email,
+       ap.dream_username
+     FROM agency_profile_assignments h
+     LEFT JOIN agency_profiles ap ON ap.id = h.agency_profile_id
+     LEFT JOIN users u ON u.id = h.user_id
+     WHERE h.assigned_at < ${sqlDreamDayEnd(1)}
+       AND (
+         h.unassigned_at IS NULL
+         OR h.unassigned_at >= ${sqlDreamDayStart(1)}
+       )
+     ORDER BY h.female_profile_id, h.assigned_at ASC`,
+    [day],
+  );
+  return result.rows.map((row) => ({
+    agencyProfileId: row.agency_profile_id ? Number(row.agency_profile_id) : null,
+    femaleProfileId: Number(row.female_profile_id),
+    displayName: String(row.display_name || ""),
+    dreamUsername: String(row.dream_username || ""),
+    userId: Number(row.user_id) || null,
+    operatorName: String(row.operator_name || "").trim(),
+    operatorEmail: String(row.operator_email || "").trim(),
+    assignedAt: row.assigned_at,
+    unassignedAt: row.unassigned_at || null,
+    photoUrl: `https://profile-photos-cdn.dream-singles.com/im${Number(row.female_profile_id)}_small.jpg`,
+  }));
+}
+
 function mapAgencyProfileRow(row, extras = {}) {
   return {
     id: row.id,

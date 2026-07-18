@@ -762,6 +762,103 @@
       color: var(--accent-strong);
       white-space: nowrap;
     }
+    .bal-section-total {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(4, 242, 160, 0.22);
+      border-radius: 10px;
+      background: rgba(12, 18, 22, 0.55);
+    }
+    .bal-section-total-label {
+      color: var(--muted);
+      font: 600 12px/1 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .bal-section-total-value {
+      color: var(--accent-strong);
+      font: 800 22px/1 var(--font);
+      font-variant-numeric: tabular-nums;
+    }
+    .bonus-profiles {
+      display: grid;
+      gap: 8px;
+    }
+    .bonus-profile {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(12, 18, 22, 0.45);
+      overflow: hidden;
+    }
+    .bonus-profile-head {
+      width: 100%;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+    }
+    .bonus-profile-meta { min-width: 0; flex: 1 1 auto; }
+    .bonus-profile-name {
+      display: block;
+      font: 700 13px/1.3 var(--font);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bonus-profile-sub {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .bonus-profile-sum {
+      color: var(--accent-strong);
+      font: 800 15px/1 var(--font);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .bonus-profile-chevron {
+      color: var(--muted);
+      font: 700 14px/1 var(--font);
+      transition: transform 0.16s ease;
+    }
+    .bonus-profile.is-open .bonus-profile-chevron { transform: rotate(180deg); }
+    .bonus-profile-actions { display: none; border-top: 1px solid var(--line); overflow-x: auto; }
+    .bonus-profile.is-open .bonus-profile-actions { display: block; }
+    .bonus-actions-table {
+      width: 100%;
+      border-collapse: collapse;
+      font: 12px/1.35 var(--font);
+    }
+    .bonus-actions-table th,
+    .bonus-actions-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(78, 98, 108, 0.22);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .bonus-actions-table th {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .bonus-actions-table td:last-child {
+      color: var(--accent-strong);
+      font-weight: 700;
+      text-align: right;
+    }
     .scan-btn {
       border: 1px solid rgba(4, 242, 160, 0.45);
       border-radius: 7px;
@@ -1449,11 +1546,11 @@
 
           <section id="section-balances" class="admin-section">
             <h2 class="admin-main-title">Balances</h2>
-            <p class="admin-main-lead">Dream agency bonuses per questionnaire for the selected day (Group By Girl).</p>
+            <p class="admin-main-lead">Dream agency day totals and paid actions (Dream day starts 10:00 Kyiv).</p>
 
             <div class="panel-card">
               <div class="card-head">
-                <h3>By questionnaire</h3>
+                <h3>Balances</h3>
                 <button type="button" id="refresh-balances-btn" class="btn-ghost">Refresh</button>
               </div>
 
@@ -1484,6 +1581,10 @@
                 <div class="mail-day-panel">
                   <h4 id="bal-day-title">Selected day</h4>
                   <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
+                  <div id="bal-day-total" class="bal-section-total hidden">
+                    <span class="bal-section-total-label">Day total</span>
+                    <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
+                  </div>
                   <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
                   <div id="bal-day-wrap" class="table-scroll hidden">
                     <table class="data-table">
@@ -1499,6 +1600,21 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div class="panel-card" style="margin-top:16px">
+              <div class="card-head">
+                <h3>Bonuses By Girl</h3>
+                <button type="button" id="refresh-bonuses-btn" class="btn-ghost">Refresh</button>
+              </div>
+              <p class="admin-main-lead" style="margin:0 0 12px">Paid actions on questionnaires for the selected day, with operator from assignment history.</p>
+              <div id="bonus-day-total" class="bal-section-total hidden">
+                <span class="bal-section-total-label">Paid actions total</span>
+                <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
+              </div>
+              <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
+              <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
+              <div id="bonus-profiles" class="bonus-profiles hidden"></div>
             </div>
           </section>
         </div>
@@ -2471,6 +2587,8 @@
       const bodyEl = document.getElementById("bal-day-body");
       const titleEl = document.getElementById("bal-day-title");
       const statusEl = document.getElementById("bal-status");
+      const totalWrap = document.getElementById("bal-day-total");
+      const totalValue = document.getElementById("bal-day-total-value");
       if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
       titleEl.textContent = `Balances · ${date}`;
       bodyEl.innerHTML = "";
@@ -2487,6 +2605,19 @@
         }
       }
       const list = Array.isArray(profiles) ? profiles : [];
+      const totalUsd =
+        meta.totalUsd != null
+          ? Number(meta.totalUsd) || 0
+          : list.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0);
+      if (totalWrap && totalValue) {
+        if (list.length) {
+          totalWrap.classList.remove("hidden");
+          totalValue.textContent = formatBalanceUsd(totalUsd);
+        } else {
+          totalWrap.classList.add("hidden");
+          totalValue.textContent = "$0.00";
+        }
+      }
       if (!list.length) {
         emptyEl.classList.remove("hidden");
         wrapEl.classList.add("hidden");
@@ -2511,6 +2642,133 @@
       }
     }
 
+    function formatBonusMan(action) {
+      const id = String(action?.maleProfileId || "").trim();
+      const name = String(action?.maleName || "").trim();
+      if (id && name) return `${id} ${name}`;
+      return name || id || "—";
+    }
+
+    function formatBonusOperator(action) {
+      const name = String(action?.operatorName || "").trim();
+      const email = String(action?.operatorEmail || "").trim();
+      if (name || email) return escapeHtml(name || email);
+      return "—";
+    }
+
+    function renderBonusActions(profiles, date, meta = {}) {
+      const emptyEl = document.getElementById("bonus-day-empty");
+      const listEl = document.getElementById("bonus-profiles");
+      const statusEl = document.getElementById("bonus-status");
+      const totalWrap = document.getElementById("bonus-day-total");
+      const totalValue = document.getElementById("bonus-day-total-value");
+      if (!emptyEl || !listEl) return;
+
+      if (statusEl) {
+        if (meta.error) {
+          statusEl.style.display = "block";
+          statusEl.textContent = meta.error;
+        } else if (meta.configured === false) {
+          statusEl.style.display = "block";
+          statusEl.textContent = "Save agency login above to load paid actions.";
+        } else {
+          statusEl.style.display = "none";
+          statusEl.textContent = "";
+        }
+      }
+
+      const list = Array.isArray(profiles) ? profiles : [];
+      const totalUsd =
+        meta.totalUsd != null
+          ? Number(meta.totalUsd) || 0
+          : list.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0);
+      if (totalWrap && totalValue) {
+        if (list.length) {
+          totalWrap.classList.remove("hidden");
+          totalValue.textContent = formatBalanceUsd(totalUsd);
+        } else {
+          totalWrap.classList.add("hidden");
+          totalValue.textContent = "$0.00";
+        }
+      }
+
+      if (!list.length) {
+        emptyEl.classList.remove("hidden");
+        listEl.classList.add("hidden");
+        listEl.innerHTML = "";
+        emptyEl.textContent = "No paid actions for this day.";
+        return;
+      }
+
+      emptyEl.classList.add("hidden");
+      listEl.classList.remove("hidden");
+      listEl.innerHTML = list
+        .map((profile, index) => {
+          const actions = Array.isArray(profile.actions) ? profile.actions : [];
+          const rows = actions.length
+            ? actions
+                .map(
+                  (action) => `
+                    <tr>
+                      <td>${escapeHtml(action.type || "Paid action")}</td>
+                      <td>${escapeHtml(formatBonusMan(action))}</td>
+                      <td>${formatBonusOperator(action)}</td>
+                      <td>${escapeHtml(action.occurredAt || "—")}</td>
+                      <td>${formatBalanceUsd(action.amountUsd)}</td>
+                    </tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="5" style="text-align:center;color:var(--muted)">No paid actions</td></tr>`;
+          const id = String(profile.profileId || "");
+          const name =
+            String(profile.displayName || profile.dreamUsername || "").trim() ||
+            `Profile ${id}`;
+          const photo =
+            profile.photoUrl ||
+            (Number(id)
+              ? `https://profile-photos-cdn.dream-singles.com/im${Number(id)}_small.jpg`
+              : "");
+          return `
+            <article class="bonus-profile${index === 0 ? " is-open" : ""}">
+              <button type="button" class="bonus-profile-head" aria-expanded="${index === 0 ? "true" : "false"}">
+                <img class="account-avatar" src="${escapeHtml(photo)}" alt="" style="width:32px;height:32px;flex:0 0 32px;border-radius:50%;object-fit:cover" onerror="this.style.visibility='hidden'">
+                <span class="bonus-profile-meta">
+                  <span class="bonus-profile-name">${escapeHtml(name)}</span>
+                  <span class="bonus-profile-sub">ID ${escapeHtml(id)} · ${actions.length} paid actions · ${date}</span>
+                </span>
+                <strong class="bonus-profile-sum">${formatBalanceUsd(profile.balanceUsd)}</strong>
+                <span class="bonus-profile-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div class="bonus-profile-actions">
+                <table class="bonus-actions-table">
+                  <thead>
+                    <tr><th>Action</th><th>Man</th><th>Operator</th><th>When</th><th>Amount</th></tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </article>`;
+        })
+        .join("");
+    }
+
+    async function refreshBonusActions({ quiet = false } = {}) {
+      const date = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
+      try {
+        const data = await api(
+          `/letterbot/admin/bonuses-actions?date=${encodeURIComponent(date)}&force=1`,
+        );
+        renderBonusActions(data.profiles || [], date, {
+          configured: data.configured,
+          error: data.error,
+          totalUsd: data.totalUsd,
+        });
+      } catch (error) {
+        renderBonusActions([], date, { error: error.message });
+        if (!quiet) setStatus(error.message, "error");
+      }
+    }
+
     async function refreshBalances({ quiet = false } = {}) {
       if (!balCalState.today) balCalState.today = kyivTodayLocal();
       if (!balCalState.selectedDate) balCalState.selectedDate = balCalState.today;
@@ -2530,10 +2788,13 @@
         renderBalanceProfiles(data.profiles || [], balCalState.selectedDate, {
           configured: data.configured,
           error: data.error,
+          totalUsd: data.totalUsd,
         });
+        await refreshBonusActions({ quiet: true });
         if (!quiet) setStatus("");
       } catch (error) {
         renderBalanceProfiles([], balCalState.selectedDate, { error: error.message });
+        renderBonusActions([], balCalState.selectedDate, { error: error.message });
         if (!quiet) setStatus(error.message, "error");
       }
     }
@@ -2957,6 +3218,18 @@
 
     document.getElementById("refresh-balances-btn")?.addEventListener("click", () => {
       void refreshBalances();
+    });
+    document.getElementById("refresh-bonuses-btn")?.addEventListener("click", () => {
+      void refreshBonusActions();
+    });
+    document.getElementById("bonus-profiles")?.addEventListener("click", (event) => {
+      const head = event.target.closest(".bonus-profile-head");
+      if (!head) return;
+      const card = head.closest(".bonus-profile");
+      if (!card) return;
+      const open = !card.classList.contains("is-open");
+      card.classList.toggle("is-open", open);
+      head.setAttribute("aria-expanded", open ? "true" : "false");
     });
     document.getElementById("bal-cal-prev")?.addEventListener("click", () => shiftBalCalMonth(-1));
     document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
