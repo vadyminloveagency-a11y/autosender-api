@@ -997,7 +997,7 @@
       letter-spacing: 0.05em;
     }
     .bal-month-total-value {
-      color: #ff2b3a;
+      color: #fff;
       font: 800 18px/1 Arial, sans-serif;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
@@ -1059,8 +1059,14 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
+    .bal-section-total-title {
+      margin: 0 !important;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
     .bal-section-total-value {
-      color: #ff2b3a;
+      color: #fff;
       font: 800 22px/1 Arial, sans-serif;
       font-variant-numeric: tabular-nums;
     }
@@ -1102,7 +1108,7 @@
       text-align: right;
     }
     .bonus-actions-table .bonus-total-row td:last-child {
-      color: #ff2b3a;
+      color: #fff;
     }
     .bonus-actions-table .bonus-total-row td {
       border-bottom: 0;
@@ -1849,10 +1855,9 @@
 
                 <div class="mail-day-panel">
                   <div id="bal-tab-balances" class="bal-tab-panel is-active" role="tabpanel">
-                    <h4 id="bal-day-title">Selected day</h4>
                     <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
                     <div id="bal-day-total" class="bal-section-total hidden">
-                      <span class="bal-section-total-label">Day total</span>
+                      <h4 id="bal-day-title" class="bal-section-total-title">Selected day</h4>
                       <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
                     </div>
                     <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
@@ -1871,9 +1876,8 @@
                   </div>
 
                   <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
-                    <h4 id="bonus-day-title">Bonuses</h4>
                     <div id="bonus-day-total" class="bal-section-total hidden">
-                      <span class="bal-section-total-label">Grand Total</span>
+                      <h4 id="bonus-day-title" class="bal-section-total-title">Bonuses</h4>
                       <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
                     </div>
                     <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
@@ -3243,13 +3247,8 @@
           ? Number(meta.totalUsd) || 0
           : list.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0);
       if (totalWrap && totalValue) {
-        if (list.length) {
-          totalWrap.classList.remove("hidden");
-          totalValue.textContent = formatBalanceUsd(totalUsd);
-        } else {
-          totalWrap.classList.add("hidden");
-          totalValue.textContent = "$0.00";
-        }
+        totalWrap.classList.remove("hidden");
+        totalValue.textContent = list.length ? formatBalanceUsd(totalUsd) : "$0.00";
       }
       if (!list.length) {
         emptyEl.classList.remove("hidden");
@@ -3378,13 +3377,8 @@
           ? Number(meta.totalUsd) || 0
           : actions.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
       if (totalWrap && totalValue) {
-        if (actions.length) {
-          totalWrap.classList.remove("hidden");
-          totalValue.textContent = formatBalanceUsd(totalUsd);
-        } else {
-          totalWrap.classList.add("hidden");
-          totalValue.textContent = "$0.00";
-        }
+        totalWrap.classList.remove("hidden");
+        totalValue.textContent = actions.length ? formatBalanceUsd(totalUsd) : "$0.00";
       }
 
       if (!actions.length) {
