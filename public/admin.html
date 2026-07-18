@@ -372,10 +372,10 @@
       position: sticky;
       top: 0;
       align-self: flex-start;
-      width: 248px;
-      flex: 0 0 248px;
+      width: 196px;
+      flex: 0 0 196px;
       height: 100vh;
-      padding: 22px 14px;
+      padding: 18px 12px;
       border-right: 1px solid rgba(255, 43, 58, 0.14);
       background: var(--sidebar);
       backdrop-filter: blur(12px) saturate(1.05);
@@ -389,16 +389,16 @@
       margin: 0;
       padding: 2px 10px 4px;
       color: #fff;
-      font: 700 20px/1.2 var(--font);
+      font: 700 16px/1.2 var(--font);
       letter-spacing: -0.02em;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     .sidebar-logo {
       flex: 0 0 auto;
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
       background: #05060a url("/inlove-emblem.png") center / cover no-repeat;
       border: 1px solid rgba(255, 43, 58, 0.35);
@@ -1104,12 +1104,9 @@
       background: rgba(255, 255, 255, 0.02);
     }
     .bonus-actions-table td:last-child {
-      color: #eef2f6;
+      color: #ff2b3a;
       font-weight: 700;
       text-align: right;
-    }
-    .bonus-actions-table .bonus-total-row td:last-child {
-      color: #fff;
     }
     .bonus-actions-table .bonus-total-row td {
       border-bottom: 0;
@@ -1697,6 +1694,9 @@
         </nav>
 
         <div class="sidebar-spacer"></div>
+        <nav class="sidebar-nav" aria-label="Settings">
+          <button type="button" class="sidebar-nav-btn" data-section="settings">Settings</button>
+        </nav>
         <button type="button" id="logout-btn" class="sidebar-logout">Logout</button>
       </aside>
 
@@ -1816,15 +1816,6 @@
                 </div>
               </div>
 
-              <div id="agency-finance-creds" class="mail-agency-creds">
-                <div class="mail-agency-creds-row">
-                  <input id="agency-finance-user" type="text" placeholder="Agency login" autocomplete="username">
-                  <input id="agency-finance-pass" type="password" placeholder="Agency password" autocomplete="current-password">
-                  <button type="button" id="agency-finance-save" class="btn-ghost">Save agency login</button>
-                </div>
-                <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
-              </div>
-
               <div class="bal-filters">
                 <div class="bal-filters-row">
                   <select id="bal-filter-profile" aria-label="Questionnaire">
@@ -1891,6 +1882,22 @@
                     <div id="bal-loading-text" class="bal-loading-text"></div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="section-settings" class="admin-section">
+            <div class="panel-card">
+              <h2 class="admin-main-title" style="margin:0 0 14px">Settings</h2>
+              <h3 style="margin:0 0 8px;font-size:14px">Dream agency account</h3>
+              <p class="mail-day-empty" style="text-align:left;padding:0 0 10px">Used to load balances and paid actions from the Dream admin panel.</p>
+              <div id="agency-finance-creds" class="mail-agency-creds">
+                <div class="mail-agency-creds-row">
+                  <input id="agency-finance-user" type="text" placeholder="Agency login" autocomplete="username">
+                  <input id="agency-finance-pass" type="password" placeholder="Agency password" autocomplete="current-password">
+                  <button type="button" id="agency-finance-save" class="btn-ghost">Save agency login</button>
+                </div>
+                <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
               </div>
             </div>
           </section>
@@ -2217,6 +2224,7 @@
         accounts: document.getElementById("section-accounts"),
         mailings: document.getElementById("section-mailings"),
         balances: document.getElementById("section-balances"),
+        settings: document.getElementById("section-settings"),
       };
       const next = sections[sectionId] ? sectionId : "accounts";
       localStorage.setItem(ADMIN_SECTION_KEY, next);
@@ -2241,6 +2249,9 @@
           void refreshBalances({ quiet: true });
           void refreshVisibleMonthTotal();
         });
+      }
+      if (next === "settings") {
+        void refreshAgencyFinanceCredsHint();
       }
     }
 
