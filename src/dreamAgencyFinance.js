@@ -172,7 +172,44 @@ function maxPaginationPage(html) {
   for (const match of String(html || "").matchAll(/[?&]page=(\d+)/gi)) {
     max = Math.max(max, Number(match[1]) || 1);
   }
-  return Math.min(max, 100);
+  return Math.min(max, 200);
+}
+
+/** Official Dream table total from detail view footer. */
+export function parseBonusGrandTotal(html) {
+  const text = stripTags(html);
+  const grand = text.match(/Grand\s*Total[^$]*\$\s*([0-9.,]+)/i);
+  if (grand) return parseMoney(grand[1]);
+  const pageTotal = text.match(/Page\s*Total[^$]*\$\s*([0-9.,]+)/i);
+  if (pageTotal) return parseMoney(pageTotal[1]);
+  return null;
+}
+
+function actionDedupeKey(action) {
+  return [
+    action.type,
+    action.maleProfileId,
+    action.femaleProfileId,
+    action.occurredAt,
+    action.amountUsd,
+  ].join("|");
+}
+
+function filterDayActions(actions, day, profileId = 0) {
+  const pid = Number(profileId) || 0;
+  return (Array.isArray(actions) ? actions : []).filter((action) => {
+    if (pid && String(action.femaleProfileId) !== String(pid)) return false;
+    if (actionCalendarDayKey(action.occurredAt) !== day) return false;
+    return true;
+  });
+}
+
+function sumActionsUsd(actions) {
+  return Number(
+    (Array.isArray(actions) ? actions : [])
+      .reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0)
+      .toFixed(2),
+  );
 }
 
 async function fetchWithCookies(url, { method = "GET", headers = {}, body, jar, maxRedirects = 8 } = {}) {
@@ -383,10 +420,24 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     throw new Error(`Agency bonuses HTTP ${first.response.status}`);
   }
 
+  const byKey = new Map();
+  const addActions = (rows) => {
+    let added = 0;
+    for (const action of filterDayActions(rows, day, pid)) {
+      const key = actionDedupeKey(action);
+      if (byKey.has(key)) continue;
+      byKey.set(key, action);
+      added += 1;
+    }
+    return added;
+  };
+
+  let targetTotal = parseBonusGrandTotal(first.html);
   let detectedPages = maxPaginationPage(first.html);
-  const htmlPages = [first.html];
   let cookieJar = first.jar;
-  // Fetch known pages in small parallel batches.
+  addActions(parseBonusActions(first.html));
+
+  // Load every page Dream advertises, refreshing the last-page estimate as we go.
   for (let start = 2; start <= detectedPages; start += 4) {
     const pageNumbers = Array.from(
       { length: Math.min(4, detectedPages - start + 1) },
@@ -404,12 +455,24 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     for (const result of results) {
       if (!result.response.ok) continue;
       cookieJar = result.jar;
-      htmlPages.push(result.html);
+      if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
       detectedPages = Math.max(detectedPages, maxPaginationPage(result.html));
+      addActions(parseBonusActions(result.html));
+    }
+    if (targetTotal != null && Math.abs(sumActionsUsd([...byKey.values()]) - targetTotal) < 0.02) {
+      break;
     }
   }
-  // Dream often hides far page links — probe a few more until empty.
-  for (let page = detectedPages + 1; page <= Math.min(detectedPages + 8, 100); page += 1) {
+
+  // Keep walking past hidden pagination until totals match or pages run out.
+  let emptyStreak = 0;
+  for (
+    let page = detectedPages + 1;
+    page <= 200 &&
+    (targetTotal == null ||
+      Math.abs(sumActionsUsd([...byKey.values()]) - targetTotal) >= 0.02);
+    page += 1
+  ) {
     const result = await fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
       method: "GET",
       jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
@@ -417,31 +480,30 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     });
     if (!result.response.ok) break;
     cookieJar = result.jar;
-    const pageActions = parseBonusActions(result.html).filter(
-      (action) => actionCalendarDayKey(action.occurredAt) === day,
-    );
-    if (!pageActions.length) break;
-    htmlPages.push(result.html);
+    if (targetTotal == null) targetTotal = parseBonusGrandTotal(result.html);
+    const added = addActions(parseBonusActions(result.html));
+    if (!added) {
+      emptyStreak += 1;
+      if (emptyStreak >= 2) break;
+      continue;
+    }
+    emptyStreak = 0;
   }
 
-  const seen = new Set();
-  const actions = htmlPages
-    .flatMap((html) => parseBonusActions(html))
-    .filter((action) => {
-      if (pid && String(action.femaleProfileId) !== String(pid)) return false;
-      // Drop rows Dream returned for the wrong calendar day.
-      if (actionCalendarDayKey(action.occurredAt) !== day) return false;
-      const key = [
-        action.type,
-        action.maleProfileId,
-        action.femaleProfileId,
-        action.occurredAt,
-        action.amountUsd,
-      ].join("|");
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  // Fallback target from Group-by-Girl if footer total was missing.
+  if (targetTotal == null) {
+    try {
+      const rows = await fetchBonusesByGirl(day, { force, profileId: pid });
+      targetTotal = Number(
+        rows
+          .filter((row) => !pid || String(row.profileId) === String(pid))
+          .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+          .toFixed(2),
+      );
+    } catch (_) {}
+  }
+
+  const actions = [...byKey.values()];
   detailCache.set(cacheKey, { at: Date.now(), actions });
   return actions;
 }
@@ -474,8 +536,7 @@ export async function fetchBonusActionsRange(
     return cached.actions;
   }
 
-  // Dream's ungrouped list over a long range often paginates poorly and
-  // effectively returns only the newest day. Fetch day-by-day instead.
+  // Day-by-day: each day loads until Dream Grand Total matches row sum.
   const days = eachDreamDayKey(startDay, endDay);
   if (force) {
     detailCache.delete(cacheKey);
@@ -484,8 +545,8 @@ export async function fetchBonusActionsRange(
 
   const merged = [];
   const errors = [];
-  for (let i = 0; i < days.length; i += 3) {
-    const batch = days.slice(i, i + 3);
+  for (let i = 0; i < days.length; i += 2) {
+    const batch = days.slice(i, i + 2);
     const results = await Promise.all(
       batch.map(async (day) => {
         try {
@@ -505,13 +566,7 @@ export async function fetchBonusActionsRange(
 
   const seen = new Set();
   const actions = merged.filter((action) => {
-    const key = [
-      action.type,
-      action.maleProfileId,
-      action.femaleProfileId,
-      action.occurredAt,
-      action.amountUsd,
-    ].join("|");
+    const key = actionDedupeKey(action);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

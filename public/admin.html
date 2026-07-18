@@ -3246,7 +3246,7 @@
             : `${actions.length} actions · newest first`;
         statusEl.style.display = "block";
         statusEl.textContent = meta.listIncomplete
-          ? `${base}. List may be partial; Grand Total uses Dream Group-by-Girl (same as month total).`
+          ? `${base}. Incomplete list — still loading from Dream or refresh again.`
           : base;
       }
       const bodyRows = actions
@@ -3286,24 +3286,116 @@
         </table>`;
     }
 
+    function eachLocalDayKey(fromDate, toDate) {
+      const days = [];
+      let cur = fromDate;
+      while (cur <= toDate) {
+        days.push(cur);
+        const [y, m, d] = cur.split("-").map(Number);
+        const next = new Date(Date.UTC(y, m - 1, d + 1));
+        cur = next.toISOString().slice(0, 10);
+      }
+      return days;
+    }
+
+    function mergeBonusProfiles(targetMap, profiles) {
+      for (const profile of Array.isArray(profiles) ? profiles : []) {
+        const key = String(profile.profileId || "");
+        if (!key) continue;
+        if (!targetMap.has(key)) {
+          targetMap.set(key, {
+            profileId: key,
+            displayName: profile.displayName || "",
+            dreamUsername: profile.dreamUsername || "",
+            photoUrl: profile.photoUrl || "",
+            balanceUsd: 0,
+            actions: [],
+          });
+        }
+        const entry = targetMap.get(key);
+        const seen = new Set(
+          entry.actions.map(
+            (action) =>
+              `${action.type}|${action.maleProfileId}|${action.occurredAt}|${action.amountUsd}`,
+          ),
+        );
+        for (const action of Array.isArray(profile.actions) ? profile.actions : []) {
+          const actionKey = `${action.type}|${action.maleProfileId}|${action.occurredAt}|${action.amountUsd}`;
+          if (seen.has(actionKey)) continue;
+          seen.add(actionKey);
+          entry.actions.push(action);
+          entry.balanceUsd += Number(action.amountUsd) || 0;
+        }
+      }
+    }
+
     async function refreshBonusActions({ quiet = false } = {}) {
       if (!balCalState.fromDate) {
         balCalState.fromDate = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
       }
       if (!balCalState.toDate) balCalState.toDate = balCalState.fromDate;
+      const from = balCalState.fromDate;
+      const to = balCalState.toDate;
       const label = balRangeLabel();
       const titleEl = document.getElementById("bonus-day-title");
       if (titleEl) titleEl.textContent = `Bonuses · ${label}`;
       try {
-        const data = await api(`/letterbot/admin/bonuses-actions?${balQueryString({ force: true })}`);
+        const profileId = balCalState.profileId || "";
+        const officialParams = new URLSearchParams({ from, to, force: "1" });
+        if (profileId) officialParams.set("profileId", profileId);
+        const officialPromise = api(
+          `/letterbot/admin/balances-by-profile?${officialParams.toString()}`,
+        ).catch(() => ({ totalUsd: 0, configured: true }));
+
+        const days = eachLocalDayKey(from, to);
+        const byProfile = new Map();
+        let configured = true;
+        let lastError = "";
+        for (let i = 0; i < days.length; i += 1) {
+          const day = days[i];
+          if (!quiet) {
+            setStatus(`Loading paid actions ${i + 1}/${days.length} (${day})...`);
+          }
+          const params = new URLSearchParams({ from: day, to: day, force: "1" });
+          if (profileId) params.set("profileId", profileId);
+          const data = await api(`/letterbot/admin/bonuses-actions?${params.toString()}`);
+          if (data.configured === false) configured = false;
+          if (data.error) lastError = String(data.error);
+          mergeBonusProfiles(byProfile, data.profiles || []);
+        }
+
+        const profiles = [...byProfile.values()].map((entry) => ({
+          ...entry,
+          balanceUsd: Number(entry.balanceUsd.toFixed(2)),
+        }));
+        const actionsSumUsd = Number(
+          profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
+        );
+        const official = await officialPromise;
+        const officialTotalUsd = Number(official.totalUsd) || 0;
+        const totalsMatch =
+          officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05;
+        const totalUsd =
+          totalsMatch && actionsSumUsd > 0
+            ? actionsSumUsd
+            : officialTotalUsd || actionsSumUsd;
+
         balCalState.bonusesLoadedFor = balCacheKey();
-        renderBonusActions(data.profiles || [], label, {
-          configured: data.configured,
-          error: data.error,
-          totalUsd: data.totalUsd,
-          listIncomplete: data.listIncomplete,
-          actionsSumUsd: data.actionsSumUsd,
+        renderBonusActions(profiles, label, {
+          configured,
+          error: totalsMatch
+            ? lastError || null
+            : `Loaded $${actionsSumUsd.toFixed(2)} of Dream total $${officialTotalUsd.toFixed(2)} — refresh again`,
+          totalUsd,
+          listIncomplete: Boolean(officialTotalUsd > 0 && !totalsMatch),
+          actionsSumUsd,
         });
+        if (!quiet) {
+          setStatus(
+            totalsMatch ? "" : "Action list still incomplete vs Dream total",
+            totalsMatch ? "" : "error",
+          );
+        }
       } catch (error) {
         balCalState.bonusesLoadedFor = "";
         renderBonusActions([], label, { error: error.message });

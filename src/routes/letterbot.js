@@ -958,8 +958,10 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
         .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
         .toFixed(2),
     );
-    // Prefer Dream's Group-by-Girl total — same source as month total / Balances.
-    const totalUsd = officialTotalUsd > 0 ? officialTotalUsd : actionsSumUsd;
+    // Prefer actions sum when it matches Dream Group-by-Girl; otherwise keep official total.
+    const totalsMatch =
+      officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05;
+    const totalUsd = totalsMatch && actionsSumUsd > 0 ? actionsSumUsd : officialTotalUsd || actionsSumUsd;
 
     return res.json({
       ok: true,
@@ -971,9 +973,11 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
       configured: true,
       totalUsd,
       actionsSumUsd,
-      listIncomplete: officialTotalUsd > 0 && actionsSumUsd + 0.009 < officialTotalUsd,
+      listIncomplete: Boolean(officialTotalUsd > 0 && !totalsMatch),
       profiles,
-      error: null,
+      error: totalsMatch
+        ? null
+        : `Action list sum $${actionsSumUsd.toFixed(2)} != Dream total $${officialTotalUsd.toFixed(2)} — keep refreshing`,
     });
   } catch (error) {
     return res.status(500).json({
