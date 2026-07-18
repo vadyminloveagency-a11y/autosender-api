@@ -367,6 +367,21 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
        WHERE female_profile_id <> ''
        GROUP BY male_key, female_profile_id
      ),
+     questionnaires_by_man AS (
+       SELECT
+         male_key,
+         json_agg(
+           json_build_object(
+             'femaleProfileId', female_profile_id,
+             'femaleName', COALESCE(female_name, ''),
+             'actionCount', action_count,
+             'totalUsd', total_usd
+           )
+           ORDER BY total_usd DESC, female_name, female_profile_id
+         ) AS questionnaires
+       FROM by_girl
+       GROUP BY male_key
+     ),
      grouped AS (
        SELECT
          male_key,
@@ -389,20 +404,9 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
      )
      SELECT
        g.*,
-       COALESCE((
-         SELECT json_agg(
-           json_build_object(
-             'femaleProfileId', b.female_profile_id,
-             'femaleName', COALESCE(b.female_name, ''),
-             'actionCount', b.action_count,
-             'totalUsd', b.total_usd
-           )
-           ORDER BY b.total_usd DESC, b.female_name, b.female_profile_id
-         )
-         FROM by_girl b
-         WHERE b.male_key = g.male_key
-       ), '[]'::json) AS questionnaires
+       COALESCE(q.questionnaires, '[]'::json) AS questionnaires
      FROM grouped g
+     LEFT JOIN questionnaires_by_man q ON q.male_key = g.male_key
      WHERE $1 = ''
        OR COALESCE(g.male_profile_id, '') ILIKE '%' || $1 || '%'
        OR COALESCE(g.male_name, '') ILIKE '%' || $1 || '%'
