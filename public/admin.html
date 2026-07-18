@@ -1539,7 +1539,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 118px;
+      min-width: 0;
       padding: 4px 10px;
       border-radius: 999px;
       border: 1px solid rgba(78, 98, 108, 0.45);
@@ -4360,18 +4360,10 @@
       const raw = String(type || "Paid action").trim();
       const key = raw.toLowerCase();
       let variant = "";
-      let label = raw;
-      if (key.includes("video")) {
-        variant = " type-video";
-        label = "Video";
-      } else if (key.includes("chat")) {
-        variant = " type-chat";
-        label = "Chat";
-      } else if (key.includes("letter")) {
-        variant = " type-letter";
-        label = "Letter";
-      }
-      return `<span class="bonus-type-badge${variant}" title="${escapeHtml(raw)}">${escapeHtml(label)}</span>`;
+      if (key.includes("video")) variant = " type-video";
+      else if (key.includes("chat")) variant = " type-chat";
+      else if (key.includes("letter")) variant = " type-letter";
+      return `<span class="bonus-type-badge${variant}">${escapeHtml(raw)}</span>`;
     }
 
     function parseBonusWhen(value) {
