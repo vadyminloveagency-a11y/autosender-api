@@ -2655,7 +2655,7 @@
     }
 
     function formatToday(job) {
-      // Real Dream LetterBot TOTAL DAY for this questionnaire (not the current run progress).
+      // Dream TOTAL DAY when synced; otherwise AutoSender letters sent today for this mailing.
       const daySent =
         job.daySent != null && Number.isFinite(Number(job.daySent))
           ? Math.trunc(Number(job.daySent))

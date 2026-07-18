@@ -2,7 +2,7 @@
 import { withDreamGate } from "./dreamGate.js";
 import { dreamLogin } from "./dreamLogin.js";
 import { dreamDayKey } from "./dreamDay.js";
-import { setMailingDailyLettersAbsolute } from "./mailingDailyStore.js";
+import { bumpMailingDailyLetters, setMailingDailyLettersAbsolute } from "./mailingDailyStore.js";
 
 const ORIGIN = "https://www.dream-singles.com";
 const BOT_SEND_URL = `${ORIGIN}/members/messaging/bot/send`;
@@ -274,8 +274,15 @@ class LetterBotWorker {
       delta = next;
     }
     if (delta <= 0) return;
-    // In-memory run counter only — durable LetterBot day total comes from Dream TOTAL DAY.
     this.state.daySent = (Number(this.state.daySent) || 0) + delta;
+    // Keep AutoSender day count as fallback; Dream TOTAL DAY overwrites when available (GREATEST).
+    void bumpMailingDailyLetters({
+      dayKey: day,
+      profileId: this.profileId,
+      product: "letterbot",
+      userId: this.ownerUserId,
+      delta,
+    }).catch(() => {});
   }
 
   setCookieHeader(cookieHeader) {
