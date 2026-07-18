@@ -1222,7 +1222,7 @@
       justify-content: flex-end;
       min-width: 1.5em;
       color: #fff;
-      cursor: help;
+      cursor: pointer;
       border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
     }
     #gold-q-popover {
@@ -1230,9 +1230,10 @@
       z-index: 80;
       display: none;
       min-width: 240px;
-      max-width: min(360px, calc(100vw - 24px));
-      max-height: min(280px, calc(100vh - 24px));
+      max-width: min(420px, calc(100vw - 24px));
+      max-height: calc(100vh - 24px);
       overflow: auto;
+      scrollbar-width: thin;
       padding: 10px 12px;
       border: 1px solid rgba(255, 43, 58, 0.35);
       border-radius: 8px;
@@ -1241,7 +1242,24 @@
       color: var(--text);
       pointer-events: none;
     }
+    #gold-q-popover::-webkit-scrollbar { width: 6px; }
+    #gold-q-popover::-webkit-scrollbar-track { background: transparent; }
+    #gold-q-popover::-webkit-scrollbar-thumb {
+      background: rgba(255, 43, 58, 0.35);
+      border-radius: 3px;
+    }
     #gold-q-popover.is-open { display: block; }
+    #gold-q-popover.is-pinned {
+      pointer-events: auto;
+      border-color: rgba(255, 43, 58, 0.75);
+      user-select: text;
+    }
+    #gold-q-popover .gold-q-hint {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 10px;
+      text-align: right;
+    }
     #gold-q-popover .gold-q-title {
       margin: 0 0 8px;
       color: #98a1aa;
@@ -3221,6 +3239,7 @@
     let goldMenPagination = { page: 1, pageSize: 50, totalMen: 0, totalPages: 1 };
     const goldMenQuestionnaireCache = new Map();
     let goldMenQuestionnaireAnchor = null;
+    let goldMenQuestionnairePinned = false;
     const goldMenSortState = { key: "date", dir: "desc" };
     const GOLD_MEN_PAGE_SIZE = 50;
 
@@ -3249,18 +3268,29 @@
       });
     }
 
-    function hideGoldMenQuestionnairesTip() {
+    function hideGoldMenQuestionnairesTip(force = false) {
+      if (goldMenQuestionnairePinned && !force) return;
       const tip = document.getElementById("gold-q-popover");
       if (!tip) return;
       goldMenQuestionnaireAnchor = null;
-      tip.classList.remove("is-open");
+      goldMenQuestionnairePinned = false;
+      tip.classList.remove("is-open", "is-pinned");
       tip.hidden = true;
       tip.innerHTML = "";
     }
 
+    function pinGoldMenQuestionnairesTip() {
+      const tip = document.getElementById("gold-q-popover");
+      if (!tip || tip.hidden) return;
+      goldMenQuestionnairePinned = true;
+      tip.classList.add("is-pinned");
+      const hint = tip.querySelector(".gold-q-hint");
+      if (hint) hint.textContent = "Pinned — click outside or press Esc to close";
+    }
+
     function positionGoldMenQuestionnairesTip(anchor, tip) {
       const rect = anchor.getBoundingClientRect();
-      const tipWidth = Math.min(360, tip.offsetWidth || 260);
+      const tipWidth = Math.min(420, tip.offsetWidth || 260);
       const tipHeight = tip.offsetHeight || 120;
       let left = rect.right - tipWidth;
       let top = rect.top - tipHeight - 8;
@@ -3269,6 +3299,9 @@
         left = Math.max(8, window.innerWidth - tipWidth - 8);
       }
       if (top < 8) top = rect.bottom + 8;
+      if (top + tipHeight > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - tipHeight - 8);
+      }
       tip.style.left = `${Math.round(left)}px`;
       tip.style.top = `${Math.round(top)}px`;
     }
@@ -3276,6 +3309,7 @@
     async function showGoldMenQuestionnairesTip(anchor, man) {
       const tip = document.getElementById("gold-q-popover");
       if (!tip || !anchor) return;
+      if (goldMenQuestionnairePinned && goldMenQuestionnaireAnchor !== anchor) return;
       goldMenQuestionnaireAnchor = anchor;
       const maleProfileId = String(man?.maleProfileId || "").trim();
       const maleName = String(man?.maleName || "").trim();
@@ -3322,7 +3356,8 @@
               <div class="gold-q-amt">${formatBalanceUsd(item.totalUsd)}</div>
             </div>`;
           })
-          .join("")}`;
+          .join("")}
+        <p class="gold-q-hint">${goldMenQuestionnairePinned ? "Pinned — click outside or press Esc to close" : "Click the number to pin and copy"}</p>`;
       tip.hidden = false;
       tip.classList.add("is-open");
       positionGoldMenQuestionnairesTip(anchor, tip);
@@ -3391,7 +3426,7 @@
       const summary = document.getElementById("gold-men-summary");
       const status = document.getElementById("gold-men-status");
       if (!body || !summary || !status) return;
-      hideGoldMenQuestionnairesTip();
+      hideGoldMenQuestionnairesTip(true);
       if (data) {
         goldMenCache = Array.isArray(data.men) ? data.men : [];
         goldMenCoverage = data.coverage || {};
@@ -5014,10 +5049,37 @@
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
       hideGoldMenQuestionnairesTip();
     });
+    document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
+      const count = event.target.closest(".gold-q-count");
+      if (!count) return;
+      event.preventDefault();
+      if (goldMenQuestionnairePinned && goldMenQuestionnaireAnchor === count) {
+        hideGoldMenQuestionnairesTip(true);
+        return;
+      }
+      if (goldMenQuestionnairePinned) hideGoldMenQuestionnairesTip(true);
+      const index = Number(count.getAttribute("data-gold-q-index"));
+      const man = goldMenCache[index];
+      void showGoldMenQuestionnairesTip(count, man).then(() => {
+        if (goldMenQuestionnaireAnchor === count) pinGoldMenQuestionnairesTip();
+      });
+    });
+    document.addEventListener("click", (event) => {
+      if (!goldMenQuestionnairePinned) return;
+      const tip = document.getElementById("gold-q-popover");
+      if (tip && tip.contains(event.target)) return;
+      if (event.target.closest?.(".gold-q-count")) return;
+      hideGoldMenQuestionnairesTip(true);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && goldMenQuestionnairePinned) {
+        hideGoldMenQuestionnairesTip(true);
+      }
+    });
     document.querySelector("#section-gold-men .gold-men-table-wrap")?.addEventListener("scroll", () => {
       hideGoldMenQuestionnairesTip();
     });
-    window.addEventListener("scroll", hideGoldMenQuestionnairesTip, true);
+    window.addEventListener("scroll", () => hideGoldMenQuestionnairesTip(), true);
     document.getElementById("gold-men-sync-to")?.addEventListener("change", () => {
       const today = kyivTodayLocal();
       const toEl = document.getElementById("gold-men-sync-to");
