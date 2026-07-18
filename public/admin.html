@@ -535,6 +535,19 @@
       background: rgba(8, 14, 18, 0.75);
       white-space: nowrap;
     }
+    .data-table th.sortable,
+    .bonus-actions-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .data-table th.sortable:hover,
+    .bonus-actions-table th.sortable:hover {
+      color: #04f2a0;
+    }
+    .data-table th.sortable.is-sorted,
+    .bonus-actions-table th.sortable.is-sorted {
+      color: #04f2a0;
+    }
     .data-table td { color: var(--text); }
     .data-table tr:last-child td { border-bottom: 0; }
     /* Never put display:flex on <td> — it breaks table borders (short stray lines). */
@@ -1583,12 +1596,12 @@
                     </div>
                     <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
                     <div id="bal-day-wrap" class="table-scroll hidden">
-                      <table class="data-table">
+                      <table class="data-table" id="bal-day-table">
                         <thead>
                           <tr>
-                            <th>Questionnaire</th>
-                            <th>Operator</th>
-                            <th>Balance</th>
+                            <th class="sortable is-sorted" data-sort="questionnaire">Questionnaire ↑</th>
+                            <th class="sortable" data-sort="operator">Operator</th>
+                            <th class="sortable" data-sort="balance">Balance</th>
                           </tr>
                         </thead>
                         <tbody id="bal-day-body"></tbody>
@@ -1851,10 +1864,37 @@
       localStorage.removeItem("autosenderAdminUser");
     }
 
+    const ADMIN_SECTION_KEY = "autosenderAdminSection";
+    const ADMIN_BAL_TAB_KEY = "autosenderAdminBalTab";
+    const ADMIN_BAL_DATE_KEY = "autosenderAdminBalDate";
+
+    function loadSavedAdminSection() {
+      const raw = localStorage.getItem(ADMIN_SECTION_KEY) || "accounts";
+      return ["accounts", "mailings", "balances"].includes(raw) ? raw : "accounts";
+    }
+
+    function persistBalDate(date) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) {
+        localStorage.setItem(ADMIN_BAL_DATE_KEY, date);
+      }
+    }
+
     function openPanel(user) {
       document.getElementById("admin-label").textContent = user.email || "";
       showView("panel");
-      showAdminSection("accounts");
+      const savedDate = localStorage.getItem(ADMIN_BAL_DATE_KEY);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(savedDate || "")) {
+        balCalState.selectedDate = savedDate;
+        const [y, m] = savedDate.split("-").map(Number);
+        balCalState.year = y;
+        balCalState.month = m;
+      }
+      const savedBalTab = localStorage.getItem(ADMIN_BAL_TAB_KEY);
+      if (savedBalTab === "bonuses" || savedBalTab === "balances") {
+        balCalState.activeTab = savedBalTab;
+      }
+      syncBalTabUi(balCalState.activeTab);
+      showAdminSection(loadSavedAdminSection());
       setupDragAndDrop();
       setStatus("");
       void (async () => {
@@ -1875,17 +1915,19 @@
         mailings: document.getElementById("section-mailings"),
         balances: document.getElementById("section-balances"),
       };
+      const next = sections[sectionId] ? sectionId : "accounts";
+      localStorage.setItem(ADMIN_SECTION_KEY, next);
       Object.entries(sections).forEach(([key, el]) => {
-        if (el) el.classList.toggle("is-active", key === sectionId);
+        if (el) el.classList.toggle("is-active", key === next);
       });
       document.querySelectorAll(".sidebar-nav-btn").forEach((button) => {
-        button.classList.toggle("is-active", button.getAttribute("data-section") === sectionId);
+        button.classList.toggle("is-active", button.getAttribute("data-section") === next);
       });
-      if (sectionId === "mailings") {
+      if (next === "mailings") {
         void refreshMailCalendar({ quiet: true });
         void refreshMailings({ quiet: true });
       }
-      if (sectionId === "balances") {
+      if (next === "balances") {
         void refreshAgencyFinanceCredsHint();
         void refreshBalances({ quiet: true });
       }
@@ -2524,10 +2566,13 @@
       activeTab: "balances",
       bonusesLoadedFor: "",
     };
+    const balSortState = { key: "questionnaire", dir: "asc" };
+    const bonusSortState = { key: "date", dir: "desc" };
+    let balProfilesCache = { profiles: [], date: "", meta: {} };
+    let bonusProfilesCache = { profiles: [], date: "", meta: {} };
 
-    function setBalTab(tab) {
+    function syncBalTabUi(tab) {
       const next = tab === "bonuses" ? "bonuses" : "balances";
-      balCalState.activeTab = next;
       document.querySelectorAll(".bal-tab-btn").forEach((button) => {
         const active = button.dataset.balTab === next;
         button.classList.toggle("is-active", active);
@@ -2547,9 +2592,76 @@
       if (titleEl) {
         titleEl.textContent = next === "bonuses" ? "Bonuses" : "Balances";
       }
+    }
+
+    function setBalTab(tab) {
+      const next = tab === "bonuses" ? "bonuses" : "balances";
+      balCalState.activeTab = next;
+      localStorage.setItem(ADMIN_BAL_TAB_KEY, next);
+      syncBalTabUi(next);
       if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
         void refreshBonusActions({ quiet: true });
       }
+    }
+
+    function sortMark(activeKey, key, dir) {
+      if (activeKey !== key) return "";
+      return dir === "asc" ? " ↑" : " ↓";
+    }
+
+    function compareText(a, b) {
+      return String(a || "").localeCompare(String(b || ""), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    }
+
+    function toggleSortState(state, key, defaultDir = "asc") {
+      if (state.key === key) {
+        state.dir = state.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.key = key;
+        state.dir = defaultDir;
+      }
+    }
+
+    function balanceSortValue(row, key) {
+      if (key === "operator") {
+        return String(row.operatorName || row.operatorEmail || "").trim().toLowerCase();
+      }
+      if (key === "balance") {
+        return Number(row.balanceUsd) || 0;
+      }
+      const name = String(row.displayName || row.dreamUsername || "").trim().toLowerCase();
+      const id = String(row.profileId || "");
+      return `${name}\0${id}`;
+    }
+
+    function sortBalanceProfiles(list) {
+      const { key, dir } = balSortState;
+      const factor = dir === "asc" ? 1 : -1;
+      return [...list].sort((a, b) => {
+        const av = balanceSortValue(a, key);
+        const bv = balanceSortValue(b, key);
+        if (typeof av === "number" && typeof bv === "number") {
+          return (av - bv) * factor;
+        }
+        return compareText(av, bv) * factor;
+      });
+    }
+
+    function updateBalSortHeaders() {
+      document.querySelectorAll("#bal-day-table th.sortable").forEach((th) => {
+        const key = th.getAttribute("data-sort");
+        const labels = {
+          questionnaire: "Questionnaire",
+          operator: "Operator",
+          balance: "Balance",
+        };
+        const active = balSortState.key === key;
+        th.classList.toggle("is-sorted", active);
+        th.textContent = `${labels[key] || key}${sortMark(balSortState.key, key, balSortState.dir)}`;
+      });
     }
 
     function shiftBalCalMonth(delta) {
@@ -2570,6 +2682,7 @@
       if (!stillInMonth) {
         balCalState.selectedDate = `${y}-${String(m).padStart(2, "0")}-01`;
       }
+      persistBalDate(balCalState.selectedDate);
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     }
@@ -2613,8 +2726,10 @@
       const totalWrap = document.getElementById("bal-day-total");
       const totalValue = document.getElementById("bal-day-total-value");
       if (!emptyEl || !wrapEl || !bodyEl || !titleEl) return;
+      balProfilesCache = { profiles: Array.isArray(profiles) ? profiles : [], date, meta };
       titleEl.textContent = `Balances · ${date}`;
       bodyEl.innerHTML = "";
+      updateBalSortHeaders();
       if (statusEl) {
         if (meta.error) {
           statusEl.style.display = "block";
@@ -2627,7 +2742,7 @@
           statusEl.textContent = "";
         }
       }
-      const list = Array.isArray(profiles) ? profiles : [];
+      const list = sortBalanceProfiles(balProfilesCache.profiles);
       const totalUsd =
         meta.totalUsd != null
           ? Number(meta.totalUsd) || 0
@@ -2703,11 +2818,16 @@
       const rows = [];
       for (const profile of Array.isArray(profiles) ? profiles : []) {
         const girl = formatBonusGirl(profile);
+        const girlKey = String(profile?.displayName || profile?.dreamUsername || girl || "")
+          .trim()
+          .toLowerCase();
         for (const action of Array.isArray(profile?.actions) ? profile.actions : []) {
           rows.push({
             type: action?.type || "Paid action",
             man: formatBonusMan(action),
             girl,
+            girlKey,
+            operator: String(action?.operatorName || action?.operatorEmail || "").trim(),
             operatorHtml: formatBonusOperator(action),
             when: action?.occurredAt || "—",
             whenTs: parseBonusWhen(action?.occurredAt),
@@ -2715,8 +2835,24 @@
           });
         }
       }
-      rows.sort((a, b) => b.whenTs - a.whenTs || String(b.when).localeCompare(String(a.when)));
-      return rows;
+      return sortBonusActions(rows);
+    }
+
+    function sortBonusActions(rows) {
+      const { key, dir } = bonusSortState;
+      const factor = dir === "asc" ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        let cmp = 0;
+        if (key === "date") cmp = (a.whenTs || 0) - (b.whenTs || 0);
+        else if (key === "amount") cmp = (a.amountUsd || 0) - (b.amountUsd || 0);
+        else if (key === "questionnaire") cmp = compareText(a.girlKey, b.girlKey) || compareText(a.girl, b.girl);
+        else if (key === "man") cmp = compareText(a.man, b.man);
+        else if (key === "operator") cmp = compareText(a.operator, b.operator);
+        else if (key === "type") cmp = compareText(a.type, b.type);
+        else cmp = (a.whenTs || 0) - (b.whenTs || 0);
+        if (cmp !== 0) return cmp * factor;
+        return (b.whenTs || 0) - (a.whenTs || 0);
+      });
     }
 
     function renderBonusActions(profiles, date, meta = {}) {
@@ -2726,6 +2862,7 @@
       const totalWrap = document.getElementById("bonus-day-total");
       const totalValue = document.getElementById("bonus-day-total-value");
       if (!emptyEl || !listEl) return;
+      bonusProfilesCache = { profiles: Array.isArray(profiles) ? profiles : [], date, meta };
 
       if (statusEl) {
         if (meta.error) {
@@ -2740,7 +2877,7 @@
         }
       }
 
-      const actions = flattenBonusActions(profiles);
+      const actions = flattenBonusActions(bonusProfilesCache.profiles);
       const totalUsd =
         meta.totalUsd != null
           ? Number(meta.totalUsd) || 0
@@ -2778,16 +2915,24 @@
             </tr>`,
         )
         .join("");
+      const th = (key, label) => {
+        const active = bonusSortState.key === key;
+        return `<th class="sortable${active ? " is-sorted" : ""}" data-sort="${key}">${label}${sortMark(
+          bonusSortState.key,
+          key,
+          bonusSortState.dir,
+        )}</th>`;
+      };
       listEl.innerHTML = `
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              <th>Type of Bonus</th>
-              <th>By Whom</th>
-              <th>To</th>
-              <th>Operator</th>
-              <th>Date</th>
-              <th>Amount</th>
+              ${th("type", "Type of Bonus")}
+              ${th("man", "By Whom")}
+              ${th("questionnaire", "To")}
+              ${th("operator", "Operator")}
+              ${th("date", "Date")}
+              ${th("amount", "Amount")}
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
@@ -2818,6 +2963,7 @@
     async function refreshBalances({ quiet = false } = {}) {
       if (!balCalState.today) balCalState.today = kyivTodayLocal();
       if (!balCalState.selectedDate) balCalState.selectedDate = balCalState.today;
+      persistBalDate(balCalState.selectedDate);
       if (!balCalState.year || !balCalState.month) {
         const [y, m] = balCalState.selectedDate.split("-").map(Number);
         balCalState.year = y;
@@ -3289,11 +3435,28 @@
         setBalTab(button.dataset.balTab);
       });
     });
+    document.getElementById("bal-day-table")?.addEventListener("click", (event) => {
+      const th = event.target.closest("th.sortable[data-sort]");
+      if (!th) return;
+      const key = th.getAttribute("data-sort");
+      const defaultDir = key === "balance" ? "desc" : "asc";
+      toggleSortState(balSortState, key, defaultDir);
+      renderBalanceProfiles(balProfilesCache.profiles, balProfilesCache.date, balProfilesCache.meta);
+    });
+    document.getElementById("bonus-profiles")?.addEventListener("click", (event) => {
+      const th = event.target.closest("th.sortable[data-sort]");
+      if (!th) return;
+      const key = th.getAttribute("data-sort");
+      const defaultDir = key === "date" || key === "amount" ? "desc" : "asc";
+      toggleSortState(bonusSortState, key, defaultDir);
+      renderBonusActions(bonusProfilesCache.profiles, bonusProfilesCache.date, bonusProfilesCache.meta);
+    });
     document.getElementById("bal-cal-prev")?.addEventListener("click", () => shiftBalCalMonth(-1));
     document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
     document.getElementById("bal-cal-today")?.addEventListener("click", () => {
       balCalState.today = kyivTodayLocal();
       balCalState.selectedDate = balCalState.today;
+      persistBalDate(balCalState.selectedDate);
       balCalState.bonusesLoadedFor = "";
       const [y, m] = balCalState.selectedDate.split("-").map(Number);
       balCalState.year = y;
@@ -3304,6 +3467,7 @@
       const btn = event.target.closest(".mail-cal-day[data-date]");
       if (!btn || btn.disabled) return;
       balCalState.selectedDate = btn.getAttribute("data-date");
+      persistBalDate(balCalState.selectedDate);
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     });
