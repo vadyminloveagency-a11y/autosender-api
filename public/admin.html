@@ -799,6 +799,11 @@
     .bal-filters-row input[type="date"] {
       flex: 0 1 150px;
     }
+    .bal-filters-row input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.85;
+      cursor: pointer;
+    }
     .bal-filters-hint {
       margin-top: 6px;
       color: var(--muted);
@@ -813,7 +818,42 @@
     .bal-tabs {
       display: flex;
       gap: 8px;
+      margin: 0;
+    }
+    .bal-topbar {
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 14px;
       margin: 0 0 14px;
+    }
+    .bal-month-total {
+      min-width: 190px;
+      min-height: 34px;
+      padding: 7px 12px;
+      border: 1px solid rgba(4, 242, 160, 0.45);
+      border-radius: 7px;
+      background: #101816;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .bal-month-total-label {
+      color: #8ea19c;
+      font: 800 10px/1.2 Arial, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .bal-month-total-value {
+      color: #04f2a0;
+      font: 800 18px/1 Arial, sans-serif;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    @media (max-width: 720px) {
+      .bal-topbar { flex-direction: column; }
+      .bal-month-total { align-self: stretch; }
     }
     .bal-tab-btn {
       min-height: 34px;
@@ -1585,9 +1625,15 @@
           </section>
 
           <section id="section-balances" class="admin-section">
-            <div class="bal-tabs" role="tablist" aria-label="Balances sections">
-              <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
-              <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
+            <div class="bal-topbar">
+              <div class="bal-tabs" role="tablist" aria-label="Balances sections">
+                <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
+                <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
+              </div>
+              <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
+                <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
+                <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
+              </div>
             </div>
 
             <div class="panel-card">
@@ -2648,6 +2694,49 @@
     const bonusSortState = { key: "date", dir: "desc" };
     let balProfilesCache = { profiles: [], date: "", meta: {} };
     let bonusProfilesCache = { profiles: [], date: "", meta: {} };
+    let balMonthTotalRequestKey = "";
+
+    function visibleBalMonthBounds() {
+      const today = balCalState.today || kyivTodayLocal();
+      const y = Number(balCalState.year);
+      const m = Number(balCalState.month);
+      if (!y || !m) return null;
+      const month = `${y}-${String(m).padStart(2, "0")}`;
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const from = `${month}-01`;
+      let to = `${month}-${String(last).padStart(2, "0")}`;
+      if (String(today).startsWith(`${month}-`) && to > today) to = today;
+      return { month, from, to };
+    }
+
+    async function refreshVisibleMonthTotal() {
+      const bounds = visibleBalMonthBounds();
+      const labelEl = document.getElementById("bal-month-total-label");
+      const valueEl = document.getElementById("bal-month-total-value");
+      if (!bounds || !labelEl || !valueEl) return;
+      const requestKey = `${bounds.from}|${bounds.to}`;
+      balMonthTotalRequestKey = requestKey;
+      labelEl.textContent = `${new Date(`${bounds.month}-01T00:00:00Z`).toLocaleString("en-US", {
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })} total`;
+      valueEl.textContent = "…";
+      try {
+        const params = new URLSearchParams({
+          from: bounds.from,
+          to: bounds.to,
+        });
+        const data = await api(`/letterbot/admin/balances-by-profile?${params.toString()}`);
+        if (balMonthTotalRequestKey !== requestKey) return;
+        valueEl.textContent = formatBalanceUsd(data.totalUsd);
+        valueEl.title = `${bounds.from} — ${bounds.to}, all questionnaires`;
+      } catch (error) {
+        if (balMonthTotalRequestKey !== requestKey) return;
+        valueEl.textContent = "—";
+        valueEl.title = error.message || String(error);
+      }
+    }
 
     function balRangeLabel() {
       const from = balCalState.fromDate || balCalState.selectedDate || "";
@@ -3144,6 +3233,7 @@
         balCalState.month = m;
       }
       renderBalCalendarGrid();
+      void refreshVisibleMonthTotal();
       const label = balRangeLabel();
       if (!quiet) {
         setStatus(
