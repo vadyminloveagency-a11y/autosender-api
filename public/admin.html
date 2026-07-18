@@ -812,61 +812,15 @@
       font-variant-numeric: tabular-nums;
     }
     .bonus-profiles {
-      display: grid;
-      gap: 8px;
+      overflow-x: auto;
+      border: 1px solid rgba(78, 98, 108, 0.35);
+      border-radius: 7px;
+      background: #0c1216;
     }
-    .bonus-profile {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: rgba(12, 18, 22, 0.45);
-      overflow: hidden;
-    }
-    .bonus-profile-head {
-      width: 100%;
-      min-height: 54px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      cursor: pointer;
-      text-align: left;
-      font: inherit;
-    }
-    .bonus-profile-meta { min-width: 0; flex: 1 1 auto; }
-    .bonus-profile-name {
-      display: block;
-      font: 700 13px/1.3 var(--font);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .bonus-profile-sub {
-      display: block;
-      margin-top: 2px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-    .bonus-profile-sum {
-      color: var(--accent-strong);
-      font: 800 15px/1 var(--font);
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-    .bonus-profile-chevron {
-      color: var(--muted);
-      font: 700 14px/1 var(--font);
-      transition: transform 0.16s ease;
-    }
-    .bonus-profile.is-open .bonus-profile-chevron { transform: rotate(180deg); }
-    .bonus-profile-actions { display: none; border-top: 1px solid var(--line); overflow-x: auto; }
-    .bonus-profile.is-open .bonus-profile-actions { display: block; }
     .bonus-actions-table {
       width: 100%;
       border-collapse: collapse;
-      font: 12px/1.35 var(--font);
+      font: 12px/1.35 Arial, sans-serif;
     }
     .bonus-actions-table th,
     .bonus-actions-table td {
@@ -876,15 +830,26 @@
       white-space: nowrap;
     }
     .bonus-actions-table th {
-      color: var(--muted);
+      color: #8ea19c;
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.04em;
+      background: #101816;
     }
-    .bonus-actions-table td:last-child {
-      color: var(--accent-strong);
+    .bonus-actions-table tbody tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .bonus-actions-table td:last-child,
+    .bonus-actions-table .bonus-total-row td:last-child {
+      color: #04f2a0;
       font-weight: 700;
       text-align: right;
+    }
+    .bonus-actions-table .bonus-total-row td {
+      border-bottom: 0;
+      background: #101816;
+      color: #d7e8de;
+      font-weight: 800;
     }
     .scan-btn {
       border: 1px solid rgba(4, 242, 160, 0.45);
@@ -1577,7 +1542,7 @@
 
             <div class="bal-tabs" role="tablist" aria-label="Balances sections">
               <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
-              <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses By Girl</button>
+              <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
             </div>
 
             <div class="panel-card">
@@ -1635,10 +1600,10 @@
                   </div>
 
                   <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
-                    <h4 id="bonus-day-title">Paid actions</h4>
-                    <p class="admin-main-lead" style="margin:0 0 12px">Paid actions on questionnaires for the selected day, with operator from assignment history.</p>
+                    <h4 id="bonus-day-title">Bonuses</h4>
+                    <p class="admin-main-lead" style="margin:0 0 12px">All paid actions for the selected day across every questionnaire, newest first.</p>
                     <div id="bonus-day-total" class="bal-section-total hidden">
-                      <span class="bal-section-total-label">Paid actions total</span>
+                      <span class="bal-section-total-label">Grand Total</span>
                       <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
                     </div>
                     <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
@@ -2584,7 +2549,7 @@
         bonusesPanel.hidden = next !== "bonuses";
       }
       if (titleEl) {
-        titleEl.textContent = next === "bonuses" ? "Bonuses By Girl" : "Balances";
+        titleEl.textContent = next === "bonuses" ? "Bonuses" : "Balances";
       }
       if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
         void refreshBonusActions({ quiet: true });
@@ -2711,11 +2676,51 @@
       return name || id || "—";
     }
 
+    function formatBonusGirl(profile) {
+      const id = String(profile?.profileId || "").trim();
+      const name =
+        String(profile?.displayName || profile?.dreamUsername || "").trim() ||
+        (id ? `Profile ${id}` : "");
+      if (id && name) return `[${id}] ${name}`;
+      return name || id || "—";
+    }
+
     function formatBonusOperator(action) {
       const name = String(action?.operatorName || "").trim();
       const email = String(action?.operatorEmail || "").trim();
       if (name || email) return escapeHtml(name || email);
       return "—";
+    }
+
+    function parseBonusWhen(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return 0;
+      const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/);
+      if (m) {
+        return Date.UTC(+m[3], +m[1] - 1, +m[2], +m[4], +m[5], +m[6]);
+      }
+      const t = Date.parse(raw);
+      return Number.isFinite(t) ? t : 0;
+    }
+
+    function flattenBonusActions(profiles) {
+      const rows = [];
+      for (const profile of Array.isArray(profiles) ? profiles : []) {
+        const girl = formatBonusGirl(profile);
+        for (const action of Array.isArray(profile?.actions) ? profile.actions : []) {
+          rows.push({
+            type: action?.type || "Paid action",
+            man: formatBonusMan(action),
+            girl,
+            operatorHtml: formatBonusOperator(action),
+            when: action?.occurredAt || "—",
+            whenTs: parseBonusWhen(action?.occurredAt),
+            amountUsd: Number(action?.amountUsd) || 0,
+          });
+        }
+      }
+      rows.sort((a, b) => b.whenTs - a.whenTs || String(b.when).localeCompare(String(a.when)));
+      return rows;
     }
 
     function renderBonusActions(profiles, date, meta = {}) {
@@ -2739,13 +2744,13 @@
         }
       }
 
-      const list = Array.isArray(profiles) ? profiles : [];
+      const actions = flattenBonusActions(profiles);
       const totalUsd =
         meta.totalUsd != null
           ? Number(meta.totalUsd) || 0
-          : list.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0);
+          : actions.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
       if (totalWrap && totalValue) {
-        if (list.length) {
+        if (actions.length) {
           totalWrap.classList.remove("hidden");
           totalValue.textContent = formatBalanceUsd(totalUsd);
         } else {
@@ -2754,7 +2759,7 @@
         }
       }
 
-      if (!list.length) {
+      if (!actions.length) {
         emptyEl.classList.remove("hidden");
         listEl.classList.add("hidden");
         listEl.innerHTML = "";
@@ -2764,60 +2769,45 @@
 
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
-      listEl.innerHTML = list
-        .map((profile, index) => {
-          const actions = Array.isArray(profile.actions) ? profile.actions : [];
-          const rows = actions.length
-            ? actions
-                .map(
-                  (action) => `
-                    <tr>
-                      <td>${escapeHtml(action.type || "Paid action")}</td>
-                      <td>${escapeHtml(formatBonusMan(action))}</td>
-                      <td>${formatBonusOperator(action)}</td>
-                      <td>${escapeHtml(action.occurredAt || "—")}</td>
-                      <td>${formatBalanceUsd(action.amountUsd)}</td>
-                    </tr>`,
-                )
-                .join("")
-            : `<tr><td colspan="5" style="text-align:center;color:var(--muted)">No paid actions</td></tr>`;
-          const id = String(profile.profileId || "");
-          const name =
-            String(profile.displayName || profile.dreamUsername || "").trim() ||
-            `Profile ${id}`;
-          const photo =
-            profile.photoUrl ||
-            (Number(id)
-              ? `https://profile-photos-cdn.dream-singles.com/im${Number(id)}_small.jpg`
-              : "");
-          return `
-            <article class="bonus-profile${index === 0 ? " is-open" : ""}">
-              <button type="button" class="bonus-profile-head" aria-expanded="${index === 0 ? "true" : "false"}">
-                <img class="account-avatar" src="${escapeHtml(photo)}" alt="" style="width:32px;height:32px;flex:0 0 32px;border-radius:50%;object-fit:cover" onerror="this.style.visibility='hidden'">
-                <span class="bonus-profile-meta">
-                  <span class="bonus-profile-name">${escapeHtml(name)}</span>
-                  <span class="bonus-profile-sub">ID ${escapeHtml(id)} · ${actions.length} paid actions · ${date}</span>
-                </span>
-                <strong class="bonus-profile-sum">${formatBalanceUsd(profile.balanceUsd)}</strong>
-                <span class="bonus-profile-chevron" aria-hidden="true">⌄</span>
-              </button>
-              <div class="bonus-profile-actions">
-                <table class="bonus-actions-table">
-                  <thead>
-                    <tr><th>Action</th><th>Man</th><th>Operator</th><th>When</th><th>Amount</th></tr>
-                  </thead>
-                  <tbody>${rows}</tbody>
-                </table>
-              </div>
-            </article>`;
-        })
+      const bodyRows = actions
+        .map(
+          (row) => `
+            <tr>
+              <td>${escapeHtml(row.type)}</td>
+              <td>${escapeHtml(row.man)}</td>
+              <td>${escapeHtml(row.girl)}</td>
+              <td>${row.operatorHtml}</td>
+              <td>${escapeHtml(row.when)}</td>
+              <td>${formatBalanceUsd(row.amountUsd)}</td>
+            </tr>`,
+        )
         .join("");
+      listEl.innerHTML = `
+        <table class="bonus-actions-table">
+          <thead>
+            <tr>
+              <th>Type of Bonus</th>
+              <th>By Whom</th>
+              <th>To</th>
+              <th>Operator</th>
+              <th>Date</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot>
+            <tr class="bonus-total-row">
+              <td colspan="5">Grand Total</td>
+              <td>${formatBalanceUsd(totalUsd)}</td>
+            </tr>
+          </tfoot>
+        </table>`;
     }
 
     async function refreshBonusActions({ quiet = false } = {}) {
       const date = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
       const titleEl = document.getElementById("bonus-day-title");
-      if (titleEl) titleEl.textContent = `Paid actions · ${date}`;
+      if (titleEl) titleEl.textContent = `Bonuses · ${date}`;
       try {
         const data = await api(
           `/letterbot/admin/bonuses-actions?date=${encodeURIComponent(date)}&force=1`,
@@ -3308,15 +3298,6 @@
       button.addEventListener("click", () => {
         setBalTab(button.dataset.balTab);
       });
-    });
-    document.getElementById("bonus-profiles")?.addEventListener("click", (event) => {
-      const head = event.target.closest(".bonus-profile-head");
-      if (!head) return;
-      const card = head.closest(".bonus-profile");
-      if (!card) return;
-      const open = !card.classList.contains("is-open");
-      card.classList.toggle("is-open", open);
-      head.setAttribute("aria-expanded", open ? "true" : "false");
     });
     document.getElementById("bal-cal-prev")?.addEventListener("click", () => shiftBalCalMonth(-1));
     document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
