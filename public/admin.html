@@ -566,19 +566,6 @@
       background: rgba(13, 19, 23, 0.75);
       white-space: nowrap;
     }
-    .data-table th.sortable,
-    .bonus-actions-table th.sortable {
-      cursor: pointer;
-      user-select: none;
-    }
-    .data-table th.sortable:hover,
-    .bonus-actions-table th.sortable:hover {
-      color: #ff2b3a;
-    }
-    .data-table th.sortable.is-sorted,
-    .bonus-actions-table th.sortable.is-sorted {
-      color: #ff2b3a;
-    }
     .data-table td { color: var(--text); }
     .data-table tr:last-child td { border-bottom: 0; }
     /* Never put display:flex on <td> — it breaks table borders (short stray lines). */
@@ -1376,10 +1363,6 @@
       top: 0;
       z-index: 2;
       background: #140f11;
-    }
-    #gold-men-table th.sortable {
-      cursor: pointer;
-      user-select: none;
     }
     #gold-men-table td:last-child {
       color: #ff2b3a;
@@ -2256,9 +2239,9 @@
                       <table class="data-table" id="bal-day-table">
                         <thead>
                           <tr>
-                            <th class="sortable is-sorted" data-sort="questionnaire">Questionnaire ↑</th>
-                            <th class="sortable" data-sort="operator">Operator</th>
-                            <th class="sortable" data-sort="balance">Balance</th>
+                            <th>Questionnaire</th>
+                            <th>Operator</th>
+                            <th>Balance</th>
                           </tr>
                         </thead>
                         <tbody id="bal-day-body"></tbody>
@@ -2306,10 +2289,10 @@
                     <tr>
                       <th>Man</th>
                       <th>First paid action</th>
-                      <th class="sortable is-sorted" data-sort="date">Last paid action ↓</th>
+                      <th>Last paid action</th>
                       <th>Questionnaires</th>
                       <th>Actions</th>
-                      <th class="sortable" data-sort="balance">Total</th>
+                      <th>Total</th>
                     </tr>
                   </thead>
                   <tbody id="gold-men-body"></tbody>
@@ -3354,7 +3337,6 @@
     const goldMenQuestionnaireCache = new Map();
     let goldMenQuestionnaireAnchor = null;
     let goldMenQuestionnairePinned = false;
-    const goldMenSortState = { key: "date", dir: "desc" };
     const GOLD_MEN_PAGE_SIZE = 50;
 
     function syncGoldMenPeriodDefaults() {
@@ -3370,16 +3352,6 @@
         date.setUTCDate(date.getUTCDate() - 29);
         fromEl.value = date.toISOString().slice(0, 10);
       }
-    }
-
-    function updateGoldMenSortHeaders() {
-      document.querySelectorAll("#gold-men-table th.sortable").forEach((th) => {
-        const key = th.getAttribute("data-sort");
-        const labels = { date: "Last paid action", balance: "Total" };
-        const active = goldMenSortState.key === key;
-        th.classList.toggle("is-sorted", active);
-        th.textContent = `${labels[key] || key}${sortMark(goldMenSortState.key, key, goldMenSortState.dir)}`;
-      });
     }
 
     function hideGoldMenQuestionnairesTip(force = false) {
@@ -3553,7 +3525,6 @@
       }
       const men = goldMenCache;
       const coverage = goldMenCoverage;
-      updateGoldMenSortHeaders();
       const menCount = Number(coverage.menCount ?? goldMenPagination.totalMen) || men.length;
       summary.innerHTML = `
         <span>Men: <strong>${menCount.toLocaleString("en-US")}</strong></span>
@@ -3649,8 +3620,8 @@
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(GOLD_MEN_PAGE_SIZE),
-          sort: goldMenSortState.key === "balance" ? "balance" : "date",
-          dir: goldMenSortState.dir === "asc" ? "asc" : "desc",
+          sort: "date",
+          dir: "desc",
         });
         if (search) params.set("search", search);
         const data = await api(`/agency-finance/gold-men?${params.toString()}`);
@@ -3903,8 +3874,6 @@
       bonusesLoadedFor: "",
     };
     let balCalPickStart = null;
-    const balSortState = { key: "questionnaire", dir: "asc" };
-    const bonusSortState = { key: "date", dir: "desc" };
     let balProfilesCache = { profiles: [], date: "", meta: {} };
     let bonusProfilesCache = { profiles: [], date: "", meta: {} };
     let balMonthTotalRequestKey = "";
@@ -4071,66 +4040,6 @@
       }
     }
 
-    function sortMark(activeKey, key, dir) {
-      if (activeKey !== key) return "";
-      return dir === "asc" ? " ↑" : " ↓";
-    }
-
-    function compareText(a, b) {
-      return String(a || "").localeCompare(String(b || ""), undefined, {
-        sensitivity: "base",
-        numeric: true,
-      });
-    }
-
-    function toggleSortState(state, key, defaultDir = "asc") {
-      if (state.key === key) {
-        state.dir = state.dir === "asc" ? "desc" : "asc";
-      } else {
-        state.key = key;
-        state.dir = defaultDir;
-      }
-    }
-
-    function balanceSortValue(row, key) {
-      if (key === "operator") {
-        return String(row.operatorName || row.operatorEmail || "").trim().toLowerCase();
-      }
-      if (key === "balance") {
-        return Number(row.balanceUsd) || 0;
-      }
-      const name = String(row.displayName || row.dreamUsername || "").trim().toLowerCase();
-      const id = String(row.profileId || "");
-      return `${name}\0${id}`;
-    }
-
-    function sortBalanceProfiles(list) {
-      const { key, dir } = balSortState;
-      const factor = dir === "asc" ? 1 : -1;
-      return [...list].sort((a, b) => {
-        const av = balanceSortValue(a, key);
-        const bv = balanceSortValue(b, key);
-        if (typeof av === "number" && typeof bv === "number") {
-          return (av - bv) * factor;
-        }
-        return compareText(av, bv) * factor;
-      });
-    }
-
-    function updateBalSortHeaders() {
-      document.querySelectorAll("#bal-day-table th.sortable").forEach((th) => {
-        const key = th.getAttribute("data-sort");
-        const labels = {
-          questionnaire: "Questionnaire",
-          operator: "Operator",
-          balance: "Balance",
-        };
-        const active = balSortState.key === key;
-        th.classList.toggle("is-sorted", active);
-        th.textContent = `${labels[key] || key}${sortMark(balSortState.key, key, balSortState.dir)}`;
-      });
-    }
-
     function shiftBalCalMonth(delta) {
       let y = balCalState.year;
       let m = balCalState.month + delta;
@@ -4211,7 +4120,6 @@
       balProfilesCache = { profiles: Array.isArray(profiles) ? profiles : [], date, meta };
       titleEl.textContent = `Balances · ${date}`;
       bodyEl.innerHTML = "";
-      updateBalSortHeaders();
       if (statusEl) {
         if (meta.error) {
           statusEl.style.display = "block";
@@ -4224,7 +4132,7 @@
           statusEl.textContent = "";
         }
       }
-      const list = sortBalanceProfiles(balProfilesCache.profiles);
+      const list = Array.isArray(balProfilesCache.profiles) ? balProfilesCache.profiles : [];
       const totalUsd =
         meta.totalUsd != null
           ? Number(meta.totalUsd) || 0
@@ -4360,24 +4268,7 @@
           });
         }
       }
-      return sortBonusActions(rows);
-    }
-
-    function sortBonusActions(rows) {
-      const { key, dir } = bonusSortState;
-      const factor = dir === "asc" ? 1 : -1;
-      return [...rows].sort((a, b) => {
-        let cmp = 0;
-        if (key === "date") cmp = (a.whenTs || 0) - (b.whenTs || 0);
-        else if (key === "amount") cmp = (a.amountUsd || 0) - (b.amountUsd || 0);
-        else if (key === "questionnaire") cmp = compareText(a.girlKey, b.girlKey) || compareText(a.girl, b.girl);
-        else if (key === "man") cmp = compareText(a.man, b.man);
-        else if (key === "operator") cmp = compareText(a.operator, b.operator);
-        else if (key === "type") cmp = compareText(a.type, b.type);
-        else cmp = (a.whenTs || 0) - (b.whenTs || 0);
-        if (cmp !== 0) return cmp * factor;
-        return (b.whenTs || 0) - (a.whenTs || 0);
-      });
+      return rows;
     }
 
     function renderBonusActions(profiles, date, meta = {}) {
@@ -4438,26 +4329,20 @@
             </tr>`,
         )
         .join("");
-      const th = (key, label, extraClass = "") => {
-        const active = bonusSortState.key === key;
-        return `<th class="sortable${active ? " is-sorted" : ""}${extraClass ? ` ${extraClass}` : ""}" data-sort="${key}">${label}${sortMark(
-          bonusSortState.key,
-          key,
-          bonusSortState.dir,
-        )}</th>`;
-      };
+      const th = (label, extraClass = "") =>
+        `<th${extraClass ? ` class="${extraClass}"` : ""}>${label}</th>`;
       listEl.innerHTML = `
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              ${th("man", "Man ID")}
-              ${th("man", "Man Name", "bonus-col-name")}
-              ${th("questionnaire", "Lady ID")}
-              ${th("questionnaire", "Lady Name", "bonus-col-name")}
-              ${th("date", "Date")}
-              ${th("type", "Type")}
-              ${th("amount", "Dollars")}
-              ${showOperator ? th("operator", "Operator", "bonus-col-operator") : ""}
+              ${th("Man ID")}
+              ${th("Man Name", "bonus-col-name")}
+              ${th("Lady ID")}
+              ${th("Lady Name", "bonus-col-name")}
+              ${th("Date")}
+              ${th("Type")}
+              ${th("Dollars")}
+              ${showOperator ? th("Operator", "bonus-col-operator") : ""}
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
@@ -5093,22 +4978,6 @@
         setBalTab(button.dataset.balTab);
       });
     });
-    document.getElementById("bal-day-table")?.addEventListener("click", (event) => {
-      const th = event.target.closest("th.sortable[data-sort]");
-      if (!th) return;
-      const key = th.getAttribute("data-sort");
-      const defaultDir = key === "balance" ? "desc" : "asc";
-      toggleSortState(balSortState, key, defaultDir);
-      renderBalanceProfiles(balProfilesCache.profiles, balProfilesCache.date, balProfilesCache.meta);
-    });
-    document.getElementById("bonus-profiles")?.addEventListener("click", (event) => {
-      const th = event.target.closest("th.sortable[data-sort]");
-      if (!th) return;
-      const key = th.getAttribute("data-sort");
-      const defaultDir = key === "date" || key === "amount" ? "desc" : "asc";
-      toggleSortState(bonusSortState, key, defaultDir);
-      renderBonusActions(bonusProfilesCache.profiles, bonusProfilesCache.date, bonusProfilesCache.meta);
-    });
     document.getElementById("bal-cal-prev")?.addEventListener("click", () => shiftBalCalMonth(-1));
     document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
     document.getElementById("bal-cal-today")?.addEventListener("click", () => {
@@ -5207,15 +5076,6 @@
     });
     document.getElementById("gold-men-repair")?.addEventListener("click", () => {
       void repairIncompleteGoldMen();
-    });
-    document.getElementById("gold-men-table")?.addEventListener("click", (event) => {
-      const th = event.target.closest("th.sortable[data-sort]");
-      if (!th) return;
-      const key = th.getAttribute("data-sort");
-      if (key !== "date" && key !== "balance") return;
-      const defaultDir = key === "balance" || key === "date" ? "desc" : "asc";
-      toggleSortState(goldMenSortState, key, defaultDir);
-      void refreshGoldMen({ page: 1, force: true });
     });
     document.getElementById("gold-men-pager")?.addEventListener("click", (event) => {
       const btn = event.target.closest("button[data-gold-page]");
