@@ -1537,9 +1537,6 @@
           </section>
 
           <section id="section-balances" class="admin-section">
-            <h2 class="admin-main-title">Balances</h2>
-            <p class="admin-main-lead">Dream agency day totals and paid actions (Dream day starts 10:00 Kyiv).</p>
-
             <div class="bal-tabs" role="tablist" aria-label="Balances sections">
               <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
               <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
@@ -1601,7 +1598,6 @@
 
                   <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
                     <h4 id="bonus-day-title">Bonuses</h4>
-                    <p class="admin-main-lead" style="margin:0 0 12px">All paid actions for the selected day across every questionnaire, newest first.</p>
                     <div id="bonus-day-total" class="bal-section-total hidden">
                       <span class="bal-section-total-label">Grand Total</span>
                       <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
@@ -2795,12 +2791,6 @@
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
-          <tfoot>
-            <tr class="bonus-total-row">
-              <td colspan="5">Grand Total</td>
-              <td>${formatBalanceUsd(totalUsd)}</td>
-            </tr>
-          </tfoot>
         </table>`;
     }
 
