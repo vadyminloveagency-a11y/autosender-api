@@ -1256,28 +1256,6 @@
       font-size: 15px;
       line-height: 1;
     }
-    .gold-men-toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 14px 0 10px;
-    }
-    .gold-men-toolbar input {
-      flex: 1 1 280px;
-      min-width: 0;
-      height: 36px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: #11151a;
-      color: var(--text);
-      font: 500 13px/1 var(--font);
-      outline: none;
-    }
-    .gold-men-toolbar input:focus {
-      border-color: rgba(255, 43, 58, 0.55);
-      box-shadow: 0 0 0 3px rgba(255, 43, 58, 0.1);
-    }
     .gold-men-summary {
       display: flex;
       flex-wrap: wrap;
@@ -1470,6 +1448,22 @@
       justify-content: flex-end;
       flex: 1 1 auto;
       min-width: 0;
+    }
+    .gold-men-actions input[type="search"] {
+      width: 210px;
+      min-height: 26px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #11151a;
+      color: var(--text);
+      font: 500 12px/1 var(--font);
+      outline: none;
+      box-sizing: border-box;
+    }
+    .gold-men-actions input[type="search"]:focus {
+      border-color: rgba(255, 43, 58, 0.55);
+      box-shadow: 0 0 0 3px rgba(255, 43, 58, 0.1);
     }
     #section-gold-men .bal-topbar { flex-wrap: wrap; }
     .gold-men-actions .btn-primary,
@@ -2355,17 +2349,15 @@
               <div class="bal-topbar">
                 <h2 class="admin-main-title" style="margin:0;align-self:center">Gold Men Agency</h2>
                 <div class="gold-men-actions">
+                  <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
+                  <button type="button" id="gold-men-copy-ids" class="btn-ghost">Copy all IDs</button>
+                  <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
                   <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
                   <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
                   <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
                   <button type="button" id="gold-men-repair" class="btn-ghost">Repair incomplete</button>
                   <button type="button" id="gold-men-sync-older" class="btn-ghost">Load older 14 days</button>
                 </div>
-              </div>
-              <div class="gold-men-toolbar">
-                <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
-                <button type="button" id="gold-men-copy-ids" class="btn-ghost">Copy all IDs</button>
-                <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
               <div id="gold-men-status" class="mail-day-empty" style="display:none;text-align:left;padding:8px 0"></div>
