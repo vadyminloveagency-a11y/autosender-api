@@ -975,7 +975,8 @@
       .bal-topbar { flex-direction: column; }
       .bal-month-total { align-self: stretch; }
     }
-    .bal-tab-btn {
+    .bal-tab-btn,
+    .mail-tab-btn {
       min-height: 34px;
       min-width: 120px;
       padding: 0 16px;
@@ -989,15 +990,27 @@
       justify-content: center;
       cursor: pointer;
     }
-    .bal-tab-btn:hover { border-color: rgba(4, 242, 160, 0.35); }
-    .bal-tab-btn.is-active {
+    .bal-tab-btn:hover,
+    .mail-tab-btn:hover { border-color: rgba(4, 242, 160, 0.35); }
+    .bal-tab-btn.is-active,
+    .mail-tab-btn.is-active {
       border-color: rgba(4, 242, 160, 0.45);
       background: rgba(4, 242, 160, 0.16);
       color: #04f2a0;
       box-shadow: 0 0 0 1px rgba(4, 242, 160, 0.18), 0 0 14px rgba(4, 242, 160, 0.12);
     }
+    .bal-tab-btn:focus,
+    .mail-tab-btn:focus {
+      outline: none;
+    }
+    .bal-tab-btn:focus-visible,
+    .mail-tab-btn:focus-visible {
+      border-color: rgba(4, 242, 160, 0.55);
+    }
     .bal-tab-panel { display: none; }
     .bal-tab-panel.is-active { display: block; }
+    .mail-tab-panel { display: none; }
+    .mail-tab-panel.is-active { display: block; }
     .bal-section-total {
       display: flex;
       align-items: baseline;
@@ -1681,13 +1694,13 @@
             <div class="panel-card">
               <div class="bal-topbar">
                 <div class="bal-tabs" role="tablist" aria-label="Mailings sections">
-                  <button type="button" class="bal-tab-btn is-active" data-mail-tab="questionnaires" role="tab" aria-selected="true">Mailings</button>
-                  <button type="button" class="bal-tab-btn" data-mail-tab="active" role="tab" aria-selected="false">Active mailings</button>
+                  <button type="button" class="mail-tab-btn is-active" data-mail-tab="questionnaires" role="tab" aria-selected="true">Mailings</button>
+                  <button type="button" class="mail-tab-btn" data-mail-tab="active" role="tab" aria-selected="false">Active mailings</button>
                 </div>
                 <button type="button" id="refresh-mail-section-btn" class="btn-ghost">Refresh</button>
               </div>
 
-              <div id="mail-tab-questionnaires" class="bal-tab-panel is-active" role="tabpanel">
+              <div id="mail-tab-questionnaires" class="mail-tab-panel is-active" role="tabpanel">
                 <div class="mail-calendar-layout">
                   <div class="mail-cal">
                     <div class="mail-cal-head">
@@ -1724,7 +1737,7 @@
                 </div>
               </div>
 
-              <div id="mail-tab-active" class="bal-tab-panel" role="tabpanel" hidden>
+              <div id="mail-tab-active" class="mail-tab-panel" role="tabpanel" hidden>
                 <div id="mailings-empty" class="empty-state hidden">No active mailings right now.</div>
                 <div id="mailings-wrap" class="hidden">
                   <div class="table-scroll">
@@ -2174,12 +2187,20 @@
         button.classList.toggle("is-active", button.getAttribute("data-section") === next);
       });
       if (next === "mailings") {
+        syncMailTabUi(mailCalState.activeTab);
         void refreshMailCalendar({ quiet: true });
         void refreshMailings({ quiet: true });
       }
       if (next === "balances") {
+        // Re-apply balances tab visibility after Mailings — shared classes used to hide the panel.
+        syncBalTabUi(balCalState.activeTab);
+        hideBalSpinner();
         void refreshAgencyFinanceCredsHint();
-        void refreshBalances({ quiet: true });
+        // Wait one frame so flex layout exists (section was display:none).
+        requestAnimationFrame(() => {
+          void refreshBalances({ quiet: true });
+          void refreshVisibleMonthTotal();
+        });
       }
     }
 
@@ -2994,10 +3015,12 @@
       if (balancesPanel) {
         balancesPanel.classList.toggle("is-active", next === "balances");
         balancesPanel.hidden = next !== "balances";
+        balancesPanel.style.display = next === "balances" ? "" : "none";
       }
       if (bonusesPanel) {
         bonusesPanel.classList.toggle("is-active", next === "bonuses");
         bonusesPanel.hidden = next !== "bonuses";
+        bonusesPanel.style.display = next === "bonuses" ? "" : "none";
       }
     }
 
