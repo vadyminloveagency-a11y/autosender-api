@@ -3556,9 +3556,10 @@
         mailCalState.selectedDate === kyivTodayLocal();
       if (!quiet) setStatus("Loading questionnaire letters...");
       try {
+        const syncDream = !quiet && lookingAtToday ? "&syncDream=1" : "";
         const [data, lbData, senderData] = await Promise.all([
           api(
-            `/letterbot/admin/letters-by-profile?date=${encodeURIComponent(mailCalState.selectedDate)}&year=${mailCalState.year}&month=${mailCalState.month}`,
+            `/letterbot/admin/letters-by-profile?date=${encodeURIComponent(mailCalState.selectedDate)}&year=${mailCalState.year}&month=${mailCalState.month}${syncDream}`,
           ),
           lookingAtToday
             ? api("/letterbot/admin/running").catch(() => ({ jobs: [] }))

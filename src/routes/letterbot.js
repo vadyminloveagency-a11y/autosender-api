@@ -11,6 +11,8 @@ import {
   getLetterBotJob,
   getOperatorShiftDisconnectRequest,
   getUserById,
+  listDreamCredentialsForProfiles,
+  listLetterBotJobDailyTotals,
   listRunningLetterBotJobs,
   listRunningLetterBotJobsWithUsers,
   markLetterBotJobStopped,
@@ -629,6 +631,16 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
     const [yStr, mStr] = date.split("-");
     const year = Number(req.query?.year) || Number(yStr);
     const month = Number(req.query?.month) || Number(mStr);
+    const syncDream =
+      date === today &&
+      ["1", "true", "yes"].includes(String(req.query?.syncDream || "").toLowerCase());
+
+    if (date === today) {
+      await mergeKnownDreamDailyTotals(today).catch(() => {});
+    }
+    if (syncDream) {
+      await syncDreamLetterBotDailyTotals({ dayKey: today }).catch(() => {});
+    }
 
     const [rows, monthDays, profileMap] = await Promise.all([
       listMailingDailyByProfile(date),
@@ -686,6 +698,7 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       today,
       monthDays,
       profiles,
+      syncedDream: Boolean(syncDream),
     });
   } catch (error) {
     return res.status(500).json({
@@ -694,6 +707,125 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       profiles: [],
       monthDays: [],
     });
+  }
+});
+
+/** Persist already-known Dream TOTAL DAY from live workers / job state. */
+async function mergeKnownDreamDailyTotals(dayKey) {
+  const day = String(dayKey || kyivDayKey()).slice(0, 10);
+  const writes = [];
+
+  for (const [key, worker] of workers) {
+    const total = Number(worker?.state?.dailyTotal);
+    if (!Number.isFinite(total) || total <= 0) continue;
+    const totalDay = String(worker.state.dailyTotalDayKey || day).slice(0, 10);
+    if (totalDay && totalDay !== day) continue;
+    const colon = String(key).indexOf(":");
+    if (colon <= 0) continue;
+    const userId = Number(key.slice(0, colon));
+    const profileId = key.slice(colon + 1);
+    if (!/^\d+$/.test(profileId)) continue;
+    writes.push(
+      setMailingDailyLettersAbsolute({
+        dayKey: day,
+        profileId,
+        product: "letterbot",
+        userId,
+        letters: total,
+      }),
+    );
+  }
+
+  const jobTotals = await listLetterBotJobDailyTotals().catch(() => []);
+  for (const row of jobTotals) {
+    if (!Number.isFinite(row.dailyTotal) || row.dailyTotal <= 0) continue;
+    if (row.dailyTotalDayKey && row.dailyTotalDayKey !== day) continue;
+    writes.push(
+      setMailingDailyLettersAbsolute({
+        dayKey: day,
+        profileId: row.profileId,
+        product: "letterbot",
+        userId: row.userId,
+        letters: row.dailyTotal,
+      }),
+    );
+  }
+
+  if (writes.length) await Promise.allSettled(writes);
+}
+
+/**
+ * Login to Dream LetterBot for profiles with saved credentials and store TOTAL DAY.
+ * Used on manual Mailings refresh so director numbers match Dream.
+ */
+async function syncDreamLetterBotDailyTotals({ dayKey } = {}) {
+  const day = String(dayKey || kyivDayKey()).slice(0, 10);
+  const creds = await listDreamCredentialsForProfiles().catch(() => []);
+  // One credential row per questionnaire (latest operator wins).
+  const byProfile = new Map();
+  for (const row of creds) {
+    if (!byProfile.has(row.profileId)) byProfile.set(row.profileId, row);
+  }
+  const rows = [...byProfile.values()];
+  const concurrency = 2;
+  for (let i = 0; i < rows.length; i += concurrency) {
+    const batch = rows.slice(i, i + concurrency);
+    await Promise.allSettled(
+      batch.map(async (row) => {
+        const worker = getWorkerForUser(row.userId, row.profileId);
+        await ensureWorkerSession(worker, {});
+        const total = Number(worker.state?.dailyTotal);
+        if (!Number.isFinite(total) || total < 0) return;
+        await setMailingDailyLettersAbsolute({
+          dayKey: day,
+          profileId: row.profileId,
+          product: "letterbot",
+          userId: row.userId,
+          letters: total,
+        });
+        await persistJob({
+          userId: row.userId,
+          profileId: row.profileId,
+          cookieHeader: worker.cookieHeader || "",
+          selection: worker.userSelection || {},
+          state: worker.getState(),
+          isRunning: Boolean(worker.senderRunning && worker.state.sessionActive),
+        }).catch(() => {});
+      }),
+    );
+  }
+}
+
+/** Operator / extension can report Dream TOTAL DAY for the current questionnaire. */
+router.post("/daily-total", authMiddleware, async (req, res) => {
+  const profileId = profileIdFrom(req);
+  const raw = req.body?.dailyTotal ?? req.body?.totalDay ?? req.body?.total;
+  const num = Number(String(raw ?? "").replace(/,/g, ""));
+  if (!/^\d+$/.test(String(profileId || "")) || !Number.isFinite(num) || num < 0) {
+    return res.status(400).json({ ok: false, error: "profileId and dailyTotal required" });
+  }
+  try {
+    const day = kyivDayKey();
+    const worker = getWorker(req, profileId);
+    worker.applyDailyTotal(num);
+    await setMailingDailyLettersAbsolute({
+      dayKey: day,
+      profileId,
+      product: "letterbot",
+      userId: req.user.id,
+      letters: num,
+    });
+    await persistJob({
+      userId: req.user.id,
+      profileId,
+      cookieHeader: worker.cookieHeader || "",
+      selection: worker.userSelection || {},
+      state: worker.getState(),
+      isRunning: Boolean(worker.senderRunning && worker.state.sessionActive),
+    }).catch(() => {});
+    return res.json({ ok: true, profileId, dayKey: day, dailyTotal: num });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error?.message || String(error) });
   }
 });
 

@@ -165,6 +165,47 @@ export async function getDreamCredentials(userId, profileId) {
   return result.rows[0] || null;
 }
 
+/** All saved Dream logins for numeric questionnaire ids (cloud LetterBot). */
+export async function listDreamCredentialsForProfiles() {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT user_id, profile_id, username, password_enc, updated_at
+     FROM dream_credentials
+     WHERE profile_id ~ '^[0-9]+$'
+     ORDER BY updated_at DESC`,
+  );
+  return result.rows.map((row) => ({
+    userId: Number(row.user_id),
+    profileId: String(row.profile_id || ""),
+    username: String(row.username || ""),
+    passwordEnc: String(row.password_enc || ""),
+    updatedAt: row.updated_at || null,
+  }));
+}
+
+/** Latest known Dream TOTAL DAY values stored on letterbot job state. */
+export async function listLetterBotJobDailyTotals() {
+  const db = getPool();
+  const result = await db.query(
+    `SELECT
+       user_id,
+       profile_id,
+       NULLIF(state->>'dailyTotal', '') AS daily_total,
+       NULLIF(state->>'dailyTotalDayKey', '') AS daily_total_day_key,
+       updated_at
+     FROM letterbot_jobs
+     WHERE profile_id ~ '^[0-9]+$'
+       AND NULLIF(state->>'dailyTotal', '') IS NOT NULL`,
+  );
+  return result.rows.map((row) => ({
+    userId: Number(row.user_id),
+    profileId: String(row.profile_id || ""),
+    dailyTotal: Number(row.daily_total),
+    dailyTotalDayKey: String(row.daily_total_day_key || "").slice(0, 10),
+    updatedAt: row.updated_at || null,
+  }));
+}
+
 export async function deleteDreamCredentials(userId, profileId) {
   const db = getPool();
   await db.query(
