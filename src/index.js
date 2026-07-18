@@ -10,6 +10,7 @@ import { ensureAgencyProfileTables } from "./agencyProfileStore.js";
 import favoritesRoutes from "./routes/favorites.js";
 import inboxRoutes from "./routes/inbox.js";
 import letterbotRoutes, { restoreRunningLetterBotJobs } from "./routes/letterbot.js";
+import agencyFinanceRoutes from "./routes/agencyFinance.js";
 import senderReadsRoutes, { restoreRunningSenderReadsJobs } from "./routes/senderReads.js";
 import { ensureLetterBotTables } from "./letterbotStore.js";
 import { ensureSenderReadsTables } from "./senderReadsStore.js";
@@ -66,6 +67,9 @@ app.use("/auth", authRoutes);
 app.use("/profiles", profilesRoutes);
 app.use("/favorites", favoritesRoutes);
 app.use("/inbox", inboxRoutes);
+if (runAdminJobs) {
+  app.use("/agency-finance", agencyFinanceRoutes);
+}
 
 // LetterBot / Sender live only on the workers instance. Admin proxies there.
 if (appRole === "admin") {
@@ -96,8 +100,10 @@ async function start() {
   await ensureAgencyProfileTables();
   await ensureSenderReadsTables();
   await ensureMailingDailyTables();
-  await ensureAgencyFinanceTables();
-  await ensureAgencyFinanceActionTables();
+  if (runAdminJobs) {
+    await ensureAgencyFinanceTables();
+    await ensureAgencyFinanceActionTables();
+  }
   app.listen(port, () => {
     console.log(`autosender-api listening on ${port} (APP_ROLE=${appRole})`);
   });

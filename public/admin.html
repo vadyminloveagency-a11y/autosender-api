@@ -3164,7 +3164,7 @@
           status.style.display = "block";
           status.textContent = "Preparing all male IDs…";
         }
-        const data = await api("/letterbot/admin/gold-men?limit=5000");
+        const data = await api("/agency-finance/gold-men?limit=5000");
         source = Array.isArray(data?.men) ? data.men : source;
       } catch (_) {
         // Fall back to the currently loaded list if refresh is unavailable.
@@ -3213,7 +3213,7 @@
         const search = String(document.getElementById("gold-men-search")?.value || "").trim();
         const params = new URLSearchParams({ limit: "5000" });
         if (search) params.set("search", search);
-        const data = await api(`/letterbot/admin/gold-men?${params.toString()}`);
+        const data = await api(`/agency-finance/gold-men?${params.toString()}`);
         renderGoldMen(data);
         if (status && options.statusText) {
           status.style.display = "block";
@@ -3238,7 +3238,7 @@
     }
 
     async function importOlderGoldMenBatch() {
-      return api("/letterbot/admin/gold-men/sync-older", {
+      return api("/agency-finance/gold-men/sync-older", {
         method: "POST",
         body: "{}",
       });
@@ -3251,7 +3251,7 @@
     }
 
     async function importGoldMenRange(from, to) {
-      return api("/letterbot/admin/gold-men/sync-range", {
+      return api("/agency-finance/gold-men/sync-range", {
         method: "POST",
         body: JSON.stringify({ from, to }),
       });
@@ -3431,7 +3431,7 @@
           from: bounds.from,
           to: bounds.to,
         });
-        const data = await api(`/letterbot/admin/balances-by-profile?${params.toString()}`);
+        const data = await api(`/agency-finance/balances-by-profile?${params.toString()}`);
         if (balMonthTotalRequestKey !== requestKey) return;
         valueEl.textContent = formatBalanceUsd(data.totalUsd);
         valueEl.title = `${bounds.from} — ${bounds.to}, all questionnaires`;
@@ -3977,7 +3977,7 @@
         const totalParams = new URLSearchParams({ from, to });
         if (profileId) totalParams.set("profileId", profileId);
         const totalPromise = api(
-          `/letterbot/admin/balances-by-profile?${totalParams.toString()}`,
+          `/agency-finance/balances-by-profile?${totalParams.toString()}`,
         ).catch(() => ({ totalUsd: 0 }));
 
         const days = eachLocalDayKey(from, to);
@@ -3991,7 +3991,7 @@
           }
           const params = new URLSearchParams({ from: day, to: day });
           if (profileId) params.set("profileId", profileId);
-          const data = await api(`/letterbot/admin/bonuses-actions?${params.toString()}`);
+          const data = await api(`/agency-finance/bonuses-actions?${params.toString()}`);
           if (data.configured === false) configured = false;
           if (data.listIncomplete) incompleteDays.push(day);
           mergeBonusProfiles(merged, data.profiles || []);
@@ -4053,7 +4053,7 @@
           await refreshBonusActions({ quiet });
         } else {
           const data = await api(
-            `/letterbot/admin/balances-by-profile?${balQueryString({ force: false })}`,
+            `/agency-finance/balances-by-profile?${balQueryString({ force: false })}`,
           );
           if (data.today) balCalState.today = String(data.today).slice(0, 10);
           renderBalCalendarGrid();
@@ -4472,7 +4472,7 @@
       const hint = document.getElementById("agency-finance-creds-hint");
       if (!hint) return;
       try {
-        const data = await api("/letterbot/admin/agency-finance-credentials");
+        const data = await api("/agency-finance/credentials");
         if (data.configured) {
           hint.textContent = `Agency login saved (${data.usernameMasked || "••••"})${data.source === "env" ? " · from env" : ""}`;
         } else {
@@ -4492,7 +4492,7 @@
       }
       setStatus("Saving agency finance login...");
       try {
-        await api("/letterbot/admin/agency-finance-credentials", {
+        await api("/agency-finance/credentials", {
           method: "POST",
           body: JSON.stringify({ username, password }),
         });
