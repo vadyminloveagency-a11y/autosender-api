@@ -838,6 +838,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 14px;
+      cursor: pointer;
     }
     .bal-month-total-label {
       color: #8ea19c;
@@ -1625,21 +1626,16 @@
           </section>
 
           <section id="section-balances" class="admin-section">
-            <div class="bal-topbar">
-              <div class="bal-tabs" role="tablist" aria-label="Balances sections">
-                <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
-                <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
-              </div>
-              <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
-                <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
-                <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
-              </div>
-            </div>
-
             <div class="panel-card">
-              <div class="card-head">
-                <h3 id="bal-panel-title">Balances</h3>
-                <button type="button" id="refresh-balances-btn" class="btn-ghost">Refresh</button>
+              <div class="bal-topbar">
+                <div class="bal-tabs" role="tablist" aria-label="Balances sections">
+                  <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
+                  <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
+                </div>
+                <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
+                  <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
+                  <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
+                </div>
               </div>
 
               <div id="agency-finance-creds" class="mail-agency-creds">
@@ -2832,7 +2828,6 @@
       });
       const balancesPanel = document.getElementById("bal-tab-balances");
       const bonusesPanel = document.getElementById("bal-tab-bonuses");
-      const titleEl = document.getElementById("bal-panel-title");
       if (balancesPanel) {
         balancesPanel.classList.toggle("is-active", next === "balances");
         balancesPanel.hidden = next !== "balances";
@@ -2840,9 +2835,6 @@
       if (bonusesPanel) {
         bonusesPanel.classList.toggle("is-active", next === "bonuses");
         bonusesPanel.hidden = next !== "bonuses";
-      }
-      if (titleEl) {
-        titleEl.textContent = next === "bonuses" ? "Bonuses" : "Balances";
       }
     }
 
@@ -3689,6 +3681,12 @@
     });
 
     document.getElementById("refresh-balances-btn")?.addEventListener("click", () => {
+      if (balCalState.activeTab === "bonuses") {
+        balCalState.bonusesLoadedFor = "";
+      }
+      void refreshBalances();
+    });
+    document.getElementById("bal-month-total")?.addEventListener("click", () => {
       if (balCalState.activeTab === "bonuses") {
         balCalState.bonusesLoadedFor = "";
       }
