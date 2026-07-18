@@ -1102,6 +1102,37 @@
       font-size: 12px;
     }
     .gold-men-summary strong { color: #fff; }
+    .gold-men-table-wrap {
+      max-height: calc(100vh - 310px);
+      min-height: 260px;
+      overflow: auto;
+      border: 1px solid rgba(255, 43, 58, 0.22);
+      border-radius: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(152, 161, 170, 0.42) #11151a;
+    }
+    .gold-men-table-wrap::-webkit-scrollbar { width: 9px; height: 9px; }
+    .gold-men-table-wrap::-webkit-scrollbar-track { background: #11151a; }
+    .gold-men-table-wrap::-webkit-scrollbar-thumb {
+      background: rgba(152, 161, 170, 0.38);
+      border: 2px solid #11151a;
+      border-radius: 8px;
+    }
+    .gold-man {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .gold-man-name {
+      color: #fff;
+      font-weight: 700;
+    }
+    .gold-man-id {
+      color: var(--muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      user-select: all;
+    }
     #gold-men-table td:nth-child(4),
     #gold-men-table td:nth-child(5),
     #gold-men-table td:nth-child(6) { text-align: right; }
@@ -1960,11 +1991,12 @@
               </div>
               <div class="gold-men-toolbar">
                 <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
+                <button type="button" id="gold-men-copy-ids" class="btn-ghost">Copy all IDs</button>
                 <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
               <div id="gold-men-status" class="mail-day-empty" style="display:none;text-align:left;padding:8px 0"></div>
-              <div class="table-scroll">
+              <div class="gold-men-table-wrap">
                 <table class="data-table" id="gold-men-table">
                   <thead>
                     <tr>
@@ -3003,6 +3035,7 @@
     }
 
     let goldMenLoading = false;
+    let goldMenCache = [];
 
     function renderGoldMen(data) {
       const body = document.getElementById("gold-men-body");
@@ -3010,6 +3043,7 @@
       const status = document.getElementById("gold-men-status");
       if (!body || !summary || !status) return;
       const men = Array.isArray(data?.men) ? data.men : [];
+      goldMenCache = men;
       const coverage = data?.coverage || {};
       summary.innerHTML = `
         <span>Men: <strong>${men.length.toLocaleString("en-US")}</strong></span>
@@ -3021,9 +3055,14 @@
         .map((man) => {
           const id = String(man.maleProfileId || "").trim();
           const name = String(man.maleName || "").trim();
-          const label = [id, name].filter(Boolean).join(" ") || "Unknown man";
+          const displayName = name || "Unknown man";
           return `<tr>
-            <td><strong>${escapeHtml(label)}</strong></td>
+            <td>
+              <div class="gold-man">
+                <span class="gold-man-name">${escapeHtml(displayName)}</span>
+                <span class="gold-man-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</span>
+              </div>
+            </td>
             <td>${escapeHtml(man.firstDay || "—")}</td>
             <td>${escapeHtml(man.lastDay || "—")}</td>
             <td>${Number(man.questionnaireCount || 0).toLocaleString("en-US")}</td>
@@ -3036,6 +3075,50 @@
       status.textContent = men.length
         ? ""
         : "No retained paid-action men yet. Load older history or open Bonuses to sync data.";
+    }
+
+    async function copyAllGoldMenIds() {
+      const status = document.getElementById("gold-men-status");
+      let source = goldMenCache;
+      try {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "Preparing all male IDs…";
+        }
+        const data = await api("/letterbot/admin/gold-men?limit=5000");
+        source = Array.isArray(data?.men) ? data.men : source;
+      } catch (_) {
+        // Fall back to the currently loaded list if refresh is unavailable.
+      }
+      const ids = [...new Set(
+        source
+          .map((man) => String(man?.maleProfileId || "").trim())
+          .filter(Boolean),
+      )];
+      if (!ids.length) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = "No male IDs to copy.";
+        }
+        return;
+      }
+      const text = ids.join("\n");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+      if (status) {
+        status.style.display = "block";
+        status.textContent = `Copied ${ids.length.toLocaleString("en-US")} male IDs.`;
+      }
     }
 
     async function refreshGoldMen(options = {}) {
@@ -4393,6 +4476,9 @@
 
     document.getElementById("gold-men-refresh")?.addEventListener("click", () => {
       void refreshGoldMen();
+    });
+    document.getElementById("gold-men-copy-ids")?.addEventListener("click", () => {
+      void copyAllGoldMenIds();
     });
     document.getElementById("gold-men-sync-older")?.addEventListener("click", () => {
       void syncOlderGoldMen();
