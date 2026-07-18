@@ -3548,9 +3548,7 @@
         balCalState.bonusesLoadedFor = balCacheKey();
         renderBonusActions(profiles, label, {
           configured,
-          error: totalsMatch
-            ? null
-            : `Incomplete cached days: ${incompleteDays.join(", ") || "total mismatch"}`,
+          error: null,
           totalUsd: officialTotalUsd || actionsSumUsd,
           listIncomplete: !totalsMatch,
           actionsSumUsd,
