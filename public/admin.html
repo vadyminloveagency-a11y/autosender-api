@@ -2447,7 +2447,16 @@
       }
     }
 
+    let createProfileInFlight = false;
     async function createProfile() {
+      if (createProfileInFlight) return;
+      const btn = document.getElementById("create-profile-btn");
+      const label = btn?.textContent || "Submit";
+      createProfileInFlight = true;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Adding…";
+      }
       setStatus("Checking Dream login...");
       try {
         await api("/profiles/admin", {
@@ -2465,7 +2474,23 @@
         setStatus("Profile added", "ok");
         await refreshAccountManager({ quiet: true });
       } catch (error) {
-        setStatus(error.message, "error");
+        const raw = String(error?.message || error || "");
+        const duplicate =
+          /duplicate key|unique constraint|already exists|dream_username/i.test(raw);
+        if (duplicate) {
+          // First click often succeeded; second click only shows Postgres noise.
+          closeCreateAccountModal();
+          setStatus("This Dream login is already added", "ok");
+          await refreshAccountManager({ quiet: true });
+        } else {
+          setStatus(raw || "Failed to create profile", "error");
+        }
+      } finally {
+        createProfileInFlight = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
       }
     }
 

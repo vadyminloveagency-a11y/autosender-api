@@ -133,6 +133,13 @@ router.post("/admin", adminMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    const raw = String(error?.message || error || "");
+    if (/duplicate key|unique constraint|agency_profiles_dream_username/i.test(raw)) {
+      return res.status(409).json({
+        ok: false,
+        error: "This Dream login is already added",
+      });
+    }
     return res.status(400).json({ ok: false, error: error?.message || "Failed to create profile" });
   }
 });
