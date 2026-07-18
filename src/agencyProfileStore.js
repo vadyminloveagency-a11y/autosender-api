@@ -513,7 +513,17 @@ export async function updateAgencyProfile(id, patch = {}) {
       password: patch.password || secrets.password,
       displayName: patch.displayName ?? displayName,
     });
-    femaleProfileId = verified.femaleProfileId;
+    // Keep the agency-synced questionnaire ID if login resolves to another girl.
+    if (
+      femaleProfileId &&
+      verified.femaleProfileId &&
+      Number(femaleProfileId) !== Number(verified.femaleProfileId)
+    ) {
+      throw new Error(
+        `This Dream login belongs to profile ${verified.femaleProfileId}, expected ${femaleProfileId}`,
+      );
+    }
+    femaleProfileId = verified.femaleProfileId || femaleProfileId;
     displayName = verified.displayName;
     dreamUsername = verified.dreamUsername;
     passwordEnc = encryptSecret(verified.dreamPassword);

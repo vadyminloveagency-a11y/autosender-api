@@ -178,10 +178,19 @@ export async function dreamLogin(username, password) {
   }
 
   if (looksLikeLoginPage(html, finalUrl) || response.status === 401 || response.status === 403) {
-    throw new Error(
-      "Dream login failed — check username/password" +
-        (needsCaptcha ? " (or 2captcha balance / sitekey)" : ""),
+    const lower = String(html || "").toLowerCase();
+    const badPassword = /invalid|incorrect|bad credentials|wrong password|authentication failed|неверн/i.test(
+      lower,
     );
+    if (badPassword) {
+      throw new Error("Dream login failed — wrong username or password");
+    }
+    if (needsCaptcha) {
+      throw new Error(
+        "Dream login failed after captcha — lady login/password may be wrong, or Render IP is blocked (set DREAM_PROXY_URL residential proxy)",
+      );
+    }
+    throw new Error("Dream login failed — check username/password");
   }
 
   const hasSession =

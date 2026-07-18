@@ -3120,21 +3120,38 @@
       document.getElementById("create-operator-modal").classList.add("hidden");
     }
 
+    function isAgencyPlaceholderLogin(login) {
+      return /^agency:\d+$/i.test(String(login || "").trim());
+    }
+
     function openProfileEditModal(profileId) {
       const profile = cachedProfiles.find((p) => String(p.id) === String(profileId));
       if (!profile) return;
+      const hasLogin = Boolean(profile.hasDreamLogin);
       document.getElementById("profile-edit-id").value = String(profile.id);
       document.getElementById("profile-edit-title").textContent = profileTitle(profile);
       const assigned = profile.assignedUserId
         ? cachedOperators.find((op) => String(op.id) === String(profile.assignedUserId))
         : null;
-      document.getElementById("profile-edit-sub").textContent = assigned
+      let sub = assigned
         ? `ID ${profile.femaleProfileId || "—"} · Assigned to ${assigned.name || assigned.email}`
         : `ID ${profile.femaleProfileId || "—"} · Unassigned · ${profile.inboxMenCount || 0} in DB`;
+      if (!hasLogin) sub += " · Add lady login to scan inbox";
+      document.getElementById("profile-edit-sub").textContent = sub;
       document.getElementById("profile-edit-avatar").innerHTML = avatarHtml(profile);
       document.getElementById("profile-edit-name").value = profile.displayName || "";
-      document.getElementById("profile-edit-login").value = profile.dreamUsername || "";
-      document.getElementById("profile-edit-password").value = profile.password || "";
+      document.getElementById("profile-edit-login").value = hasLogin ? profile.dreamUsername || "" : "";
+      document.getElementById("profile-edit-password").value = hasLogin ? profile.password || "" : "";
+      const updateBtn = document.getElementById("profile-edit-update");
+      const scanBtn = document.getElementById("profile-edit-scanall");
+      if (updateBtn) {
+        updateBtn.disabled = !hasLogin;
+        updateBtn.title = hasLogin ? "Update inbox (3 pages)" : "Add lady Dream login first";
+      }
+      if (scanBtn) {
+        scanBtn.disabled = !hasLogin;
+        scanBtn.title = hasLogin ? "Scan full inbox" : "Add lady Dream login first";
+      }
       document.getElementById("profile-edit-modal").classList.remove("hidden");
     }
 
@@ -3195,20 +3212,28 @@
       const name = String(document.getElementById("profile-edit-name").value || "").trim();
       const login = String(document.getElementById("profile-edit-login").value || "").trim();
       const password = String(document.getElementById("profile-edit-password").value || "");
+      const storedLogin = isAgencyPlaceholderLogin(profile?.dreamUsername)
+        ? ""
+        : String(profile?.dreamUsername || "");
+      const hasStoredLogin = Boolean(profile?.hasDreamLogin);
       if (!login) {
         setStatus("Dream login is required", "error");
+        return;
+      }
+      if (isAgencyPlaceholderLogin(login)) {
+        setStatus("Enter the lady Dream login, not the agency placeholder", "error");
         return;
       }
       setStatus("Saving profile...");
       try {
         const body = { displayName: name };
-        const loginChanged = login !== String(profile?.dreamUsername || "");
+        const loginChanged = login !== storedLogin;
         const passwordChanged = password !== String(profile?.password || "");
-        if (loginChanged || passwordChanged) {
+        if (loginChanged || passwordChanged || !hasStoredLogin) {
           body.dreamUsername = login;
           body.password = password || profile?.password || "";
           if (!body.password) {
-            setStatus("Dream password is required when changing login", "error");
+            setStatus("Dream password is required when adding login", "error");
             return;
           }
         }
