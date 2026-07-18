@@ -873,11 +873,6 @@
       opacity: 0.85;
       cursor: pointer;
     }
-    .bal-filters-hint {
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 12px;
-    }
     #bal-day-wrap {
       max-height: calc(100vh - 340px);
       overflow: auto;
@@ -990,6 +985,31 @@
       gap: 14px;
       margin: 0 0 14px;
     }
+    .bal-top-day-total {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 34px;
+      margin: 0;
+      padding: 7px 12px;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      border-radius: 7px;
+      background: #140f11;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .bal-top-day-total.hidden { display: none; }
+    .bal-top-day-total .bal-section-total-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    .bal-top-day-total .bal-section-total-value {
+      font-size: 18px;
+      flex: 0 0 auto;
+    }
     .bal-month-total {
       min-width: 190px;
       min-height: 34px;
@@ -1017,7 +1037,8 @@
     }
     @media (max-width: 720px) {
       .bal-topbar { flex-direction: column; }
-      .bal-month-total { align-self: stretch; }
+      .bal-month-total,
+      .bal-top-day-total { align-self: stretch; }
     }
     .bal-tab-btn,
     .mail-tab-btn {
@@ -2052,6 +2073,14 @@
                   <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
                   <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
                 </div>
+                <div id="bal-day-total" class="bal-section-total bal-top-day-total hidden">
+                  <h4 id="bal-day-title" class="bal-section-total-title">Balances</h4>
+                  <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
+                </div>
+                <div id="bonus-day-total" class="bal-section-total bal-top-day-total hidden">
+                  <h4 id="bonus-day-title" class="bal-section-total-title">Bonuses</h4>
+                  <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
+                </div>
                 <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
                   <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
                   <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
@@ -2068,7 +2097,6 @@
                   <button type="button" id="bal-filter-apply" class="btn-ghost">Apply</button>
                   <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
                 </div>
-                <div class="bal-filters-hint">Pick one questionnaire and a date range for total / paid actions (max 62 days). Calendar day sets a single-day range.</div>
               </div>
 
               <div class="mail-calendar-layout" style="margin-top:12px">
@@ -2090,10 +2118,6 @@
                 <div class="mail-day-panel">
                   <div id="bal-tab-balances" class="bal-tab-panel is-active" role="tabpanel">
                     <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
-                    <div id="bal-day-total" class="bal-section-total hidden">
-                      <h4 id="bal-day-title" class="bal-section-total-title">Selected day</h4>
-                      <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
-                    </div>
                     <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
                     <div id="bal-day-wrap" class="table-scroll hidden">
                       <table class="data-table" id="bal-day-table">
@@ -2110,10 +2134,6 @@
                   </div>
 
                   <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
-                    <div id="bonus-day-total" class="bal-section-total hidden">
-                      <h4 id="bonus-day-title" class="bal-section-total-title">Bonuses</h4>
-                      <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
-                    </div>
                     <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
                     <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
                     <div id="bonus-profiles" class="bonus-profiles hidden"></div>
@@ -3879,6 +3899,8 @@
       });
       const balancesPanel = document.getElementById("bal-tab-balances");
       const bonusesPanel = document.getElementById("bal-tab-bonuses");
+      const balDayTotal = document.getElementById("bal-day-total");
+      const bonusDayTotal = document.getElementById("bonus-day-total");
       if (balancesPanel) {
         balancesPanel.classList.toggle("is-active", next === "balances");
         balancesPanel.hidden = next !== "balances";
@@ -3888,6 +3910,12 @@
         bonusesPanel.classList.toggle("is-active", next === "bonuses");
         bonusesPanel.hidden = next !== "bonuses";
         bonusesPanel.style.display = next === "bonuses" ? "" : "none";
+      }
+      if (balDayTotal) {
+        balDayTotal.classList.toggle("hidden", next !== "balances");
+      }
+      if (bonusDayTotal) {
+        bonusDayTotal.classList.toggle("hidden", next !== "bonuses");
       }
     }
 
@@ -4050,8 +4078,8 @@
           ? Number(meta.totalUsd) || 0
           : list.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0);
       if (totalWrap && totalValue) {
-        totalWrap.classList.remove("hidden");
         totalValue.textContent = list.length ? formatBalanceUsd(totalUsd) : "$0.00";
+        totalWrap.classList.toggle("hidden", balCalState.activeTab !== "balances");
       }
       if (!list.length) {
         emptyEl.classList.remove("hidden");
@@ -4180,8 +4208,8 @@
           ? Number(meta.totalUsd) || 0
           : actions.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
       if (totalWrap && totalValue) {
-        totalWrap.classList.remove("hidden");
         totalValue.textContent = actions.length ? formatBalanceUsd(totalUsd) : "$0.00";
+        totalWrap.classList.toggle("hidden", balCalState.activeTab !== "bonuses");
       }
 
       if (!actions.length) {
