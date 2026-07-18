@@ -383,26 +383,45 @@ async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } 
     throw new Error(`Agency bonuses HTTP ${first.response.status}`);
   }
 
-  const pages = maxPaginationPage(first.html);
+  let detectedPages = maxPaginationPage(first.html);
   const htmlPages = [first.html];
-  // Keep batches small so the agency site is not flooded.
-  for (let start = 2; start <= pages; start += 5) {
+  let cookieJar = first.jar;
+  // Fetch known pages in small parallel batches.
+  for (let start = 2; start <= detectedPages; start += 4) {
     const pageNumbers = Array.from(
-      { length: Math.min(5, pages - start + 1) },
+      { length: Math.min(4, detectedPages - start + 1) },
       (_, index) => start + index,
     );
     const results = await Promise.all(
       pageNumbers.map((page) =>
         fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
           method: "GET",
-          jar: cookieMapFromHeader(cookieHeaderFromJar(first.jar)),
+          jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
           headers,
         }),
       ),
     );
     for (const result of results) {
-      if (result.response.ok) htmlPages.push(result.html);
+      if (!result.response.ok) continue;
+      cookieJar = result.jar;
+      htmlPages.push(result.html);
+      detectedPages = Math.max(detectedPages, maxPaginationPage(result.html));
     }
+  }
+  // Dream often hides far page links — probe a few more until empty.
+  for (let page = detectedPages + 1; page <= Math.min(detectedPages + 8, 100); page += 1) {
+    const result = await fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
+      method: "GET",
+      jar: cookieMapFromHeader(cookieHeaderFromJar(cookieJar)),
+      headers,
+    });
+    if (!result.response.ok) break;
+    cookieJar = result.jar;
+    const pageActions = parseBonusActions(result.html).filter(
+      (action) => actionCalendarDayKey(action.occurredAt) === day,
+    );
+    if (!pageActions.length) break;
+    htmlPages.push(result.html);
   }
 
   const seen = new Set();

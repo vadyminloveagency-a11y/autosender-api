@@ -878,11 +878,15 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
       });
     }
 
-    const [actions, profileMap, dayAssignments] = await Promise.all([
+    const [actions, bonusRows, profileMap, dayAssignments] = await Promise.all([
       fetchBonusActionsRange(range.from, range.to, {
         force: Boolean(req.query?.force),
         profileId: range.profileId || 0,
       }),
+      fetchBonusesByGirlRange(range.from, range.to, {
+        force: Boolean(req.query?.force),
+        profileId: range.profileId || 0,
+      }).catch(() => []),
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
       listAssignmentsForDreamDayRange(range.from, range.to).catch(() => []),
     ]);
@@ -945,6 +949,18 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
         );
       });
 
+    const actionsSumUsd = Number(
+      profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
+    );
+    let officialTotalUsd = Number(
+      (Array.isArray(bonusRows) ? bonusRows : [])
+        .filter((row) => !range.profileId || String(row.profileId) === range.profileId)
+        .reduce((sum, row) => sum + (Number(row.amount) || 0), 0)
+        .toFixed(2),
+    );
+    // Prefer Dream's Group-by-Girl total — same source as month total / Balances.
+    const totalUsd = officialTotalUsd > 0 ? officialTotalUsd : actionsSumUsd;
+
     return res.json({
       ok: true,
       date: range.from,
@@ -953,9 +969,9 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
       today,
       profileId: range.profileId || null,
       configured: true,
-      totalUsd: Number(
-        profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
-      ),
+      totalUsd,
+      actionsSumUsd,
+      listIncomplete: officialTotalUsd > 0 && actionsSumUsd + 0.009 < officialTotalUsd,
       profiles,
       error: null,
     });

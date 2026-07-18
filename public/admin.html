@@ -3240,11 +3240,14 @@
       if (statusEl && !meta.error && meta.configured !== false) {
         const dates = [...new Set(actions.map((row) => String(row.when || "").slice(0, 10)).filter(Boolean))];
         const dayCount = dates.length || 1;
-        statusEl.style.display = "block";
-        statusEl.textContent =
+        const base =
           dayCount > 1
             ? `${actions.length} actions across ${dayCount} days · newest first — scroll down for earlier days`
             : `${actions.length} actions · newest first`;
+        statusEl.style.display = "block";
+        statusEl.textContent = meta.listIncomplete
+          ? `${base}. List may be partial; Grand Total uses Dream Group-by-Girl (same as month total).`
+          : base;
       }
       const bodyRows = actions
         .map(
@@ -3298,6 +3301,8 @@
           configured: data.configured,
           error: data.error,
           totalUsd: data.totalUsd,
+          listIncomplete: data.listIncomplete,
+          actionsSumUsd: data.actionsSumUsd,
         });
       } catch (error) {
         balCalState.bonusesLoadedFor = "";
