@@ -1110,7 +1110,23 @@
     #gold-men-table th:nth-child(6) { text-align: right; }
     #gold-men-table td:last-child {
       color: #ff2b3a;
-      font-weight: 800;
+      font-weight: 700;
+    }
+    .gold-men-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .gold-men-actions .btn-primary,
+    .gold-men-actions .btn-ghost,
+    .gold-men-toolbar .btn-ghost {
+      min-height: 26px;
+      min-width: 0;
+      padding: 0 10px;
+      border-radius: 6px;
+      font: 600 12px/1 var(--font);
     }
     .bonus-profiles {
       overflow: auto;
@@ -1937,7 +1953,10 @@
                     Men who made paid actions across all questionnaires and retained Dream history.
                   </p>
                 </div>
-                <button type="button" id="gold-men-sync-older" class="btn-primary">Load older 14 days</button>
+                <div class="gold-men-actions">
+                  <button type="button" id="gold-men-sync-older" class="btn-ghost">Load older 14 days</button>
+                  <button type="button" id="gold-men-sync-year" class="btn-primary">Load previous year</button>
+                </div>
               </div>
               <div class="gold-men-toolbar">
                 <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
@@ -3019,12 +3038,13 @@
         : "No retained paid-action men yet. Load older history or open Bonuses to sync data.";
     }
 
-    async function refreshGoldMen() {
-      if (goldMenLoading) return;
-      goldMenLoading = true;
+    async function refreshGoldMen(options = {}) {
+      if (goldMenLoading && !options.force) return;
+      const keepBusy = Boolean(options.keepBusy);
+      if (!keepBusy) goldMenLoading = true;
       const status = document.getElementById("gold-men-status");
       try {
-        if (status) {
+        if (status && !options.quiet) {
           status.style.display = "block";
           status.textContent = "Loading Gold Men Agency…";
         }
@@ -3033,34 +3053,48 @@
         if (search) params.set("search", search);
         const data = await api(`/letterbot/admin/gold-men?${params.toString()}`);
         renderGoldMen(data);
+        if (status && options.statusText) {
+          status.style.display = "block";
+          status.textContent = options.statusText;
+        }
       } catch (error) {
         if (status) {
           status.style.display = "block";
           status.textContent = error.message || String(error);
         }
       } finally {
-        goldMenLoading = false;
+        if (!keepBusy) goldMenLoading = false;
       }
+    }
+
+    function setGoldMenSyncBusy(busy) {
+      goldMenLoading = busy;
+      ["gold-men-sync-older", "gold-men-sync-year", "gold-men-refresh"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = busy;
+      });
+    }
+
+    async function importOlderGoldMenBatch() {
+      return api("/letterbot/admin/gold-men/sync-older", {
+        method: "POST",
+        body: "{}",
+      });
     }
 
     async function syncOlderGoldMen() {
       if (goldMenLoading) return;
-      const button = document.getElementById("gold-men-sync-older");
       const status = document.getElementById("gold-men-status");
-      goldMenLoading = true;
-      if (button) button.disabled = true;
+      setGoldMenSyncBusy(true);
       try {
         if (status) {
           status.style.display = "block";
           status.textContent = "Loading the previous 14 days from Dream…";
         }
-        const result = await api("/letterbot/admin/gold-men/sync-older", {
-          method: "POST",
-          body: "{}",
-        });
+        const result = await importOlderGoldMenBatch();
         if (status) {
           status.textContent =
-            `Imported ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions.`;
+            `Added ${result.from} → ${result.to}: ${Number(result.importedActions || 0)} paid actions.`;
         }
       } catch (error) {
         if (status) {
@@ -3068,10 +3102,49 @@
           status.textContent = error.message || String(error);
         }
       } finally {
-        goldMenLoading = false;
-        if (button) button.disabled = false;
+        setGoldMenSyncBusy(false);
       }
       await refreshGoldMen();
+    }
+
+    async function syncPreviousYearGoldMen() {
+      if (goldMenLoading) return;
+      const status = document.getElementById("gold-men-status");
+      const batches = 26;
+      let importedTotal = 0;
+      let from = "";
+      let to = "";
+      setGoldMenSyncBusy(true);
+      try {
+        for (let i = 1; i <= batches; i += 1) {
+          if (status) {
+            status.style.display = "block";
+            status.textContent = `Loading previous year… batch ${i}/${batches}`;
+          }
+          const result = await importOlderGoldMenBatch();
+          importedTotal += Number(result.importedActions) || 0;
+          if (!to) to = result.to || "";
+          from = result.from || from;
+          await refreshGoldMen({
+            force: true,
+            keepBusy: true,
+            quiet: true,
+            statusText: `Loading previous year… batch ${i}/${batches} · ${from} → ${result.to || to}`,
+          });
+        }
+        if (status) {
+          status.textContent =
+            `Year import done ${from || "—"} → ${to || "—"}: ${importedTotal.toLocaleString("en-US")} paid actions.`;
+        }
+      } catch (error) {
+        if (status) {
+          status.style.display = "block";
+          status.textContent = error.message || String(error);
+        }
+      } finally {
+        setGoldMenSyncBusy(false);
+      }
+      await refreshGoldMen({ force: true });
     }
 
     function renderMailDayProfiles(profiles, date) {
@@ -4323,6 +4396,9 @@
     });
     document.getElementById("gold-men-sync-older")?.addEventListener("click", () => {
       void syncOlderGoldMen();
+    });
+    document.getElementById("gold-men-sync-year")?.addEventListener("click", () => {
+      void syncPreviousYearGoldMen();
     });
     let goldMenSearchTimer = null;
     document.getElementById("gold-men-search")?.addEventListener("input", () => {
