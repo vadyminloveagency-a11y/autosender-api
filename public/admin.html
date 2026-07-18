@@ -1301,8 +1301,9 @@
       flex-wrap: wrap;
       gap: 6px;
       align-items: center;
-      justify-content: flex-start;
-      flex: 1 1 100%;
+      justify-content: flex-end;
+      flex: 1 1 auto;
+      min-width: 0;
     }
     #section-gold-men .bal-topbar { flex-wrap: wrap; }
     .gold-men-actions .btn-primary,
@@ -2151,12 +2152,7 @@
           <section id="section-gold-men" class="admin-section">
             <div class="panel-card">
               <div class="bal-topbar">
-                <div>
-                  <h2 class="admin-main-title" style="margin:0">Gold Men Agency</h2>
-                  <p class="mail-day-empty" style="text-align:left;padding:5px 0 0">
-                    Men who made paid actions across all questionnaires and retained Dream history.
-                  </p>
-                </div>
+                <h2 class="admin-main-title" style="margin:0;align-self:center">Gold Men Agency</h2>
                 <div class="gold-men-actions">
                   <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
                   <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
