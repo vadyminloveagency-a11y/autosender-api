@@ -392,6 +392,19 @@
       color: #fff;
       font: 700 20px/1.2 var(--font);
       letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .sidebar-logo {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      /* Same emblem crop as the auth page logo. */
+      background: #05060a url("/inlove-logo.png") 53.6% 33.4% / 260% auto no-repeat;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      box-shadow: 0 0 14px rgba(255, 43, 58, 0.16);
     }
     .sidebar-user {
       margin: 0 0 10px;
@@ -1664,7 +1677,7 @@
   <div id="panel-shell" class="hidden">
     <div class="panel-layout">
       <aside class="admin-sidebar" aria-label="Director navigation">
-        <h1 class="sidebar-brand">Inlove Services</h1>
+        <h1 class="sidebar-brand"><span class="sidebar-logo" aria-hidden="true"></span>Inlove Services</h1>
         <p class="sidebar-user" id="admin-label"></p>
 
         <div class="sidebar-section-title">Main</div>
