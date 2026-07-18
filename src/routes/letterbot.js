@@ -774,7 +774,7 @@ async function syncDreamLetterBotDailyTotals({ dayKey } = {}) {
         const worker = getWorkerForUser(row.userId, row.profileId);
         await ensureWorkerSession(worker, {});
         const total = Number(worker.state?.dailyTotal);
-        if (!Number.isFinite(total) || total < 0) return;
+        if (!Number.isFinite(total) || total <= 0) return;
         await setMailingDailyLettersAbsolute({
           dayKey: day,
           profileId: row.profileId,
@@ -800,7 +800,7 @@ router.post("/daily-total", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const raw = req.body?.dailyTotal ?? req.body?.totalDay ?? req.body?.total;
   const num = Number(String(raw ?? "").replace(/,/g, ""));
-  if (!/^\d+$/.test(String(profileId || "")) || !Number.isFinite(num) || num < 0) {
+  if (!/^\d+$/.test(String(profileId || "")) || !Number.isFinite(num) || num <= 0) {
     return res.status(400).json({ ok: false, error: "profileId and dailyTotal required" });
   }
   try {

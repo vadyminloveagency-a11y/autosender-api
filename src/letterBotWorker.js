@@ -228,7 +228,8 @@ class LetterBotWorker {
     const normalized = this.normalizeDailyTotalValue(raw);
     if (!normalized) return false;
     const num = Number(normalized.replace(/,/g, ""));
-    if (!Number.isFinite(num) || num < 0) return false;
+    // Never persist 0 — a failed scrape must not wipe a real TOTAL DAY.
+    if (!Number.isFinite(num) || num <= 0) return false;
     const day = this.kyivDayKey();
     if (this.state.dailyTotalDayKey !== day) {
       this.state.dailyTotalDayKey = day;

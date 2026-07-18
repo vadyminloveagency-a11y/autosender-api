@@ -3594,8 +3594,12 @@
 
     function mergeLiveDaySentIntoProfiles(profiles, lbJobs, senderJobs) {
       const byId = new Map();
+      const originalIds = new Set();
       for (const row of profiles) {
-        byId.set(String(row.profileId), { ...row });
+        const id = String(row.profileId || "");
+        if (!id) continue;
+        originalIds.add(id);
+        byId.set(id, { ...row });
       }
       const ensure = (job) => {
         const id = String(job.profileId || "");
@@ -3647,7 +3651,8 @@
           ...row,
           total: (Number(row.letterbot) || 0) + (Number(row.read) || 0) + (Number(row.online) || 0),
         }))
-        .filter((row) => row.total > 0)
+        // Keep DB rows even if live Dream total is not ready yet; only drop empty job-only rows.
+        .filter((row) => row.total > 0 || originalIds.has(String(row.profileId)))
         .sort((a, b) => {
           return (
             b.total - a.total ||
