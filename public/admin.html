@@ -762,6 +762,29 @@
       color: var(--accent-strong);
       white-space: nowrap;
     }
+    .bal-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 0 0 14px;
+    }
+    .bal-tab-btn {
+      min-height: 36px;
+      padding: 0 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text-soft);
+      font: 600 13px/1 var(--font);
+      cursor: pointer;
+    }
+    .bal-tab-btn:hover { filter: brightness(0.98); }
+    .bal-tab-btn.is-active {
+      border-color: transparent;
+      background: var(--accent);
+      color: #fff;
+    }
+    .bal-tab-panel { display: none; }
+    .bal-tab-panel.is-active { display: block; }
     .bal-section-total {
       display: flex;
       align-items: baseline;
@@ -769,9 +792,9 @@
       gap: 12px;
       margin: 0 0 12px;
       padding: 12px 14px;
-      border: 1px solid rgba(4, 242, 160, 0.22);
+      border: 1px solid rgba(47, 111, 237, 0.22);
       border-radius: 10px;
-      background: rgba(12, 18, 22, 0.55);
+      background: rgba(47, 111, 237, 0.06);
     }
     .bal-section-total-label {
       color: var(--muted);
@@ -780,7 +803,7 @@
       letter-spacing: 0.04em;
     }
     .bal-section-total-value {
-      color: var(--accent-strong);
+      color: var(--accent);
       font: 800 22px/1 var(--font);
       font-variant-numeric: tabular-nums;
     }
@@ -1548,9 +1571,14 @@
             <h2 class="admin-main-title">Balances</h2>
             <p class="admin-main-lead">Dream agency day totals and paid actions (Dream day starts 10:00 Kyiv).</p>
 
+            <div class="bal-tabs" role="tablist" aria-label="Balances sections">
+              <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
+              <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses By Girl</button>
+            </div>
+
             <div class="panel-card">
               <div class="card-head">
-                <h3>Balances</h3>
+                <h3 id="bal-panel-title">Balances</h3>
                 <button type="button" id="refresh-balances-btn" class="btn-ghost">Refresh</button>
               </div>
 
@@ -1578,43 +1606,43 @@
                   </div>
                   <div id="bal-cal-grid" class="mail-cal-grid"></div>
                 </div>
+
                 <div class="mail-day-panel">
-                  <h4 id="bal-day-title">Selected day</h4>
-                  <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
-                  <div id="bal-day-total" class="bal-section-total hidden">
-                    <span class="bal-section-total-label">Day total</span>
-                    <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
+                  <div id="bal-tab-balances" class="bal-tab-panel is-active" role="tabpanel">
+                    <h4 id="bal-day-title">Selected day</h4>
+                    <div id="bal-status" class="mail-day-empty" style="display:none;padding:8px 0 12px;text-align:left"></div>
+                    <div id="bal-day-total" class="bal-section-total hidden">
+                      <span class="bal-section-total-label">Day total</span>
+                      <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
+                    </div>
+                    <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
+                    <div id="bal-day-wrap" class="table-scroll hidden">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            <th>Questionnaire</th>
+                            <th>Operator</th>
+                            <th>Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody id="bal-day-body"></tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div id="bal-day-empty" class="mail-day-empty">No bonuses for this day.</div>
-                  <div id="bal-day-wrap" class="table-scroll hidden">
-                    <table class="data-table">
-                      <thead>
-                        <tr>
-                          <th>Questionnaire</th>
-                          <th>Operator</th>
-                          <th>Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody id="bal-day-body"></tbody>
-                    </table>
+
+                  <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
+                    <h4 id="bonus-day-title">Paid actions</h4>
+                    <p class="admin-main-lead" style="margin:0 0 12px">Paid actions on questionnaires for the selected day, with operator from assignment history.</p>
+                    <div id="bonus-day-total" class="bal-section-total hidden">
+                      <span class="bal-section-total-label">Paid actions total</span>
+                      <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
+                    </div>
+                    <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
+                    <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
+                    <div id="bonus-profiles" class="bonus-profiles hidden"></div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div class="panel-card" style="margin-top:16px">
-              <div class="card-head">
-                <h3>Bonuses By Girl</h3>
-                <button type="button" id="refresh-bonuses-btn" class="btn-ghost">Refresh</button>
-              </div>
-              <p class="admin-main-lead" style="margin:0 0 12px">Paid actions on questionnaires for the selected day, with operator from assignment history.</p>
-              <div id="bonus-day-total" class="bal-section-total hidden">
-                <span class="bal-section-total-label">Paid actions total</span>
-                <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
-              </div>
-              <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
-              <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
-              <div id="bonus-profiles" class="bonus-profiles hidden"></div>
             </div>
           </section>
         </div>
@@ -2528,7 +2556,36 @@
       month: null,
       selectedDate: null,
       today: null,
+      activeTab: "balances",
+      bonusesLoadedFor: "",
     };
+
+    function setBalTab(tab) {
+      const next = tab === "bonuses" ? "bonuses" : "balances";
+      balCalState.activeTab = next;
+      document.querySelectorAll(".bal-tab-btn").forEach((button) => {
+        const active = button.dataset.balTab === next;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      const balancesPanel = document.getElementById("bal-tab-balances");
+      const bonusesPanel = document.getElementById("bal-tab-bonuses");
+      const titleEl = document.getElementById("bal-panel-title");
+      if (balancesPanel) {
+        balancesPanel.classList.toggle("is-active", next === "balances");
+        balancesPanel.hidden = next !== "balances";
+      }
+      if (bonusesPanel) {
+        bonusesPanel.classList.toggle("is-active", next === "bonuses");
+        bonusesPanel.hidden = next !== "bonuses";
+      }
+      if (titleEl) {
+        titleEl.textContent = next === "bonuses" ? "Bonuses By Girl" : "Balances";
+      }
+      if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
+        void refreshBonusActions({ quiet: true });
+      }
+    }
 
     function shiftBalCalMonth(delta) {
       let y = balCalState.year;
@@ -2548,6 +2605,7 @@
       if (!stillInMonth) {
         balCalState.selectedDate = `${y}-${String(m).padStart(2, "0")}-01`;
       }
+      balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     }
 
@@ -2754,16 +2812,20 @@
 
     async function refreshBonusActions({ quiet = false } = {}) {
       const date = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
+      const titleEl = document.getElementById("bonus-day-title");
+      if (titleEl) titleEl.textContent = `Paid actions · ${date}`;
       try {
         const data = await api(
           `/letterbot/admin/bonuses-actions?date=${encodeURIComponent(date)}&force=1`,
         );
+        balCalState.bonusesLoadedFor = date;
         renderBonusActions(data.profiles || [], date, {
           configured: data.configured,
           error: data.error,
           totalUsd: data.totalUsd,
         });
       } catch (error) {
+        balCalState.bonusesLoadedFor = "";
         renderBonusActions([], date, { error: error.message });
         if (!quiet) setStatus(error.message, "error");
       }
@@ -2778,23 +2840,39 @@
         balCalState.month = m;
       }
       renderBalCalendarGrid();
-      if (!quiet) setStatus("Loading balances...");
-      try {
-        const data = await api(
-          `/letterbot/admin/balances-by-profile?date=${encodeURIComponent(balCalState.selectedDate)}&force=1`,
+      if (!quiet) {
+        setStatus(
+          balCalState.activeTab === "bonuses"
+            ? "Loading paid actions..."
+            : "Loading balances...",
         );
-        if (data.today) balCalState.today = String(data.today).slice(0, 10);
-        renderBalCalendarGrid();
-        renderBalanceProfiles(data.profiles || [], balCalState.selectedDate, {
-          configured: data.configured,
-          error: data.error,
-          totalUsd: data.totalUsd,
-        });
-        await refreshBonusActions({ quiet: true });
+      }
+      try {
+        if (balCalState.activeTab === "bonuses") {
+          await refreshBonusActions({ quiet: true });
+        } else {
+          const data = await api(
+            `/letterbot/admin/balances-by-profile?date=${encodeURIComponent(balCalState.selectedDate)}&force=1`,
+          );
+          if (data.today) balCalState.today = String(data.today).slice(0, 10);
+          renderBalCalendarGrid();
+          renderBalanceProfiles(data.profiles || [], balCalState.selectedDate, {
+            configured: data.configured,
+            error: data.error,
+            totalUsd: data.totalUsd,
+          });
+          // Invalidate bonuses cache when day changes so next tab open reloads.
+          if (balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
+            balCalState.bonusesLoadedFor = "";
+          }
+        }
         if (!quiet) setStatus("");
       } catch (error) {
-        renderBalanceProfiles([], balCalState.selectedDate, { error: error.message });
-        renderBonusActions([], balCalState.selectedDate, { error: error.message });
+        if (balCalState.activeTab === "bonuses") {
+          renderBonusActions([], balCalState.selectedDate, { error: error.message });
+        } else {
+          renderBalanceProfiles([], balCalState.selectedDate, { error: error.message });
+        }
         if (!quiet) setStatus(error.message, "error");
       }
     }
@@ -3217,10 +3295,15 @@
     });
 
     document.getElementById("refresh-balances-btn")?.addEventListener("click", () => {
+      if (balCalState.activeTab === "bonuses") {
+        balCalState.bonusesLoadedFor = "";
+      }
       void refreshBalances();
     });
-    document.getElementById("refresh-bonuses-btn")?.addEventListener("click", () => {
-      void refreshBonusActions();
+    document.querySelectorAll(".bal-tab-btn").forEach((button) => {
+      button.addEventListener("click", () => {
+        setBalTab(button.dataset.balTab);
+      });
     });
     document.getElementById("bonus-profiles")?.addEventListener("click", (event) => {
       const head = event.target.closest(".bonus-profile-head");
@@ -3236,6 +3319,7 @@
     document.getElementById("bal-cal-today")?.addEventListener("click", () => {
       balCalState.today = kyivTodayLocal();
       balCalState.selectedDate = balCalState.today;
+      balCalState.bonusesLoadedFor = "";
       const [y, m] = balCalState.selectedDate.split("-").map(Number);
       balCalState.year = y;
       balCalState.month = m;
@@ -3245,6 +3329,7 @@
       const btn = event.target.closest(".mail-cal-day[data-date]");
       if (!btn || btn.disabled) return;
       balCalState.selectedDate = btn.getAttribute("data-date");
+      balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     });
 
