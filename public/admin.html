@@ -1143,6 +1143,66 @@
       font-variant-numeric: tabular-nums;
       user-select: all;
     }
+    .gold-q-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 1.5em;
+      color: #fff;
+      cursor: help;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
+    }
+    #gold-q-popover {
+      position: fixed;
+      z-index: 80;
+      display: none;
+      min-width: 240px;
+      max-width: min(360px, calc(100vw - 24px));
+      max-height: min(280px, calc(100vh - 24px));
+      overflow: auto;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      border-radius: 8px;
+      background: #140f11;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+      color: var(--text);
+      pointer-events: none;
+    }
+    #gold-q-popover.is-open { display: block; }
+    #gold-q-popover .gold-q-title {
+      margin: 0 0 8px;
+      color: #98a1aa;
+      font: 700 10px/1.2 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    #gold-q-popover .gold-q-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 12px;
+      align-items: baseline;
+      padding: 5px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+    }
+    #gold-q-popover .gold-q-row:first-of-type { border-top: 0; }
+    #gold-q-popover .gold-q-name {
+      color: #fff;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #gold-q-popover .gold-q-id {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    #gold-q-popover .gold-q-amt {
+      color: #ff2b3a;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     #gold-men-table td:nth-child(4),
     #gold-men-table td:nth-child(5),
     #gold-men-table td:nth-child(6) { text-align: right; }
@@ -2055,6 +2115,7 @@
                   <tbody id="gold-men-body"></tbody>
                 </table>
               </div>
+              <div id="gold-q-popover" hidden></div>
             </div>
           </section>
 
@@ -3141,11 +3202,59 @@
       });
     }
 
+    function hideGoldMenQuestionnairesTip() {
+      const tip = document.getElementById("gold-q-popover");
+      if (!tip) return;
+      tip.classList.remove("is-open");
+      tip.hidden = true;
+      tip.innerHTML = "";
+    }
+
+    function showGoldMenQuestionnairesTip(anchor, questionnaires) {
+      const tip = document.getElementById("gold-q-popover");
+      if (!tip || !anchor) return;
+      const rows = Array.isArray(questionnaires) ? questionnaires : [];
+      if (!rows.length) {
+        hideGoldMenQuestionnairesTip();
+        return;
+      }
+      tip.innerHTML = `
+        <p class="gold-q-title">Spent on questionnaires</p>
+        ${rows
+          .map((item) => {
+            const id = String(item.femaleProfileId || "").trim();
+            const name = String(item.femaleName || "").trim() || "Questionnaire";
+            return `<div class="gold-q-row">
+              <div>
+                <div class="gold-q-name">${escapeHtml(name)}</div>
+                <div class="gold-q-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</div>
+              </div>
+              <div class="gold-q-amt">${formatBalanceUsd(item.totalUsd)}</div>
+            </div>`;
+          })
+          .join("")}`;
+      tip.hidden = false;
+      tip.classList.add("is-open");
+      const rect = anchor.getBoundingClientRect();
+      const tipWidth = Math.min(360, tip.offsetWidth || 260);
+      const tipHeight = tip.offsetHeight || 120;
+      let left = rect.right - tipWidth;
+      let top = rect.top - tipHeight - 8;
+      if (left < 8) left = 8;
+      if (left + tipWidth > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - tipWidth - 8);
+      }
+      if (top < 8) top = rect.bottom + 8;
+      tip.style.left = `${Math.round(left)}px`;
+      tip.style.top = `${Math.round(top)}px`;
+    }
+
     function renderGoldMen(data) {
       const body = document.getElementById("gold-men-body");
       const summary = document.getElementById("gold-men-summary");
       const status = document.getElementById("gold-men-status");
       if (!body || !summary || !status) return;
+      hideGoldMenQuestionnairesTip();
       if (data) {
         goldMenCache = Array.isArray(data.men) ? data.men : [];
         goldMenCoverage = data.coverage || {};
@@ -3158,10 +3267,11 @@
         <span>Paid actions: <strong>${Number(coverage.actionCount || 0).toLocaleString("en-US")}</strong></span>
         <span>Total: <strong>${formatBalanceUsd(coverage.totalUsd)}</strong></span>`;
       body.innerHTML = men
-        .map((man) => {
+        .map((man, index) => {
           const id = String(man.maleProfileId || "").trim();
           const name = String(man.maleName || "").trim();
           const displayName = name || "Unknown man";
+          const qCount = Number(man.questionnaireCount || 0);
           return `<tr>
             <td>
               <div class="gold-man">
@@ -3171,7 +3281,9 @@
             </td>
             <td>${escapeHtml(man.firstDay || "—")}</td>
             <td>${escapeHtml(man.lastDay || "—")}</td>
-            <td>${Number(man.questionnaireCount || 0).toLocaleString("en-US")}</td>
+            <td>
+              <span class="gold-q-count" data-gold-q-index="${index}" tabindex="0">${qCount.toLocaleString("en-US")}</span>
+            </td>
             <td>${Number(man.actionCount || 0).toLocaleString("en-US")}</td>
             <td>${formatBalanceUsd(man.totalUsd)}</td>
           </tr>`;
@@ -4710,6 +4822,34 @@
       toggleSortState(goldMenSortState, key, defaultDir);
       renderGoldMen();
     });
+    document.getElementById("gold-men-body")?.addEventListener("mouseover", (event) => {
+      const count = event.target.closest(".gold-q-count");
+      if (!count || !document.getElementById("gold-men-body")?.contains(count)) return;
+      const index = Number(count.getAttribute("data-gold-q-index"));
+      const man = sortGoldMenRows(goldMenCache)[index];
+      showGoldMenQuestionnairesTip(count, man?.questionnaires || []);
+    });
+    document.getElementById("gold-men-body")?.addEventListener("mouseout", (event) => {
+      const count = event.target.closest(".gold-q-count");
+      if (!count) return;
+      const next = event.relatedTarget;
+      if (next && (count === next || count.contains(next))) return;
+      hideGoldMenQuestionnairesTip();
+    });
+    document.getElementById("gold-men-body")?.addEventListener("focusin", (event) => {
+      const count = event.target.closest(".gold-q-count");
+      if (!count) return;
+      const index = Number(count.getAttribute("data-gold-q-index"));
+      const man = sortGoldMenRows(goldMenCache)[index];
+      showGoldMenQuestionnairesTip(count, man?.questionnaires || []);
+    });
+    document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
+      hideGoldMenQuestionnairesTip();
+    });
+    document.querySelector("#section-gold-men .gold-men-table-wrap")?.addEventListener("scroll", () => {
+      hideGoldMenQuestionnairesTip();
+    });
+    window.addEventListener("scroll", hideGoldMenQuestionnairesTip, true);
     document.getElementById("gold-men-sync-to")?.addEventListener("change", () => {
       const today = kyivTodayLocal();
       const toEl = document.getElementById("gold-men-sync-to");

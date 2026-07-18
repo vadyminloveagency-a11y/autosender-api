@@ -347,12 +347,25 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
          male_profile_id,
          male_name,
          female_profile_id,
+         female_name,
          action_type,
          day_key,
          occurred_at,
          amount_usd
        FROM agency_finance_actions
        WHERE male_profile_id <> '' OR TRIM(male_name) <> ''
+     ),
+     by_girl AS (
+       SELECT
+         male_key,
+         female_profile_id,
+         (ARRAY_AGG(female_name ORDER BY day_key DESC, occurred_at DESC)
+           FILTER (WHERE TRIM(female_name) <> ''))[1] AS female_name,
+         COUNT(*)::int AS action_count,
+         COALESCE(SUM(amount_usd), 0) AS total_usd
+       FROM identified
+       WHERE female_profile_id <> ''
+       GROUP BY male_key, female_profile_id
      ),
      grouped AS (
        SELECT
@@ -374,12 +387,26 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
        FROM identified
        GROUP BY male_key
      )
-     SELECT *
-     FROM grouped
+     SELECT
+       g.*,
+       COALESCE((
+         SELECT json_agg(
+           json_build_object(
+             'femaleProfileId', b.female_profile_id,
+             'femaleName', COALESCE(b.female_name, ''),
+             'actionCount', b.action_count,
+             'totalUsd', b.total_usd
+           )
+           ORDER BY b.total_usd DESC, b.female_name, b.female_profile_id
+         )
+         FROM by_girl b
+         WHERE b.male_key = g.male_key
+       ), '[]'::json) AS questionnaires
+     FROM grouped g
      WHERE $1 = ''
-       OR COALESCE(male_profile_id, '') ILIKE '%' || $1 || '%'
-       OR COALESCE(male_name, '') ILIKE '%' || $1 || '%'
-     ORDER BY total_usd DESC, action_count DESC, male_name, male_profile_id
+       OR COALESCE(g.male_profile_id, '') ILIKE '%' || $1 || '%'
+       OR COALESCE(g.male_name, '') ILIKE '%' || $1 || '%'
+     ORDER BY g.total_usd DESC, g.action_count DESC, g.male_name, g.male_profile_id
      LIMIT $2`,
     [query, safeLimit],
   );
@@ -425,18 +452,34 @@ export async function listAgencyFinanceMen({ search = "", limit = 1000 } = {}) {
     incompleteRows = [];
   }
   return {
-    men: result.rows.map((row) => ({
-      maleProfileId: String(row.male_profile_id || ""),
-      maleName: String(row.male_name || ""),
-      actionCount: Number(row.action_count) || 0,
-      questionnaireCount: Number(row.questionnaire_count) || 0,
-      actionTypeCount: Number(row.action_type_count) || 0,
-      totalUsd: Number(row.total_usd) || 0,
-      firstDay: String(row.first_day || "").slice(0, 10),
-      lastDay: String(row.last_day || "").slice(0, 10),
-      firstOccurredAt: String(row.first_occurred_at || ""),
-      lastOccurredAt: String(row.last_occurred_at || ""),
-    })),
+    men: result.rows.map((row) => {
+      let questionnaires = [];
+      try {
+        questionnaires = Array.isArray(row.questionnaires)
+          ? row.questionnaires
+          : JSON.parse(row.questionnaires || "[]");
+      } catch (_) {
+        questionnaires = [];
+      }
+      return {
+        maleProfileId: String(row.male_profile_id || ""),
+        maleName: String(row.male_name || ""),
+        actionCount: Number(row.action_count) || 0,
+        questionnaireCount: Number(row.questionnaire_count) || 0,
+        actionTypeCount: Number(row.action_type_count) || 0,
+        totalUsd: Number(row.total_usd) || 0,
+        firstDay: String(row.first_day || "").slice(0, 10),
+        lastDay: String(row.last_day || "").slice(0, 10),
+        firstOccurredAt: String(row.first_occurred_at || ""),
+        lastOccurredAt: String(row.last_occurred_at || ""),
+        questionnaires: questionnaires.map((item) => ({
+          femaleProfileId: String(item.femaleProfileId || ""),
+          femaleName: String(item.femaleName || ""),
+          actionCount: Number(item.actionCount) || 0,
+          totalUsd: Number(item.totalUsd) || 0,
+        })),
+      };
+    }),
     coverage: {
       firstDay: String(stats.first_day || "").slice(0, 10),
       lastDay: String(stats.last_day || "").slice(0, 10),
