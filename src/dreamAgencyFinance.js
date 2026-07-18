@@ -321,12 +321,26 @@ export async function fetchBonusesByGirl(dayKey, options = {}) {
   return fetchBonusesByGirlRange(dayKey, dayKey, options);
 }
 
-export async function fetchBonusActions(dayKey, { force = false } = {}) {
-  const day = String(dayKey || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    throw new Error("Invalid day key");
+export async function fetchBonusActionsRange(
+  startDayKey,
+  endDayKey = startDayKey,
+  { force = false, profileId = 0 } = {},
+) {
+  const startDay = String(startDayKey || "").slice(0, 10);
+  const endDay = String(endDayKey || "").slice(0, 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDay) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(endDay)
+  ) {
+    throw new Error("Invalid date range");
   }
-  const cached = detailCache.get(day);
+  if (startDay > endDay) {
+    throw new Error("Invalid date range");
+  }
+
+  const pid = Number(profileId) || 0;
+  const cacheKey = `${startDay}|${endDay}|${pid}`;
+  const cached = detailCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < DETAIL_CACHE_TTL_MS) {
     return cached.actions;
   }
@@ -340,7 +354,7 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
-  let first = await fetchWithCookies(bonusesUrl(day, 1).toString(), {
+  let first = await fetchWithCookies(bonusesUrl(startDay, 1, 1, endDay, pid).toString(), {
     method: "GET",
     jar,
     headers,
@@ -348,7 +362,7 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
   if (/id="_username"/i.test(first.html) && /name="_password"/i.test(first.html)) {
     cookieHeader = await getCookieHeader({ force: true });
     jar = cookieMapFromHeader(cookieHeader);
-    first = await fetchWithCookies(bonusesUrl(day, 1).toString(), {
+    first = await fetchWithCookies(bonusesUrl(startDay, 1, 1, endDay, pid).toString(), {
       method: "GET",
       jar,
       headers,
@@ -368,7 +382,7 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
     );
     const results = await Promise.all(
       pageNumbers.map((page) =>
-        fetchWithCookies(bonusesUrl(day, 1, page).toString(), {
+        fetchWithCookies(bonusesUrl(startDay, 1, page, endDay, pid).toString(), {
           method: "GET",
           jar: cookieMapFromHeader(cookieHeaderFromJar(first.jar)),
           headers,
@@ -384,6 +398,7 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
   const actions = htmlPages
     .flatMap((html) => parseBonusActions(html))
     .filter((action) => {
+      if (pid && String(action.femaleProfileId) !== String(pid)) return false;
       const key = [
         action.type,
         action.maleProfileId,
@@ -395,8 +410,12 @@ export async function fetchBonusActions(dayKey, { force = false } = {}) {
       seen.add(key);
       return true;
     });
-  detailCache.set(day, { at: Date.now(), actions });
+  detailCache.set(cacheKey, { at: Date.now(), actions });
   return actions;
+}
+
+export async function fetchBonusActions(dayKey, options = {}) {
+  return fetchBonusActionsRange(dayKey, dayKey, options);
 }
 
 export function clearAgencyFinanceCaches() {

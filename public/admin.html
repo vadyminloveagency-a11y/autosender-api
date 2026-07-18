@@ -769,6 +769,41 @@
       color: var(--muted);
       font-size: 12px;
     }
+    .bal-filters {
+      margin: 0 0 12px;
+      padding: 10px;
+      border: 1px solid rgba(78, 98, 108, 0.35);
+      border-radius: 10px;
+      background: rgba(8, 14, 18, 0.45);
+    }
+    .bal-filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .bal-filters-row select,
+    .bal-filters-row input[type="date"] {
+      min-height: 34px;
+      border: 1px solid rgba(78, 98, 108, 0.55);
+      border-radius: 7px;
+      background: #0c1218;
+      color: #d7e8de;
+      padding: 0 10px;
+      font: 500 13px/1 Arial, sans-serif;
+    }
+    .bal-filters-row select {
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+    .bal-filters-row input[type="date"] {
+      flex: 0 1 150px;
+    }
+    .bal-filters-hint {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     .mail-balance {
       font-weight: 700;
       font-variant-numeric: tabular-nums;
@@ -1570,6 +1605,19 @@
                 <div id="agency-finance-creds-hint" class="mail-agency-creds-hint"></div>
               </div>
 
+              <div class="bal-filters">
+                <div class="bal-filters-row">
+                  <select id="bal-filter-profile" aria-label="Questionnaire">
+                    <option value="">All questionnaires</option>
+                  </select>
+                  <input id="bal-filter-from" type="date" aria-label="From date">
+                  <input id="bal-filter-to" type="date" aria-label="To date">
+                  <button type="button" id="bal-filter-apply" class="btn-ghost">Apply</button>
+                  <button type="button" id="bal-filter-month" class="btn-ghost">This month</button>
+                </div>
+                <div class="bal-filters-hint">Pick one questionnaire and a date range for total / paid actions (max 62 days). Calendar day sets a single-day range.</div>
+              </div>
+
               <div class="mail-calendar-layout" style="margin-top:12px">
                 <div class="mail-cal">
                   <div class="mail-cal-head">
@@ -1867,6 +1915,9 @@
     const ADMIN_SECTION_KEY = "autosenderAdminSection";
     const ADMIN_BAL_TAB_KEY = "autosenderAdminBalTab";
     const ADMIN_BAL_DATE_KEY = "autosenderAdminBalDate";
+    const ADMIN_BAL_FROM_KEY = "autosenderAdminBalFrom";
+    const ADMIN_BAL_TO_KEY = "autosenderAdminBalTo";
+    const ADMIN_BAL_PROFILE_KEY = "autosenderAdminBalProfile";
 
     function loadSavedAdminSection() {
       const raw = localStorage.getItem(ADMIN_SECTION_KEY) || "accounts";
@@ -1879,6 +1930,17 @@
       }
     }
 
+    function persistBalFilters() {
+      persistBalDate(balCalState.selectedDate);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(balCalState.fromDate || ""))) {
+        localStorage.setItem(ADMIN_BAL_FROM_KEY, balCalState.fromDate);
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(balCalState.toDate || ""))) {
+        localStorage.setItem(ADMIN_BAL_TO_KEY, balCalState.toDate);
+      }
+      localStorage.setItem(ADMIN_BAL_PROFILE_KEY, String(balCalState.profileId || ""));
+    }
+
     function openPanel(user) {
       document.getElementById("admin-label").textContent = user.email || "";
       showView("panel");
@@ -1889,11 +1951,23 @@
         balCalState.year = y;
         balCalState.month = m;
       }
+      const savedFrom = localStorage.getItem(ADMIN_BAL_FROM_KEY);
+      const savedTo = localStorage.getItem(ADMIN_BAL_TO_KEY);
+      balCalState.fromDate =
+        /^\d{4}-\d{2}-\d{2}$/.test(savedFrom || "")
+          ? savedFrom
+          : balCalState.selectedDate;
+      balCalState.toDate =
+        /^\d{4}-\d{2}-\d{2}$/.test(savedTo || "")
+          ? savedTo
+          : balCalState.fromDate || balCalState.selectedDate;
+      balCalState.profileId = String(localStorage.getItem(ADMIN_BAL_PROFILE_KEY) || "");
       const savedBalTab = localStorage.getItem(ADMIN_BAL_TAB_KEY);
       if (savedBalTab === "bonuses" || savedBalTab === "balances") {
         balCalState.activeTab = savedBalTab;
       }
       syncBalTabUi(balCalState.activeTab);
+      syncBalFilterInputs();
       showAdminSection(loadSavedAdminSection());
       setupDragAndDrop();
       setStatus("");
@@ -2144,6 +2218,7 @@
         cachedOperators = Array.isArray(opsData.operators) ? opsData.operators : [];
         cachedProfiles = Array.isArray(profilesData.profiles) ? profilesData.profiles : [];
         renderAccountManager();
+        fillBalProfileOptions();
         if (!quiet) setStatus("");
       } catch (error) {
         if (!quiet) setStatus(error.message, "error");
@@ -2562,6 +2637,9 @@
       year: null,
       month: null,
       selectedDate: null,
+      fromDate: null,
+      toDate: null,
+      profileId: "",
       today: null,
       activeTab: "balances",
       bonusesLoadedFor: "",
@@ -2570,6 +2648,91 @@
     const bonusSortState = { key: "date", dir: "desc" };
     let balProfilesCache = { profiles: [], date: "", meta: {} };
     let bonusProfilesCache = { profiles: [], date: "", meta: {} };
+
+    function balRangeLabel() {
+      const from = balCalState.fromDate || balCalState.selectedDate || "";
+      const to = balCalState.toDate || from;
+      return from && to && from !== to ? `${from} → ${to}` : from || to || "—";
+    }
+
+    function balCacheKey() {
+      const from = balCalState.fromDate || balCalState.selectedDate || "";
+      const to = balCalState.toDate || from;
+      return `${from}|${to}|${balCalState.profileId || ""}`;
+    }
+
+    function balQueryString({ force = true } = {}) {
+      const from = balCalState.fromDate || balCalState.selectedDate || kyivTodayLocal();
+      const to = balCalState.toDate || from;
+      const params = new URLSearchParams({ from, to });
+      if (force) params.set("force", "1");
+      if (balCalState.profileId) params.set("profileId", balCalState.profileId);
+      return params.toString();
+    }
+
+    function syncBalFilterInputs() {
+      const fromEl = document.getElementById("bal-filter-from");
+      const toEl = document.getElementById("bal-filter-to");
+      const profileEl = document.getElementById("bal-filter-profile");
+      if (fromEl) fromEl.value = balCalState.fromDate || balCalState.selectedDate || "";
+      if (toEl) toEl.value = balCalState.toDate || balCalState.fromDate || balCalState.selectedDate || "";
+      if (profileEl) profileEl.value = balCalState.profileId || "";
+    }
+
+    function fillBalProfileOptions() {
+      const select = document.getElementById("bal-filter-profile");
+      if (!select) return;
+      const current = balCalState.profileId || select.value || "";
+      const options = [`<option value="">All questionnaires</option>`];
+      const seen = new Set();
+      for (const profile of cachedProfiles) {
+        const id = String(profile.femaleProfileId || "").trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        const name =
+          String(profile.displayName || profile.dreamUsername || "").trim() || `Profile ${id}`;
+        options.push(
+          `<option value="${escapeHtml(id)}">${escapeHtml(name)} · ${escapeHtml(id)}</option>`,
+        );
+      }
+      select.innerHTML = options.join("");
+      select.value = seen.has(current) || current === "" ? current : "";
+      balCalState.profileId = select.value || "";
+    }
+
+    function readBalFiltersFromInputs() {
+      const fromEl = document.getElementById("bal-filter-from");
+      const toEl = document.getElementById("bal-filter-to");
+      const profileEl = document.getElementById("bal-filter-profile");
+      let from = String(fromEl?.value || "").slice(0, 10);
+      let to = String(toEl?.value || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+        from = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) to = from;
+      if (from > to) {
+        const swap = from;
+        from = to;
+        to = swap;
+      }
+      balCalState.fromDate = from;
+      balCalState.toDate = to;
+      balCalState.selectedDate = to;
+      balCalState.profileId = String(profileEl?.value || "").trim();
+      const [y, m] = to.split("-").map(Number);
+      balCalState.year = y;
+      balCalState.month = m;
+      persistBalFilters();
+      syncBalFilterInputs();
+    }
+
+    function setBalSingleDay(date) {
+      balCalState.selectedDate = date;
+      balCalState.fromDate = date;
+      balCalState.toDate = date;
+      persistBalFilters();
+      syncBalFilterInputs();
+    }
 
     function syncBalTabUi(tab) {
       const next = tab === "bonuses" ? "bonuses" : "balances";
@@ -2599,7 +2762,7 @@
       balCalState.activeTab = next;
       localStorage.setItem(ADMIN_BAL_TAB_KEY, next);
       syncBalTabUi(next);
-      if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
+      if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCacheKey()) {
         void refreshBonusActions({ quiet: true });
       }
     }
@@ -2681,8 +2844,11 @@
         balCalState.selectedDate.startsWith(`${y}-${String(m).padStart(2, "0")}-`);
       if (!stillInMonth) {
         balCalState.selectedDate = `${y}-${String(m).padStart(2, "0")}-01`;
+        balCalState.fromDate = balCalState.selectedDate;
+        balCalState.toDate = balCalState.selectedDate;
       }
-      persistBalDate(balCalState.selectedDate);
+      persistBalFilters();
+      syncBalFilterInputs();
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     }
@@ -2708,7 +2874,9 @@
       for (let day = 1; day <= daysInMonth; day += 1) {
         const date = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const classes = ["mail-cal-day"];
-        if (date === balCalState.selectedDate) classes.push("selected");
+        const from = balCalState.fromDate || balCalState.selectedDate;
+        const to = balCalState.toDate || from;
+        if (from && to && date >= from && date <= to) classes.push("selected");
         if (date === balCalState.today) classes.push("today");
         cells.push(
           `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span></button>`,
@@ -2940,22 +3108,24 @@
     }
 
     async function refreshBonusActions({ quiet = false } = {}) {
-      const date = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
+      if (!balCalState.fromDate) {
+        balCalState.fromDate = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
+      }
+      if (!balCalState.toDate) balCalState.toDate = balCalState.fromDate;
+      const label = balRangeLabel();
       const titleEl = document.getElementById("bonus-day-title");
-      if (titleEl) titleEl.textContent = `Bonuses · ${date}`;
+      if (titleEl) titleEl.textContent = `Bonuses · ${label}`;
       try {
-        const data = await api(
-          `/letterbot/admin/bonuses-actions?date=${encodeURIComponent(date)}&force=1`,
-        );
-        balCalState.bonusesLoadedFor = date;
-        renderBonusActions(data.profiles || [], date, {
+        const data = await api(`/letterbot/admin/bonuses-actions?${balQueryString({ force: true })}`);
+        balCalState.bonusesLoadedFor = balCacheKey();
+        renderBonusActions(data.profiles || [], label, {
           configured: data.configured,
           error: data.error,
           totalUsd: data.totalUsd,
         });
       } catch (error) {
         balCalState.bonusesLoadedFor = "";
-        renderBonusActions([], date, { error: error.message });
+        renderBonusActions([], label, { error: error.message });
         if (!quiet) setStatus(error.message, "error");
       }
     }
@@ -2963,13 +3133,18 @@
     async function refreshBalances({ quiet = false } = {}) {
       if (!balCalState.today) balCalState.today = kyivTodayLocal();
       if (!balCalState.selectedDate) balCalState.selectedDate = balCalState.today;
-      persistBalDate(balCalState.selectedDate);
+      if (!balCalState.fromDate) balCalState.fromDate = balCalState.selectedDate;
+      if (!balCalState.toDate) balCalState.toDate = balCalState.fromDate;
+      persistBalFilters();
+      syncBalFilterInputs();
+      fillBalProfileOptions();
       if (!balCalState.year || !balCalState.month) {
         const [y, m] = balCalState.selectedDate.split("-").map(Number);
         balCalState.year = y;
         balCalState.month = m;
       }
       renderBalCalendarGrid();
+      const label = balRangeLabel();
       if (!quiet) {
         setStatus(
           balCalState.activeTab === "bonuses"
@@ -2982,26 +3157,25 @@
           await refreshBonusActions({ quiet: true });
         } else {
           const data = await api(
-            `/letterbot/admin/balances-by-profile?date=${encodeURIComponent(balCalState.selectedDate)}&force=1`,
+            `/letterbot/admin/balances-by-profile?${balQueryString({ force: true })}`,
           );
           if (data.today) balCalState.today = String(data.today).slice(0, 10);
           renderBalCalendarGrid();
-          renderBalanceProfiles(data.profiles || [], balCalState.selectedDate, {
+          renderBalanceProfiles(data.profiles || [], label, {
             configured: data.configured,
             error: data.error,
             totalUsd: data.totalUsd,
           });
-          // Invalidate bonuses cache when day changes so next tab open reloads.
-          if (balCalState.bonusesLoadedFor !== balCalState.selectedDate) {
+          if (balCalState.bonusesLoadedFor !== balCacheKey()) {
             balCalState.bonusesLoadedFor = "";
           }
         }
         if (!quiet) setStatus("");
       } catch (error) {
         if (balCalState.activeTab === "bonuses") {
-          renderBonusActions([], balCalState.selectedDate, { error: error.message });
+          renderBonusActions([], label, { error: error.message });
         } else {
-          renderBalanceProfiles([], balCalState.selectedDate, { error: error.message });
+          renderBalanceProfiles([], label, { error: error.message });
         }
         if (!quiet) setStatus(error.message, "error");
       }
@@ -3455,8 +3629,7 @@
     document.getElementById("bal-cal-next")?.addEventListener("click", () => shiftBalCalMonth(1));
     document.getElementById("bal-cal-today")?.addEventListener("click", () => {
       balCalState.today = kyivTodayLocal();
-      balCalState.selectedDate = balCalState.today;
-      persistBalDate(balCalState.selectedDate);
+      setBalSingleDay(balCalState.today);
       balCalState.bonusesLoadedFor = "";
       const [y, m] = balCalState.selectedDate.split("-").map(Number);
       balCalState.year = y;
@@ -3466,8 +3639,42 @@
     document.getElementById("bal-cal-grid")?.addEventListener("click", (event) => {
       const btn = event.target.closest(".mail-cal-day[data-date]");
       if (!btn || btn.disabled) return;
-      balCalState.selectedDate = btn.getAttribute("data-date");
-      persistBalDate(balCalState.selectedDate);
+      setBalSingleDay(btn.getAttribute("data-date"));
+      balCalState.bonusesLoadedFor = "";
+      void refreshBalances({ quiet: true });
+    });
+    document.getElementById("bal-filter-apply")?.addEventListener("click", () => {
+      readBalFiltersFromInputs();
+      balCalState.bonusesLoadedFor = "";
+      void refreshBalances();
+    });
+    document.getElementById("bal-filter-month")?.addEventListener("click", () => {
+      if (!balCalState.year || !balCalState.month) {
+        const today = kyivTodayLocal();
+        const [y, m] = today.split("-").map(Number);
+        balCalState.year = y;
+        balCalState.month = m;
+      }
+      const y = balCalState.year;
+      const m = balCalState.month;
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const from = `${y}-${String(m).padStart(2, "0")}-01`;
+      let to = `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+      const today = balCalState.today || kyivTodayLocal();
+      if (to > today && String(today).startsWith(`${y}-${String(m).padStart(2, "0")}`)) {
+        to = today;
+      }
+      balCalState.fromDate = from;
+      balCalState.toDate = to;
+      balCalState.selectedDate = to;
+      persistBalFilters();
+      syncBalFilterInputs();
+      balCalState.bonusesLoadedFor = "";
+      void refreshBalances();
+    });
+    document.getElementById("bal-filter-profile")?.addEventListener("change", () => {
+      balCalState.profileId = String(document.getElementById("bal-filter-profile")?.value || "");
+      persistBalFilters();
       balCalState.bonusesLoadedFor = "";
       void refreshBalances({ quiet: true });
     });

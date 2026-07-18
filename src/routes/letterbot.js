@@ -20,7 +20,7 @@ import {
   upsertLetterBotJob,
 } from "../letterbotStore.js";
 
-import { mapAgencyProfilesByFemaleId, listAssignmentsForDreamDay } from "../agencyProfileStore.js";
+import { mapAgencyProfilesByFemaleId, listAssignmentsForDreamDayRange } from "../agencyProfileStore.js";
 import {
   ensureMailingDailyTables,
   kyivDayKey,
@@ -34,8 +34,8 @@ import {
 } from "../agencyFinanceStore.js";
 import {
   clearAgencyFinanceCaches,
-  fetchBonusesByGirl,
-  fetchBonusActions,
+  fetchBonusesByGirlRange,
+  fetchBonusActionsRange,
 } from "../dreamAgencyFinance.js";
 import { dreamDayKey } from "../dreamDay.js";
 
@@ -667,18 +667,53 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
 });
 
 /** Director cabinet — Dream agency bonuses (Group By Girl) for a day. */
+function parseFinanceDateRange(query, today) {
+  const day = String(query?.date || "").slice(0, 10);
+  let from = String(query?.from || query?.start || "").slice(0, 10);
+  let to = String(query?.to || query?.end || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day) && !from && !to) {
+    from = day;
+    to = day;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) from = today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) to = from;
+  if (from > to) {
+    const swap = from;
+    from = to;
+    to = swap;
+  }
+  const fromMs = Date.parse(`${from}T00:00:00Z`);
+  const toMs = Date.parse(`${to}T00:00:00Z`);
+  const daySpan =
+    Number.isFinite(fromMs) && Number.isFinite(toMs)
+      ? Math.floor((toMs - fromMs) / 86_400_000) + 1
+      : 1;
+  if (daySpan > 62) {
+    throw new Error("Date range too long (max 62 days)");
+  }
+  const profileId = String(query?.profileId || "").trim();
+  return {
+    from,
+    to,
+    date: from === to ? from : `${from}…${to}`,
+    profileId: /^\d+$/.test(profileId) ? profileId : "",
+  };
+}
+
 router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
   try {
     const today = dreamDayKey() || kyivDayKey();
-    let date = String(req.query?.date || today).slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+    const range = parseFinanceDateRange(req.query, today);
 
     const creds = await getAgencyFinanceCredentials();
     if (!creds.configured) {
       return res.json({
         ok: true,
-        date,
+        date: range.from,
+        from: range.from,
+        to: range.to,
         today,
+        profileId: range.profileId || null,
         configured: false,
         profiles: [],
         error: "Save agency login in Balances section",
@@ -686,14 +721,17 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
     }
 
     const [bonusRows, profileMap, dayAssignments] = await Promise.all([
-      fetchBonusesByGirl(date, { force: Boolean(req.query?.force) }),
+      fetchBonusesByGirlRange(range.from, range.to, {
+        force: Boolean(req.query?.force),
+        profileId: range.profileId || 0,
+      }),
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
-      listAssignmentsForDreamDay(date).catch(() => []),
+      listAssignmentsForDreamDayRange(range.from, range.to).catch(() => []),
     ]);
 
     const operatorByProfile = pickDayOperators(dayAssignments);
 
-    const profiles = bonusRows
+    let profiles = bonusRows
       .map((bonus) => {
         const idNum = Number(bonus.profileId) || 0;
         const meta = idNum ? profileMap.get(idNum) : null;
@@ -718,10 +756,17 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
         );
       });
 
+    if (range.profileId) {
+      profiles = profiles.filter((row) => String(row.profileId) === range.profileId);
+    }
+
     return res.json({
       ok: true,
-      date,
+      date: range.from,
+      from: range.from,
+      to: range.to,
       today,
+      profileId: range.profileId || null,
       configured: true,
       totalUsd: Number(
         profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
@@ -732,7 +777,9 @@ router.get("/admin/balances-by-profile", adminMiddleware, async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      date: String(req.query?.date || ""),
+      date: String(req.query?.date || req.query?.from || ""),
+      from: String(req.query?.from || ""),
+      to: String(req.query?.to || ""),
       configured: true,
       profiles: [],
       error: error?.message || String(error),
@@ -809,19 +856,21 @@ function resolveOperatorForAction(action, assignmentsByProfile) {
   };
 }
 
-/** Director cabinet — paid bonus actions for the day, grouped by questionnaire. */
+/** Director cabinet — paid bonus actions for a day/range, optionally one questionnaire. */
 router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
   try {
     const today = dreamDayKey() || kyivDayKey();
-    let date = String(req.query?.date || today).slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+    const range = parseFinanceDateRange(req.query, today);
 
     const creds = await getAgencyFinanceCredentials();
     if (!creds.configured) {
       return res.json({
         ok: true,
-        date,
+        date: range.from,
+        from: range.from,
+        to: range.to,
         today,
+        profileId: range.profileId || null,
         configured: false,
         totalUsd: 0,
         profiles: [],
@@ -830,9 +879,12 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
     }
 
     const [actions, profileMap, dayAssignments] = await Promise.all([
-      fetchBonusActions(date, { force: Boolean(req.query?.force) }),
+      fetchBonusActionsRange(range.from, range.to, {
+        force: Boolean(req.query?.force),
+        profileId: range.profileId || 0,
+      }),
       mapAgencyProfilesByFemaleId().catch(() => new Map()),
-      listAssignmentsForDreamDay(date).catch(() => []),
+      listAssignmentsForDreamDayRange(range.from, range.to).catch(() => []),
     ]);
 
     const assignmentsByProfile = new Map();
@@ -847,6 +899,7 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
     for (const action of actions) {
       const key = String(action.femaleProfileId || "");
       if (!key) continue;
+      if (range.profileId && key !== range.profileId) continue;
       const idNum = Number(key) || 0;
       const meta = idNum ? profileMap.get(idNum) : null;
       const operator = resolveOperatorForAction(action, assignmentsByProfile);
@@ -894,8 +947,11 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
 
     return res.json({
       ok: true,
-      date,
+      date: range.from,
+      from: range.from,
+      to: range.to,
       today,
+      profileId: range.profileId || null,
       configured: true,
       totalUsd: Number(
         profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
@@ -906,7 +962,9 @@ router.get("/admin/bonuses-actions", adminMiddleware, async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       ok: false,
-      date: String(req.query?.date || ""),
+      date: String(req.query?.date || req.query?.from || ""),
+      from: String(req.query?.from || ""),
+      to: String(req.query?.to || ""),
       configured: true,
       totalUsd: 0,
       profiles: [],

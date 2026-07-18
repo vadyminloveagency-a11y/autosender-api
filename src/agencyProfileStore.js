@@ -222,8 +222,18 @@ export async function listProfileAssignmentsForUserDay(userId, dayKey) {
 
 /** All assignment intervals that overlap a Dream business day (admin finance views). */
 export async function listAssignmentsForDreamDay(dayKey) {
-  const day = String(dayKey || "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+  return listAssignmentsForDreamDayRange(dayKey, dayKey);
+}
+
+/** Assignment intervals overlapping Dream days [startDay, endDay] inclusive. */
+export async function listAssignmentsForDreamDayRange(startDayKey, endDayKey = startDayKey) {
+  const startDay = String(startDayKey || "").slice(0, 10);
+  const endDay = String(endDayKey || startDay).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDay) || !/^\d{4}-\d{2}-\d{2}$/.test(endDay)) {
+    return [];
+  }
+  const from = startDay <= endDay ? startDay : endDay;
+  const to = startDay <= endDay ? endDay : startDay;
   const db = getPool();
   const result = await db.query(
     `SELECT
@@ -239,13 +249,13 @@ export async function listAssignmentsForDreamDay(dayKey) {
      FROM agency_profile_assignments h
      LEFT JOIN agency_profiles ap ON ap.id = h.agency_profile_id
      LEFT JOIN users u ON u.id = h.user_id
-     WHERE h.assigned_at < ${sqlDreamDayEnd(1)}
+     WHERE h.assigned_at < ${sqlDreamDayEnd(2)}
        AND (
          h.unassigned_at IS NULL
          OR h.unassigned_at >= ${sqlDreamDayStart(1)}
        )
      ORDER BY h.female_profile_id, h.assigned_at ASC`,
-    [day],
+    [from, to],
   );
   return result.rows.map((row) => ({
     agencyProfileId: row.agency_profile_id ? Number(row.agency_profile_id) : null,
