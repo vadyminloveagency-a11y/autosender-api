@@ -133,10 +133,30 @@ export function parseBonusActions(html) {
   return actions;
 }
 
+function eachDreamDayKey(startDay, endDay) {
+  const days = [];
+  let cur = startDay;
+  while (cur <= endDay) {
+    days.push(cur);
+    const [year, month, day] = cur.split("-").map(Number);
+    const next = new Date(Date.UTC(year, month - 1, day + 1));
+    cur = next.toISOString().slice(0, 10);
+  }
+  return days;
+}
+
+/** Dream form fields use MM/DD/YYYY in the agency UI. */
+function dreamFormDate(dayKey) {
+  const day = String(dayKey || "").slice(0, 10);
+  const match = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return day;
+  return `${match[2]}/${match[3]}/${match[1]}`;
+}
+
 function bonusesUrl(startDay, groupBy, page = 1, endDay = startDay, profileId = 0) {
   const url = new URL(BONUSES_URL);
-  url.searchParams.set("form[startDate]", startDay);
-  url.searchParams.set("form[endDate]", endDay);
+  url.searchParams.set("form[startDate]", dreamFormDate(startDay));
+  url.searchParams.set("form[endDate]", dreamFormDate(endDay));
   url.searchParams.set("form[type]", "0");
   url.searchParams.set("form[profileId]", String(Number(profileId) || 0));
   url.searchParams.set("form[groupBy]", String(groupBy));
@@ -321,25 +341,14 @@ export async function fetchBonusesByGirl(dayKey, options = {}) {
   return fetchBonusesByGirlRange(dayKey, dayKey, options);
 }
 
-export async function fetchBonusActionsRange(
-  startDayKey,
-  endDayKey = startDayKey,
-  { force = false, profileId = 0 } = {},
-) {
-  const startDay = String(startDayKey || "").slice(0, 10);
-  const endDay = String(endDayKey || "").slice(0, 10);
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(startDay) ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(endDay)
-  ) {
-    throw new Error("Invalid date range");
-  }
-  if (startDay > endDay) {
-    throw new Error("Invalid date range");
+async function fetchBonusActionsOneDay(dayKey, { force = false, profileId = 0 } = {}) {
+  const day = String(dayKey || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    throw new Error("Invalid day key");
   }
 
   const pid = Number(profileId) || 0;
-  const cacheKey = `${startDay}|${endDay}|${pid}`;
+  const cacheKey = `${day}|${day}|${pid}`;
   const cached = detailCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.at < DETAIL_CACHE_TTL_MS) {
     return cached.actions;
@@ -354,7 +363,7 @@ export async function fetchBonusActionsRange(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   };
 
-  let first = await fetchWithCookies(bonusesUrl(startDay, 1, 1, endDay, pid).toString(), {
+  let first = await fetchWithCookies(bonusesUrl(day, 1, 1, day, pid).toString(), {
     method: "GET",
     jar,
     headers,
@@ -362,7 +371,7 @@ export async function fetchBonusActionsRange(
   if (/id="_username"/i.test(first.html) && /name="_password"/i.test(first.html)) {
     cookieHeader = await getCookieHeader({ force: true });
     jar = cookieMapFromHeader(cookieHeader);
-    first = await fetchWithCookies(bonusesUrl(startDay, 1, 1, endDay, pid).toString(), {
+    first = await fetchWithCookies(bonusesUrl(day, 1, 1, day, pid).toString(), {
       method: "GET",
       jar,
       headers,
@@ -382,7 +391,7 @@ export async function fetchBonusActionsRange(
     );
     const results = await Promise.all(
       pageNumbers.map((page) =>
-        fetchWithCookies(bonusesUrl(startDay, 1, page, endDay, pid).toString(), {
+        fetchWithCookies(bonusesUrl(day, 1, page, day, pid).toString(), {
           method: "GET",
           jar: cookieMapFromHeader(cookieHeaderFromJar(first.jar)),
           headers,
@@ -414,8 +423,65 @@ export async function fetchBonusActionsRange(
   return actions;
 }
 
+export async function fetchBonusActionsRange(
+  startDayKey,
+  endDayKey = startDayKey,
+  { force = false, profileId = 0 } = {},
+) {
+  const startDay = String(startDayKey || "").slice(0, 10);
+  const endDay = String(endDayKey || "").slice(0, 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDay) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(endDay)
+  ) {
+    throw new Error("Invalid date range");
+  }
+  if (startDay > endDay) {
+    throw new Error("Invalid date range");
+  }
+
+  const pid = Number(profileId) || 0;
+  if (startDay === endDay) {
+    return fetchBonusActionsOneDay(startDay, { force, profileId: pid });
+  }
+
+  const cacheKey = `${startDay}|${endDay}|${pid}`;
+  const cached = detailCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.at < DETAIL_CACHE_TTL_MS) {
+    return cached.actions;
+  }
+
+  // Dream's ungrouped list over a long range often paginates poorly and
+  // effectively returns only the newest day. Fetch day-by-day instead.
+  const days = eachDreamDayKey(startDay, endDay);
+  const merged = [];
+  for (let i = 0; i < days.length; i += 4) {
+    const batch = days.slice(i, i + 4);
+    const results = await Promise.all(
+      batch.map((day) => fetchBonusActionsOneDay(day, { force, profileId: pid })),
+    );
+    for (const rows of results) merged.push(...rows);
+  }
+
+  const seen = new Set();
+  const actions = merged.filter((action) => {
+    const key = [
+      action.type,
+      action.maleProfileId,
+      action.femaleProfileId,
+      action.occurredAt,
+      action.amountUsd,
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  detailCache.set(cacheKey, { at: Date.now(), actions });
+  return actions;
+}
+
 export async function fetchBonusActions(dayKey, options = {}) {
-  return fetchBonusActionsRange(dayKey, dayKey, options);
+  return fetchBonusActionsOneDay(dayKey, options);
 }
 
 export function clearAgencyFinanceCaches() {
