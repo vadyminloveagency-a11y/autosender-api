@@ -3499,13 +3499,6 @@
     const ADMIN_BAL_TO_KEY = "autosenderAdminBalTo";
     const ADMIN_BAL_PROFILE_KEY = "autosenderAdminBalProfile";
 
-    function loadSavedAdminSection() {
-      const raw = localStorage.getItem(ADMIN_SECTION_KEY) || "accounts";
-      return ["accounts", "mailings", "balances", "gold-men", "settings"].includes(raw)
-        ? raw
-        : "accounts";
-    }
-
     function persistBalDate(date) {
       if (/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) {
         localStorage.setItem(ADMIN_BAL_DATE_KEY, date);
@@ -3523,6 +3516,45 @@
       localStorage.setItem(ADMIN_BAL_PROFILE_KEY, String(balCalState.profileId || ""));
     }
 
+    function resetCabinetViewState() {
+      [
+        ADMIN_SECTION_KEY,
+        ADMIN_BAL_TAB_KEY,
+        ADMIN_MAIL_TAB_KEY,
+        ADMIN_BAL_DATE_KEY,
+        ADMIN_BAL_FROM_KEY,
+        ADMIN_BAL_TO_KEY,
+        ADMIN_BAL_PROFILE_KEY,
+      ].forEach((key) => localStorage.removeItem(key));
+
+      const today = kyivTodayLocal();
+      const [year, month] = today.split("-").map(Number);
+
+      balCalState.today = today;
+      balCalState.selectedDate = today;
+      balCalState.fromDate = today;
+      balCalState.toDate = today;
+      balCalState.year = year;
+      balCalState.month = month;
+      balCalState.profileId = "";
+      balCalState.activeTab = "bonuses";
+      balCalState.bonusesLoadedFor = "";
+      balCalPickStart = null;
+      balProfilesCache = { profiles: [], date: "", meta: {} };
+      bonusProfilesCache = { profiles: [], date: "", meta: {} };
+      balMonthTotalRequestKey = "";
+
+      mailCalState.today = today;
+      mailCalState.selectedDate = today;
+      mailCalState.year = year;
+      mailCalState.month = month;
+      mailCalState.monthDays = {};
+      mailCalState.activeTab = "questionnaires";
+
+      const goldSearch = document.getElementById("gold-men-search");
+      if (goldSearch) goldSearch.value = "";
+    }
+
     function openPanel(user, { showHome = false } = {}) {
       document.getElementById("admin-label").textContent = user.email || "";
       const homeName = document.getElementById("admin-home-name");
@@ -3531,33 +3563,11 @@
         homeName.textContent = label.includes("@") ? label.split("@")[0] : label;
       }
       showView("panel");
-      const savedDate = localStorage.getItem(ADMIN_BAL_DATE_KEY);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(savedDate || "")) {
-        balCalState.selectedDate = savedDate;
-        const [y, m] = savedDate.split("-").map(Number);
-        balCalState.year = y;
-        balCalState.month = m;
-      }
-      const savedFrom = localStorage.getItem(ADMIN_BAL_FROM_KEY);
-      const savedTo = localStorage.getItem(ADMIN_BAL_TO_KEY);
-      balCalState.fromDate =
-        /^\d{4}-\d{2}-\d{2}$/.test(savedFrom || "")
-          ? savedFrom
-          : balCalState.selectedDate;
-      balCalState.toDate =
-        /^\d{4}-\d{2}-\d{2}$/.test(savedTo || "")
-          ? savedTo
-          : balCalState.fromDate || balCalState.selectedDate;
-      balCalState.profileId = String(localStorage.getItem(ADMIN_BAL_PROFILE_KEY) || "");
-      balCalState.activeTab = "bonuses";
+      resetCabinetViewState();
       syncBalTabUi(balCalState.activeTab);
-      const savedMailTab = localStorage.getItem(ADMIN_MAIL_TAB_KEY);
-      if (savedMailTab === "active" || savedMailTab === "questionnaires") {
-        mailCalState.activeTab = savedMailTab;
-      }
       syncMailTabUi(mailCalState.activeTab);
       syncBalFilterInputs();
-      showAdminSection(showHome ? "home" : loadSavedAdminSection());
+      showAdminSection(showHome ? "home" : "accounts");
       setupDragAndDrop();
       setStatus("");
       void (async () => {
