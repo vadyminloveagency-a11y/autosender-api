@@ -2532,10 +2532,6 @@
                   <span class="bal-month-total-label">Period total</span>
                   <strong id="bal-day-total-value" class="bal-section-total-value">$0.00</strong>
                 </div>
-                <div id="bonus-day-total" class="bal-section-total bal-top-day-total hidden">
-                  <span class="bal-month-total-label">Period total</span>
-                  <strong id="bonus-day-total-value" class="bal-section-total-value">$0.00</strong>
-                </div>
                 <div id="bal-month-total" class="bal-month-total" title="All questionnaires for the calendar month">
                   <span id="bal-month-total-label" class="bal-month-total-label">Month total</span>
                   <strong id="bal-month-total-value" class="bal-month-total-value">—</strong>
@@ -4783,10 +4779,9 @@
             </div>`,
         )
         .join("");
-      const personRows = (map, limit = 5) =>
+      const personRows = (map) =>
         [...map.values()]
           .sort((a, b) => b.usd - a.usd)
-          .slice(0, limit)
           .map((entry) => {
             const ava = /^\d+$/.test(String(entry.id || ""))
               ? `<img class="bonus-sum-ava" src="https://profile-photos-cdn.dream-singles.com/im${entry.id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">`
@@ -4809,11 +4804,11 @@
           ${typeRows}
         </div>
         <div class="bonus-sum-card">
-          <p class="bonus-sum-title">Top ladies</p>
+          <p class="bonus-sum-title">All ladies · ${ladies.size.toLocaleString("en-US")}</p>
           ${personRows(ladies)}
         </div>
         <div class="bonus-sum-card">
-          <p class="bonus-sum-title">Top men</p>
+          <p class="bonus-sum-title">All men · ${men.size.toLocaleString("en-US")}</p>
           ${personRows(men)}
         </div>`;
     }
