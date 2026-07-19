@@ -49,22 +49,33 @@ app.use(
   }),
 );
 
-app.get("/health", (_req, res) => {
+app.get("/health", (req, res) => {
   res.json({
     ok: true,
     service: "autosender-api",
     role: appRole,
     workers: runWorkers,
     adminJobs: runAdminJobs,
-    adminPublicUrl: adminPublicUrl || null,
+    adminPublicUrl: resolveAdminPublicUrl(req) || null,
   });
 });
+
+function resolveAdminPublicUrl(req) {
+  if (adminPublicUrl) return adminPublicUrl;
+  const host = String(req?.headers?.host || "").toLowerCase();
+  // Known split deploy: workers host must not serve the director cabinet.
+  if (host.includes("autosender-api.onrender.com")) {
+    return "https://autosender-admin.onrender.com";
+  }
+  return "";
+}
 
 function sendAdminCabinet(req, res) {
   // Workers instance has no /agency-finance — redirect directors to the admin service.
   if (!runAdminJobs) {
-    if (adminPublicUrl) {
-      return res.redirect(302, `${adminPublicUrl}/admin`);
+    const target = resolveAdminPublicUrl(req);
+    if (target) {
+      return res.redirect(302, `${target}/admin`);
     }
     return res
       .status(503)

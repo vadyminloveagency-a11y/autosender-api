@@ -643,9 +643,9 @@
       padding: 18px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: rgba(18, 23, 28, 0.72);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      background: rgba(12, 16, 20, 0.92);
+      backdrop-filter: blur(14px) saturate(1.05);
+      -webkit-backdrop-filter: blur(14px) saturate(1.05);
       box-shadow: var(--shadow);
     }
     .card-head {
@@ -813,6 +813,10 @@
       flex: 1 1 280px;
       min-width: 0;
       position: relative;
+      border: 1px solid rgba(78, 98, 108, 0.28);
+      border-radius: 10px;
+      background: rgba(11, 15, 20, 0.88);
+      padding: 10px;
     }
     .bal-loading-overlay {
       position: absolute;
@@ -6307,7 +6311,10 @@
       try {
         const health = await fetch(`${API}/health`).then((r) => r.json()).catch(() => null);
         if (health && health.adminJobs === false) {
-          const target = String(health.adminPublicUrl || "").trim();
+          const target = String(health.adminPublicUrl || "").trim()
+            || (String(window.location.hostname || "").includes("autosender-api.onrender.com")
+              ? "https://autosender-admin.onrender.com"
+              : "");
           if (target) {
             window.location.replace(`${target.replace(/\/$/, "")}/admin`);
             return;
