@@ -349,7 +349,8 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
   if (worker) {
     try {
       // Director force-stop: tell Dream WS to stop even if socket was down.
-      if (worker.socket?.readyState !== WebSocket.OPEN && cookieHeader) {
+      // Use numeric readyState — WebSocket may not be in scope in this module.
+      if (worker.socket?.readyState !== 1 && cookieHeader) {
         try {
           await ensureWorkerSession(worker, { cookieHeader });
         } catch (_) {}
@@ -927,7 +928,17 @@ export async function restoreRunningLetterBotJobs() {
         worker.state.sendDayKey = String(prev.sendDayKey || "");
       }
       await ensureWorkerSession(worker, { cookieHeader: row.cookie_header || "" });
-      await worker.start(selection);
+      const cycle = prev.cycle && typeof prev.cycle === "object" ? prev.cycle : {};
+      await worker.start(selection, {
+        restoreCycle: {
+          firstStartIndex: cycle.firstStartIndex,
+          mailing247Index: cycle.mailing247Index,
+          categoryIndex: cycle.categoryIndex,
+          onlineStage: cycle.onlineStage,
+          progress: prev.progress || null,
+          filter: prev.filter || "",
+        },
+      });
       worker.startKeepAlive();
       console.log(`Restored LetterBot job user=${userId} profile=${profileId}`);
     } catch (error) {

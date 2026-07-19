@@ -339,6 +339,13 @@ class LetterBotWorker {
   emitState() {
     this.state.updatedAt = Date.now();
     this.state.profileId = this.profileId;
+    // Persist cycle indexes so Render restart can resume mid-campaign.
+    this.state.cycle = {
+      firstStartIndex: this.firstStartIndex,
+      mailing247Index: this.mailing247Index,
+      categoryIndex: this.categoryIndex,
+      onlineStage: this.onlineStage,
+    };
     if (typeof this.onStateChange === "function") {
       this.onStateChange(this.getState());
     }
@@ -374,9 +381,12 @@ class LetterBotWorker {
       this.state.previewHtml = String(preview.message || "");
       this.state.previewText = this.state.previewHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     }
-    this.state.previewPhoto = String(preview.attachment || "");
-    this.state.previewVideo = String(preview.video_attachment || "");
-    this.state.previewVideoPoster = String(preview.video_attachment_preview || "");
+    // Never wipe existing media with empty init fields (common on reconnect).
+    if (preview.attachment) this.state.previewPhoto = String(preview.attachment);
+    if (preview.video_attachment) this.state.previewVideo = String(preview.video_attachment);
+    if (preview.video_attachment_preview) {
+      this.state.previewVideoPoster = String(preview.video_attachment_preview);
+    }
   }
 
   mergeSetCookies(response) {
@@ -671,12 +681,19 @@ class LetterBotWorker {
     this.emitState();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      // Stop may have won the race after the timer was scheduled.
+      if (!this.senderRunning && !this.state.sessionActive) return;
       void this.ensureConnected(true)
-        .then(() => {
+        .then(async () => {
+          if (!this.senderRunning && !this.state.sessionActive) return;
           if (this.socket?.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify({ type: "bot-start-init" }));
           }
           this.ensureCycleTimer();
+          // Resume incomplete filter immediately — do not wait for 5min stall.
+          if (this.senderRunning && !this.senderPaused) {
+            await this.runSenderCycle();
+          }
         })
         .catch((error) => this.scheduleReconnect(error?.message || "retry"));
     }, 2000);
@@ -961,22 +978,26 @@ class LetterBotWorker {
 
       if (selection.totalOnline) {
         await resumeOrStart(async () => {
-          if (this.onlineStage === "online") {
-            await this.wsStartFilter("onlineOnly");
-            this.onlineStage = "lastActive";
-          } else {
-            await this.wsStartFilter("lastActive");
-            this.onlineStage = "online";
+          // Advance stage only after a filter completes — otherwise stall recovery
+          // restarts the *next* filter while the current one is still mid-pass.
+          if (this.state.progress?.complete) {
+            this.onlineStage = this.onlineStage === "online" ? "lastActive" : "online";
+            this.state.progress = null;
           }
+          const key = this.onlineStage === "lastActive" ? "lastActive" : "onlineOnly";
+          await this.wsStartFilter(key);
         });
         return;
       }
 
       if (selection.mailing247) {
         await resumeOrStart(async () => {
+          if (this.state.progress?.complete) {
+            this.state.progress = null;
+          }
           const key = MAILING_247_KEYS[this.mailing247Index % MAILING_247_KEYS.length];
-          this.mailing247Index += 1;
           await this.wsStartFilter(key);
+          this.mailing247Index += 1;
         });
         return;
       }
@@ -984,9 +1005,12 @@ class LetterBotWorker {
       const selected = this.getSelectedCategories(selection);
       if (!selected.length) return;
       await resumeOrStart(async () => {
+        if (this.state.progress?.complete) {
+          this.state.progress = null;
+        }
         const key = selected[this.categoryIndex % selected.length];
-        this.categoryIndex += 1;
         await this.wsStartFilter(key);
+        this.categoryIndex += 1;
       });
     } catch (error) {
       this.setError(error?.message || String(error));
@@ -1003,7 +1027,7 @@ class LetterBotWorker {
     if (!recovered) await this.runSenderCycle();
   }
 
-  async start(selection) {
+  async start(selection, { restoreCycle = null } = {}) {
     this.userSelection = selection || {};
     const hasMode =
       Boolean(this.userSelection.firstStart) ||
@@ -1016,15 +1040,24 @@ class LetterBotWorker {
 
     this.senderRunning = true;
     this.senderPaused = false;
-    this.categoryIndex = 0;
-    this.firstStartIndex = 0;
-    this.mailing247Index = 0;
-    this.onlineStage = "online";
+    if (restoreCycle && typeof restoreCycle === "object") {
+      this.categoryIndex = Number(restoreCycle.categoryIndex) || 0;
+      this.firstStartIndex = Number(restoreCycle.firstStartIndex) || 0;
+      this.mailing247Index = Number(restoreCycle.mailing247Index) || 0;
+      this.onlineStage = restoreCycle.onlineStage === "lastActive" ? "lastActive" : "online";
+      if (restoreCycle.progress) this.state.progress = restoreCycle.progress;
+      if (restoreCycle.filter) this.state.filter = restoreCycle.filter;
+    } else {
+      this.categoryIndex = 0;
+      this.firstStartIndex = 0;
+      this.mailing247Index = 0;
+      this.onlineStage = "online";
+      this.state.progress = null;
+      this.state.filter = "onlineOnly";
+    }
     this.state.sessionActive = true;
     this.state.isPaused = false;
     this.state.sending = false;
-    this.state.progress = null;
-    this.state.filter = "onlineOnly";
     this.state.buttonLabel = "Start";
     this.state.statusMessage = "Starting...";
     this.state.error = "";
@@ -1065,6 +1098,10 @@ class LetterBotWorker {
   async stop({ complete = false } = {}) {
     this.senderRunning = false;
     this.senderPaused = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.clearCycleTimer();
     this.clearKeepAlive();
     await this.wsStopSend();
@@ -1081,6 +1118,10 @@ class LetterBotWorker {
   stopSync() {
     this.senderRunning = false;
     this.senderPaused = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.clearCycleTimer();
     if (this.socket?.readyState === WebSocket.OPEN) {
       try {
