@@ -1948,15 +1948,24 @@
       font-size: 9px;
     }
     .bonus-sum-muted { color: var(--muted); font-weight: 600; }
-    .bonus-sum-row.is-man {
-      cursor: default;
+    .bonus-sum-row.is-man .bonus-sum-ava {
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
-    .bonus-sum-row.is-man:hover {
-      background: rgba(255, 43, 58, 0.06);
+    .bonus-sum-row.is-man .bonus-sum-ava:hover {
+      border-color: rgba(255, 43, 58, 0.85);
+      box-shadow: 0 0 0 2px rgba(255, 43, 58, 0.25);
+    }
+    .bonus-sum-row.is-man.is-active {
+      background: rgba(255, 43, 58, 0.1);
       border-radius: 6px;
       margin: 0 -6px;
       padding-left: 6px;
       padding-right: 6px;
+    }
+    .bonus-sum-row.is-man.is-active .bonus-sum-ava {
+      border-color: rgba(255, 43, 58, 0.9);
+      box-shadow: 0 0 0 2px rgba(255, 43, 58, 0.3);
     }
     #bonus-man-popover {
       position: fixed;
@@ -1973,7 +1982,7 @@
       background: #140f11;
       box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
       color: var(--text);
-      pointer-events: none;
+      pointer-events: auto;
     }
     #bonus-man-popover::-webkit-scrollbar { width: 6px; }
     #bonus-man-popover::-webkit-scrollbar-track { background: transparent; }
@@ -5291,6 +5300,7 @@
         clearTimeout(bonusManTipHideTimer);
         bonusManTipHideTimer = null;
       }
+      if (bonusManTipAnchor) bonusManTipAnchor.classList.remove("is-active");
       bonusManTipAnchor = null;
       const tip = document.getElementById("bonus-man-popover");
       if (!tip) return;
@@ -5328,7 +5338,11 @@
         clearTimeout(bonusManTipHideTimer);
         bonusManTipHideTimer = null;
       }
+      if (bonusManTipAnchor && bonusManTipAnchor !== anchor) {
+        bonusManTipAnchor.classList.remove("is-active");
+      }
       bonusManTipAnchor = anchor;
+      anchor.classList.add("is-active");
       const manName = String(rows[0]?.manName || rows[0]?.man || "Man").trim() || "Man";
       const manId = String(rows[0]?.manId || "").trim();
       const totalUsd = rows.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
@@ -6343,27 +6357,37 @@
       if (event.key === "Escape") setBalProfilePickerOpen(false);
     });
 
-    document.getElementById("bonus-summary")?.addEventListener("mouseover", (event) => {
-      const row = event.target.closest(".bonus-sum-row.is-man");
-      if (!row || !document.getElementById("bonus-summary")?.contains(row)) return;
-      const related = event.relatedTarget;
-      if (related && (row === related || row.contains(related))) return;
+    document.getElementById("bonus-summary")?.addEventListener("click", (event) => {
+      const ava = event.target.closest(".bonus-sum-row.is-man .bonus-sum-ava");
+      if (!ava) return;
+      const row = ava.closest(".bonus-sum-row.is-man");
+      if (!row) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (bonusManTipAnchor === row) {
+        hideBonusManTip();
+        return;
+      }
       const manKey = String(row.getAttribute("data-bonus-man-key") || "").trim();
       if (!manKey) return;
       showBonusManTip(row, manKey);
     });
-    document.getElementById("bonus-summary")?.addEventListener("mouseout", (event) => {
-      const row = event.target.closest(".bonus-sum-row.is-man");
-      if (!row) return;
-      const related = event.relatedTarget;
-      if (related && (row === related || row.contains(related))) return;
-      if (bonusManTipHideTimer) clearTimeout(bonusManTipHideTimer);
-      bonusManTipHideTimer = setTimeout(() => {
-        if (bonusManTipAnchor === row) hideBonusManTip();
-      }, 80);
+    document.addEventListener("click", (event) => {
+      if (!bonusManTipAnchor) return;
+      const tip = document.getElementById("bonus-man-popover");
+      if (tip && tip.contains(event.target)) return;
+      hideBonusManTip();
     });
     document.getElementById("bonus-summary")?.addEventListener("scroll", () => hideBonusManTip());
-    window.addEventListener("scroll", () => hideBonusManTip(), true);
+    window.addEventListener(
+      "scroll",
+      (event) => {
+        const tip = document.getElementById("bonus-man-popover");
+        if (tip && event.target instanceof Node && tip.contains(event.target)) return;
+        hideBonusManTip();
+      },
+      true,
+    );
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") hideBonusManTip();
     });
