@@ -38,6 +38,8 @@
       --sidebar: rgba(20, 24, 28, 0.88);
       --sidebar-text: #e9edf1;
       --sidebar-muted: #98a1aa;
+      --ui-zoom: 1.1;
+      --ui-vh: calc(100vh / var(--ui-zoom));
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
@@ -64,7 +66,7 @@
       color: var(--text);
       background: var(--bg-0);
       -webkit-font-smoothing: antialiased;
-      zoom: 1.1;
+      zoom: var(--ui-zoom);
     }
     body.auth-page,
     body.panel-page {
@@ -104,7 +106,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      min-height: var(--ui-vh);
       padding: 28px 16px;
       background: transparent;
     }
@@ -384,7 +386,7 @@
 
     .panel-layout {
       display: flex;
-      min-height: 100vh;
+      min-height: var(--ui-vh);
       width: 100%;
     }
     .admin-sidebar {
@@ -393,7 +395,7 @@
       align-self: flex-start;
       width: 184px;
       flex: 0 0 184px;
-      height: 100vh;
+      height: var(--ui-vh);
       padding: 14px 10px;
       border-right: 1px solid rgba(255, 43, 58, 0.14);
       background: var(--sidebar);
@@ -1011,7 +1013,7 @@
       cursor: pointer;
     }
     #bal-day-wrap {
-      max-height: calc(100vh - 340px);
+      max-height: calc(var(--ui-vh) - 340px);
       overflow: auto;
     }
     #bal-day-wrap .data-table th {
@@ -1051,11 +1053,11 @@
     }
     @media (min-width: 981px) {
       body.panel-page {
-        height: 100vh;
+        height: var(--ui-vh);
         overflow: hidden;
       }
       body.panel-page .panel-layout {
-        height: 100vh;
+        height: var(--ui-vh);
         min-height: 0;
         overflow: hidden;
       }
@@ -1470,7 +1472,7 @@
       display: none;
       min-width: 240px;
       max-width: min(420px, calc(100vw - 24px));
-      max-height: calc(100vh - 24px);
+      max-height: calc(var(--ui-vh) - 24px);
       overflow: auto;
       scrollbar-width: thin;
       padding: 10px 12px;
@@ -1627,7 +1629,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      max-height: calc(100vh - 340px);
+      max-height: calc(var(--ui-vh) - 340px);
       overflow: auto;
     }
     .bonus-sum-card {
@@ -1703,7 +1705,7 @@
       flex: 1 1 auto;
       min-width: 0;
       overflow: auto;
-      max-height: calc(100vh - 340px);
+      max-height: calc(var(--ui-vh) - 340px);
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 7px;
       background: #11151a;
@@ -2011,7 +2013,7 @@
     .modal-card {
       width: 100%;
       max-width: 440px;
-      max-height: calc(100vh - 40px);
+      max-height: calc(var(--ui-vh) - 40px);
       overflow: auto;
       padding: 22px;
       border: 1px solid rgba(255, 43, 58, 0.22);
