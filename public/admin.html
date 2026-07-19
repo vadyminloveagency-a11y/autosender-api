@@ -1934,6 +1934,141 @@
       font-size: 9px;
     }
     .bonus-sum-muted { color: var(--muted); font-weight: 600; }
+    .bonus-sum-row.is-man {
+      cursor: default;
+    }
+    .bonus-sum-row.is-man:hover {
+      background: rgba(255, 43, 58, 0.06);
+      border-radius: 6px;
+      margin: 0 -6px;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
+    #bonus-man-popover {
+      position: fixed;
+      z-index: 85;
+      display: none;
+      min-width: 280px;
+      max-width: min(440px, calc(100vw - 24px));
+      max-height: calc(var(--ui-vh) - 24px);
+      overflow: auto;
+      scrollbar-width: thin;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      border-radius: 8px;
+      background: #140f11;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+      color: var(--text);
+      pointer-events: none;
+    }
+    #bonus-man-popover::-webkit-scrollbar { width: 6px; }
+    #bonus-man-popover::-webkit-scrollbar-track { background: transparent; }
+    #bonus-man-popover::-webkit-scrollbar-thumb {
+      background: rgba(255, 43, 58, 0.35);
+      border-radius: 3px;
+    }
+    #bonus-man-popover.is-open { display: block; }
+    #bonus-man-popover .bonus-man-tip-title {
+      margin: 0 0 8px;
+      color: #98a1aa;
+      font: 700 10px/1.2 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    #bonus-man-popover .bonus-man-tip-sub {
+      margin: -4px 0 10px;
+      color: #dde3e9;
+      font: 600 12px/1.3 var(--font);
+    }
+    #bonus-man-popover .bonus-man-tip-lady {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #bonus-man-popover .bonus-man-tip-lady:first-of-type {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+    #bonus-man-popover .bonus-man-tip-ava {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
+    }
+    #bonus-man-popover .bonus-man-tip-ava.placeholder {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #98a1aa;
+      font: 700 9px/1 var(--font);
+      text-transform: uppercase;
+      background: rgba(255, 43, 58, 0.12);
+    }
+    #bonus-man-popover .bonus-man-tip-lady-meta {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    #bonus-man-popover .bonus-man-tip-lady-name {
+      color: #fff;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    #bonus-man-popover .bonus-man-tip-lady-id {
+      color: var(--muted);
+      font-size: 10px;
+      user-select: none;
+    }
+    #bonus-man-popover .bonus-man-tip-action {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px 10px;
+      align-items: baseline;
+      padding: 4px 0 4px 34px;
+      font-size: 11.5px;
+      color: #dde3e9;
+    }
+    #bonus-man-popover .bonus-man-tip-type {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #bonus-man-popover .bonus-man-tip-when {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      font-size: 10.5px;
+    }
+    #bonus-man-popover .bonus-man-tip-amt {
+      color: #ff2b3a;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    #bonus-man-popover .bonus-man-tip-total {
+      margin: 10px 0 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 43, 58, 0.25);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font: 700 12px/1.2 var(--font);
+    }
+    #bonus-man-popover .bonus-man-tip-total span:last-child {
+      color: #ff2b3a;
+      font-variant-numeric: tabular-nums;
+    }
     .bonus-sum-hero {
       margin: 0;
       color: #ff2b3a;
@@ -2828,6 +2963,7 @@
                       <div id="bonus-profiles" class="bonus-profiles"></div>
                       <aside id="bonus-summary" class="bonus-summary" aria-label="Period summary"></aside>
                     </div>
+                    <div id="bonus-man-popover" hidden></div>
                   </div>
 
                   <div id="bal-loading" class="bal-loading-overlay" aria-hidden="true">
@@ -3316,6 +3452,7 @@
         if (
           !img.classList.contains("bonus-person-ava") &&
           !img.classList.contains("bonus-sum-ava") &&
+          !img.classList.contains("bonus-man-tip-ava") &&
           !img.classList.contains("gold-man-avatar") &&
           !img.classList.contains("gold-top-ava") &&
           !img.classList.contains("bal-profile-option-ava")
@@ -5129,16 +5266,117 @@
       return rows.sort((a, b) => (b.whenTs || 0) - (a.whenTs || 0));
     }
 
+    let bonusMenActionsByKey = new Map();
+    let bonusManTipAnchor = null;
+    let bonusManTipHideTimer = null;
+
+    function hideBonusManTip() {
+      if (bonusManTipHideTimer) {
+        clearTimeout(bonusManTipHideTimer);
+        bonusManTipHideTimer = null;
+      }
+      bonusManTipAnchor = null;
+      const tip = document.getElementById("bonus-man-popover");
+      if (!tip) return;
+      tip.classList.remove("is-open");
+      tip.hidden = true;
+      tip.innerHTML = "";
+    }
+
+    function positionBonusManTip(anchor, tip) {
+      if (!anchor || !tip) return;
+      const rect = anchor.getBoundingClientRect();
+      const pad = 10;
+      tip.style.left = "0px";
+      tip.style.top = "0px";
+      const tipRect = tip.getBoundingClientRect();
+      let left = rect.left - tipRect.width - 12;
+      if (left < pad) left = rect.right + 12;
+      if (left + tipRect.width > window.innerWidth - pad) {
+        left = Math.max(pad, window.innerWidth - tipRect.width - pad);
+      }
+      let top = rect.top;
+      if (top + tipRect.height > window.innerHeight - pad) {
+        top = Math.max(pad, window.innerHeight - tipRect.height - pad);
+      }
+      tip.style.left = `${Math.round(left)}px`;
+      tip.style.top = `${Math.round(top)}px`;
+    }
+
+    function showBonusManTip(anchor, manKey) {
+      const tip = document.getElementById("bonus-man-popover");
+      if (!tip || !anchor) return;
+      const rows = bonusMenActionsByKey.get(manKey) || [];
+      if (!rows.length) return;
+      if (bonusManTipHideTimer) {
+        clearTimeout(bonusManTipHideTimer);
+        bonusManTipHideTimer = null;
+      }
+      bonusManTipAnchor = anchor;
+      const manName = String(rows[0]?.manName || rows[0]?.man || "Man").trim() || "Man";
+      const manId = String(rows[0]?.manId || "").trim();
+      const totalUsd = rows.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
+      const byLady = new Map();
+      for (const row of rows) {
+        const ladyKey = String(row.girlId || row.girlName || "—").trim() || "—";
+        if (!byLady.has(ladyKey)) {
+          byLady.set(ladyKey, {
+            id: String(row.girlId || "").trim(),
+            name: String(row.girlName || row.girl || "—").trim() || "—",
+            actions: [],
+          });
+        }
+        byLady.get(ladyKey).actions.push(row);
+      }
+      const ladyBlocks = [...byLady.values()]
+        .map((lady) => {
+          const ava = dreamAvatarHtml(lady.id, lady.name, "bonus-man-tip-ava");
+          const actionsHtml = lady.actions
+            .slice()
+            .sort((a, b) => (b.whenTs || 0) - (a.whenTs || 0))
+            .map(
+              (action) => `
+                <div class="bonus-man-tip-action">
+                  <span class="bonus-man-tip-type">${escapeHtml(action.type || "Paid action")}</span>
+                  <span class="bonus-man-tip-when">${escapeHtml(action.when || "—")}</span>
+                  <span class="bonus-man-tip-amt">${formatBalanceUsd(action.amountUsd)}</span>
+                </div>`,
+            )
+            .join("");
+          return `
+            <div class="bonus-man-tip-lady">
+              ${ava}
+              <span class="bonus-man-tip-lady-meta">
+                <span class="bonus-man-tip-lady-name">${escapeHtml(lady.name)}</span>
+                ${lady.id ? `<span class="bonus-man-tip-lady-id">${idLabelHtml(lady.id)}</span>` : ""}
+              </span>
+            </div>
+            ${actionsHtml}`;
+        })
+        .join("");
+      tip.innerHTML = `
+        <p class="bonus-man-tip-title">Paid actions on questionnaires</p>
+        <p class="bonus-man-tip-sub">${escapeHtml(manName)}${manId ? ` · ${idLabelHtml(manId)}` : ""} · ${rows.length} actions</p>
+        ${ladyBlocks}
+        <p class="bonus-man-tip-total"><span>Total</span><span>${formatBalanceUsd(totalUsd)}</span></p>`;
+      tip.hidden = false;
+      tip.classList.add("is-open");
+      positionBonusManTip(anchor, tip);
+    }
+
     function renderBonusSummary(actions, totalUsd) {
       const box = document.getElementById("bonus-summary");
       if (!box) return;
+      hideBonusManTip();
       const byType = new Map();
       const ladies = new Map();
       const men = new Map();
+      bonusMenActionsByKey = new Map();
       const bump = (map, key, name, id, usd, row) => {
         if (!key) return;
         if (!map.has(key)) {
           map.set(key, {
+            key,
             id,
             name,
             usd: 0,
@@ -5172,14 +5410,19 @@
           usd,
           row,
         );
+        const manKey = String(row.manId || row.manName || "").trim();
         bump(
           men,
-          row.manId || row.manName,
+          manKey,
           row.manName || (row.manId ? `ID ${row.manId}` : "Unknown"),
           row.manId,
           usd,
           row,
         );
+        if (manKey) {
+          if (!bonusMenActionsByKey.has(manKey)) bonusMenActionsByKey.set(manKey, []);
+          bonusMenActionsByKey.get(manKey).push(row);
+        }
       }
       const typeRows = [...byType.entries()]
         .sort((a, b) => b[1].usd - a[1].usd)
@@ -5191,14 +5434,17 @@
             </div>`,
         )
         .join("");
-      const personRows = (map, showLastPaid = false) =>
+      const personRows = (map, { showLastPaid = false, isMan = false } = {}) =>
         [...map.values()]
           .sort((a, b) => b.usd - a.usd)
           .map((entry) => {
             const ava = dreamAvatarHtml(entry.id, entry.name, "bonus-sum-ava");
             const id = String(entry.id || "").trim();
+            const manAttr = isMan
+              ? ` class="bonus-sum-row is-man" data-bonus-man-key="${escapeHtml(entry.key)}"`
+              : ` class="bonus-sum-row"`;
             return `
-              <div class="bonus-sum-row">
+              <div${manAttr}>
                 <span class="bonus-sum-label">
                   ${ava}
                   <span class="bonus-sum-person-meta">
@@ -5234,7 +5480,7 @@
         </div>
         <div class="bonus-sum-card">
           <p class="bonus-sum-title">All men · ${men.size.toLocaleString("en-US")}</p>
-          ${personRows(men, true)}
+          ${personRows(men, { showLastPaid: true, isMan: true })}
         </div>`;
     }
 
@@ -6079,6 +6325,31 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") setBalProfilePickerOpen(false);
+    });
+
+    document.getElementById("bonus-summary")?.addEventListener("mouseover", (event) => {
+      const row = event.target.closest(".bonus-sum-row.is-man");
+      if (!row || !document.getElementById("bonus-summary")?.contains(row)) return;
+      const related = event.relatedTarget;
+      if (related && (row === related || row.contains(related))) return;
+      const manKey = String(row.getAttribute("data-bonus-man-key") || "").trim();
+      if (!manKey) return;
+      showBonusManTip(row, manKey);
+    });
+    document.getElementById("bonus-summary")?.addEventListener("mouseout", (event) => {
+      const row = event.target.closest(".bonus-sum-row.is-man");
+      if (!row) return;
+      const related = event.relatedTarget;
+      if (related && (row === related || row.contains(related))) return;
+      if (bonusManTipHideTimer) clearTimeout(bonusManTipHideTimer);
+      bonusManTipHideTimer = setTimeout(() => {
+        if (bonusManTipAnchor === row) hideBonusManTip();
+      }, 80);
+    });
+    document.getElementById("bonus-summary")?.addEventListener("scroll", () => hideBonusManTip());
+    window.addEventListener("scroll", () => hideBonusManTip(), true);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideBonusManTip();
     });
 
     document.getElementById("gold-men-refresh")?.addEventListener("click", () => {
