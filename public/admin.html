@@ -1787,6 +1787,17 @@
       background: rgba(13, 19, 23, 0.8);
       border: 1px solid rgba(255, 43, 58, 0.25);
     }
+    .bonus-person-ava.placeholder,
+    .bonus-sum-ava.placeholder,
+    .gold-man-avatar.placeholder {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #98a1aa;
+      font: 700 10px/1 var(--font);
+      text-transform: uppercase;
+      background: rgba(255, 43, 58, 0.12);
+    }
     .bonus-when-time { color: #fff; font-weight: 600; font-size: 12px; }
     .bonus-when-date { color: var(--muted); font-size: 11px; margin-left: 0; }
     .bonus-type {
@@ -3021,10 +3032,46 @@
         .replace(/"/g, "&quot;");
     }
 
+    function dreamPhotoUrl(id) {
+      const n = String(id || "").trim();
+      if (!/^\d+$/.test(n)) return "";
+      return `https://profile-photos-cdn.dream-singles.com/im${n}_small.jpg`;
+    }
+
+    function dreamAvatarHtml(id, name, className) {
+      const cls = String(className || "bonus-person-ava").trim();
+      const fallback = escapeHtml(initials(name || id || "?"));
+      const url = dreamPhotoUrl(id);
+      if (!url) return `<span class="${cls} placeholder">${fallback}</span>`;
+      return `<img class="${cls}" src="${url}" loading="lazy" alt="" data-fallback="${fallback}">`;
+    }
+
+    document.addEventListener(
+      "error",
+      (event) => {
+        const img = event.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        if (
+          !img.classList.contains("bonus-person-ava") &&
+          !img.classList.contains("bonus-sum-ava") &&
+          !img.classList.contains("gold-man-avatar") &&
+          !img.classList.contains("bal-profile-option-ava")
+        ) {
+          return;
+        }
+        const fallback = img.getAttribute("data-fallback") || "?";
+        const span = document.createElement("span");
+        span.className = `${img.className} placeholder`;
+        span.textContent = fallback;
+        img.replaceWith(span);
+      },
+      true,
+    );
+
     function profilePhotoUrl(profile) {
       const id = Number(profile.femaleProfileId) || 0;
       if (!id) return "";
-      return `https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg`;
+      return dreamPhotoUrl(id);
     }
 
     function profileTitle(profile) {
@@ -3948,9 +3995,7 @@
           const qCount = Number(man.questionnaireCount || 0);
           const rowKey = goldManRowKey(man);
           const selected = goldMenSelectedKey && goldMenSelectedKey === rowKey ? " is-selected" : "";
-          const avatar = /^\d+$/.test(id)
-            ? `<img class="gold-man-avatar" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">`
-            : "";
+          const avatar = dreamAvatarHtml(id, displayName, "gold-man-avatar");
           return `<tr class="${selected.trim()}" data-gold-man-key="${escapeHtml(rowKey)}" data-gold-man-index="${index}">
             <td>
               <div class="gold-man">
@@ -4435,9 +4480,7 @@
         </button>`,
       ];
       for (const row of rows) {
-        const ava = /^\d+$/.test(row.id)
-          ? `<img class="bal-profile-option-ava" src="https://profile-photos-cdn.dream-singles.com/im${row.id}_small.jpg" loading="lazy" alt="" onerror="this.style.visibility='hidden'">`
-          : "";
+        const ava = dreamAvatarHtml(row.id, row.name, "bal-profile-option-ava");
         items.push(`<button type="button" class="bal-profile-option${
           current === row.id ? " is-active" : ""
         }" data-profile-id="${escapeHtml(row.id)}" role="option">
@@ -4789,9 +4832,7 @@
         [...map.values()]
           .sort((a, b) => b.usd - a.usd)
           .map((entry) => {
-            const ava = /^\d+$/.test(String(entry.id || ""))
-              ? `<img class="bonus-sum-ava" src="https://profile-photos-cdn.dream-singles.com/im${entry.id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">`
-              : "";
+            const ava = dreamAvatarHtml(entry.id, entry.name, "bonus-sum-ava");
             return `
               <div class="bonus-sum-row">
                 <span class="bonus-sum-label">${ava}${escapeHtml(entry.name || "—")}</span>
@@ -4869,8 +4910,7 @@
       const personCell = (idValue, nameValue) => {
         const id = String(idValue || "").trim();
         const name = escapeHtml(nameValue || "—");
-        if (!/^\d+$/.test(id)) return name;
-        return `<span class="bonus-person"><img class="bonus-person-ava" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'"><span class="bonus-person-name">${name}</span></span>`;
+        return `<span class="bonus-person">${dreamAvatarHtml(id, nameValue, "bonus-person-ava")}<span class="bonus-person-name">${name}</span></span>`;
       };
       const bodyRows = actions
         .map(
