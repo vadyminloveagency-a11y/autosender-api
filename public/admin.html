@@ -1010,8 +1010,15 @@
     .gold-man-id .id-num,
     .gold-q-id .id-num,
     .bonus-sum-person-id .id-num {
-      user-select: all;
-      -webkit-user-select: all;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .bal-profile-option-id .id-label,
+    .gold-q-id .id-label,
+    .bonus-sum-person-id .id-label,
+    .bonus-man-tip-lady-id .id-label {
+      user-select: none;
+      -webkit-user-select: none;
     }
     .bal-filters-row input[type="date"] {
       flex: 0 1 140px;
@@ -1459,16 +1466,16 @@
       font-size: 9px;
       font-variant-numeric: tabular-nums;
       user-select: none;
-      cursor: copy;
+      cursor: text;
     }
-    .gold-man-id:hover .id-num {
-      color: #fff;
-      text-decoration: underline;
-      text-decoration-color: rgba(255, 43, 58, 0.65);
-      text-underline-offset: 2px;
+    .gold-man-id .id-label {
+      user-select: none;
+      -webkit-user-select: none;
     }
-    .gold-man-id.is-copied .id-num {
-      color: #23d18b;
+    .gold-man-id .id-num {
+      user-select: text;
+      -webkit-user-select: text;
+      cursor: text;
     }
     .gold-q-count {
       display: inline-flex;
@@ -1608,14 +1615,13 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    #gold-men-table td:nth-child(2),
-    #gold-men-table th:nth-child(2) { text-align: center; }
-    #gold-men-table td:nth-child(3),
-    #gold-men-table th:nth-child(3) { text-align: center; }
-    #gold-men-table td:nth-child(4),
-    #gold-men-table th:nth-child(4) { text-align: center; }
-    #gold-men-table td:nth-child(5),
-    #gold-men-table th:nth-child(5) { text-align: right; }
+    #gold-men-table {
+      width: max-content;
+      max-width: 100%;
+      table-layout: auto;
+    }
+    #gold-men-table th:first-child,
+    #gold-men-table td:first-child,
     #gold-men-table th:nth-child(2),
     #gold-men-table td:nth-child(2),
     #gold-men-table th:nth-child(3),
@@ -1627,6 +1633,14 @@
       width: 1%;
       white-space: nowrap;
     }
+    #gold-men-table td:nth-child(2),
+    #gold-men-table th:nth-child(2) { text-align: center; }
+    #gold-men-table td:nth-child(3),
+    #gold-men-table th:nth-child(3) { text-align: center; }
+    #gold-men-table td:nth-child(4),
+    #gold-men-table th:nth-child(4) { text-align: center; }
+    #gold-men-table td:nth-child(5),
+    #gold-men-table th:nth-child(5) { text-align: right; }
     .gold-men-layout {
       display: flex;
       align-items: stretch;
@@ -3440,8 +3454,10 @@
 
     function idLabelHtml(id, emptyText = "unavailable") {
       const value = String(id || "").trim();
-      if (!value) return `ID <span class="id-num">${escapeHtml(emptyText)}</span>`;
-      return `ID <span class="id-num">${escapeHtml(value)}</span>`;
+      if (!value) {
+        return `<span class="id-label">ID</span> <span class="id-num">${escapeHtml(emptyText)}</span>`;
+      }
+      return `<span class="id-label">ID</span> <span class="id-num">${escapeHtml(value)}</span>`;
     }
 
     document.addEventListener(
@@ -4412,7 +4428,7 @@
                 ${avatar}
                 <span class="gold-man-meta">
                   <span class="gold-man-name">${escapeHtml(displayName)}</span>
-                  <span class="gold-man-id" data-copy-id="${escapeHtml(id)}" title="Click to copy ID">${idLabelHtml(id)}</span>
+                  <span class="gold-man-id">${idLabelHtml(id)}</span>
                 </span>
               </div>
             </td>
@@ -4561,7 +4577,7 @@
               ${avatar}
               <span class="gold-top-meta">
                 <span class="gold-top-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
-                <span class="gold-man-id" data-copy-id="${escapeHtml(id)}" title="Click to copy ID">${idLabelHtml(id)}</span>
+                <span class="gold-man-id">${idLabelHtml(id)}</span>
               </span>
               <span class="gold-top-amt">${formatBalanceUsd(man.totalUsd)}</span>
             </div>`;
@@ -6400,40 +6416,7 @@
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
       hideGoldMenQuestionnairesTip();
     });
-    function handleCopyIdClick(event) {
-      const copyId = event.target.closest("[data-copy-id]");
-      if (!copyId) return false;
-      event.preventDefault();
-      event.stopPropagation();
-      const id = String(copyId.getAttribute("data-copy-id") || "").trim();
-      if (!id) return true;
-      void (async () => {
-        try {
-          await navigator.clipboard.writeText(id);
-        } catch (_) {
-          const textarea = document.createElement("textarea");
-          textarea.value = id;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          textarea.remove();
-        }
-        copyId.classList.add("is-copied");
-        copyId.title = "Copied";
-        window.setTimeout(() => {
-          copyId.classList.remove("is-copied");
-          copyId.title = "Click to copy ID";
-        }, 1000);
-      })();
-      return true;
-    }
-    document.getElementById("gold-top-men-list")?.addEventListener("click", (event) => {
-      handleCopyIdClick(event);
-    });
     document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
-      if (handleCopyIdClick(event)) return;
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
