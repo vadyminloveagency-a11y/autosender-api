@@ -1634,6 +1634,13 @@
       border-radius: 8px;
       background: #11151a;
       padding: 12px 14px;
+      flex: 0 0 auto;
+    }
+    .bonus-summary .bonus-sum-card:first-child {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
     }
     .bonus-sum-title {
       margin: 0 0 8px;
@@ -1770,8 +1777,8 @@
     }
     .bonus-person-ava {
       flex: 0 0 auto;
-      width: 36px;
-      height: 36px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
       object-fit: cover;
       background: rgba(13, 19, 23, 0.8);
@@ -2495,8 +2502,7 @@
             <div class="panel-card">
               <div class="bal-topbar">
                 <div class="bal-tabs" role="tablist" aria-label="Balances sections">
-                  <button type="button" class="bal-tab-btn is-active" data-bal-tab="balances" role="tab" aria-selected="true">Balances</button>
-                  <button type="button" class="bal-tab-btn" data-bal-tab="bonuses" role="tab" aria-selected="false">Bonuses</button>
+                  <button type="button" class="bal-tab-btn is-active" data-bal-tab="bonuses" role="tab" aria-selected="true">Balances</button>
                 </div>
                 <div class="bal-top-controls">
                   <button type="button" id="bal-cal-toggle" class="btn-ghost" aria-haspopup="true" aria-expanded="false">Calendar</button>
@@ -2931,10 +2937,7 @@
           ? savedTo
           : balCalState.fromDate || balCalState.selectedDate;
       balCalState.profileId = String(localStorage.getItem(ADMIN_BAL_PROFILE_KEY) || "");
-      const savedBalTab = localStorage.getItem(ADMIN_BAL_TAB_KEY);
-      if (savedBalTab === "bonuses" || savedBalTab === "balances") {
-        balCalState.activeTab = savedBalTab;
-      }
+      balCalState.activeTab = "bonuses";
       syncBalTabUi(balCalState.activeTab);
       const savedMailTab = localStorage.getItem(ADMIN_MAIL_TAB_KEY);
       if (savedMailTab === "active" || savedMailTab === "questionnaires") {
@@ -4248,7 +4251,7 @@
       toDate: null,
       profileId: "",
       today: null,
-      activeTab: "balances",
+      activeTab: "bonuses",
       bonusesLoadedFor: "",
     };
     let balCalPickStart = null;
@@ -4522,7 +4525,7 @@
     }
 
     function setBalTab(tab) {
-      const next = tab === "bonuses" ? "bonuses" : "balances";
+      const next = tab === "balances" ? "balances" : "bonuses";
       balCalState.activeTab = next;
       localStorage.setItem(ADMIN_BAL_TAB_KEY, next);
       syncBalTabUi(next);
