@@ -5506,46 +5506,34 @@
 
     function positionBonusManTip(anchor, tip) {
       if (!anchor || !tip) return;
-      const table = document.getElementById("bonus-profiles");
-      const tableRect = table?.getBoundingClientRect();
       // body has zoom: 1.1 — rects are measured in visual px, but style.left
       // gets multiplied by the zoom factor when applied, so divide on assign.
       const zoom = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
       tip.style.left = "0px";
       tip.style.top = "0px";
       tip.style.maxWidth = "";
-      const tipRect = tip.getBoundingClientRect();
-      const gap = 8;
-      let left;
-      let top;
-      if (tableRect && tableRect.width > 40) {
-        // Stay strictly inside the left table panel — right edge is the
-        // scrollbar/gutter boundary before the summary sidebar.
-        const typeCol = table.querySelector(".bonus-actions-table th.bonus-col-type");
-        const typeRect = typeCol?.getBoundingClientRect();
-        const maxWidth = Math.max(220, tableRect.width - gap * 2);
-        if (tipRect.width > maxWidth) {
-          tip.style.maxWidth = `${Math.floor(maxWidth / zoom)}px`;
-        }
-        const width = Math.min(tip.getBoundingClientRect().width, maxWidth);
-        if (typeRect && typeRect.width > 0) {
-          left = typeRect.left;
-        } else {
-          left = tableRect.right - width - gap;
-        }
-        // Clamp to table panel bounds (never cross into the sidebar).
-        left = Math.min(left, tableRect.right - width - gap);
-        left = Math.max(tableRect.left + gap, left);
-        top = tableRect.top + gap;
-        const height = tip.getBoundingClientRect().height;
-        if (top + height > tableRect.bottom - gap) {
-          top = Math.max(tableRect.top + gap, tableRect.bottom - height - gap);
-        }
-      } else {
-        const rect = anchor.getBoundingClientRect();
-        left = Math.max(10, rect.left - tipRect.width - 12);
-        top = rect.top;
+      const gap = 12;
+      const pad = 8;
+      const anchorRect = anchor.getBoundingClientRect();
+      // The boundary is the left edge of the man's capsule (summary sidebar):
+      // the tip's RIGHT edge sits just outside it, aligned with the man's row.
+      const boundary =
+        document.getElementById("bonus-summary")?.getBoundingClientRect()?.left ??
+        anchorRect.left;
+      const maxWidth = Math.max(240, boundary - gap - pad);
+      let tipRect = tip.getBoundingClientRect();
+      if (tipRect.width > maxWidth) {
+        tip.style.maxWidth = `${Math.floor(maxWidth / zoom)}px`;
+        tipRect = tip.getBoundingClientRect();
       }
+      let left = boundary - gap - tipRect.width;
+      if (left < pad) left = pad;
+      let top = anchorRect.top;
+      const height = tipRect.height;
+      if (top + height > window.innerHeight - pad) {
+        top = Math.max(pad, window.innerHeight - height - pad);
+      }
+      if (top < pad) top = pad;
       tip.style.left = `${Math.round(left / zoom)}px`;
       tip.style.top = `${Math.round(top / zoom)}px`;
     }
