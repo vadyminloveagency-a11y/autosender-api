@@ -1971,8 +1971,8 @@
       position: fixed;
       z-index: 85;
       display: none;
-      min-width: 280px;
-      max-width: min(440px, calc(100vw - 24px));
+      min-width: 320px;
+      max-width: min(480px, calc(100vw - 24px));
       max-height: calc(var(--ui-vh) - 24px);
       overflow: auto;
       scrollbar-width: thin;
@@ -2003,14 +2003,24 @@
       color: #dde3e9;
       font: 600 12px/1.3 var(--font);
     }
+    #bonus-man-popover .bonus-man-tip-block {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #bonus-man-popover .bonus-man-tip-block:first-of-type {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
     #bonus-man-popover .bonus-man-tip-lady {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin: 0 0 6px;
+      padding: 0;
+      border: 0;
     }
     #bonus-man-popover .bonus-man-tip-lady:first-of-type {
       margin-top: 0;
@@ -2053,6 +2063,13 @@
       font-size: 10px;
       user-select: none;
     }
+    #bonus-man-popover .bonus-man-tip-lady-sum {
+      color: #ff2b3a;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      font-size: 12px;
+    }
     #bonus-man-popover .bonus-man-tip-action {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto auto;
@@ -2080,13 +2097,13 @@
       white-space: nowrap;
     }
     #bonus-man-popover .bonus-man-tip-total {
-      margin: 10px 0 0;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255, 43, 58, 0.25);
+      margin: 8px 0 0;
+      padding: 6px 0 0 34px;
+      border-top: 1px dashed rgba(255, 43, 58, 0.28);
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      font: 700 12px/1.2 var(--font);
+      font: 700 11.5px/1.2 var(--font);
     }
     #bonus-man-popover .bonus-man-tip-total span:last-child {
       color: #ff2b3a;
@@ -5311,20 +5328,36 @@
 
     function positionBonusManTip(anchor, tip) {
       if (!anchor || !tip) return;
-      const rect = anchor.getBoundingClientRect();
       const pad = 10;
+      const table = document.getElementById("bonus-profiles");
+      const tableRect = table?.getBoundingClientRect();
       tip.style.left = "0px";
       tip.style.top = "0px";
       const tipRect = tip.getBoundingClientRect();
-      let left = rect.left - tipRect.width - 12;
-      if (left < pad) left = rect.right + 12;
+      let left;
+      let top;
+      if (tableRect && tableRect.width > 40) {
+        // Open over the bonuses table (Type / Dollars / Operator area), not over the sidebar.
+        left = tableRect.right - tipRect.width - 12;
+        if (left < tableRect.left + 8) left = tableRect.left + 8;
+        top = tableRect.top + 10;
+        if (top + tipRect.height > tableRect.bottom - 8) {
+          top = Math.max(tableRect.top + 8, tableRect.bottom - tipRect.height - 8);
+        }
+      } else {
+        const rect = anchor.getBoundingClientRect();
+        left = rect.left - tipRect.width - 12;
+        if (left < pad) left = Math.max(pad, rect.right + 12);
+        top = rect.top;
+      }
       if (left + tipRect.width > window.innerWidth - pad) {
         left = Math.max(pad, window.innerWidth - tipRect.width - pad);
       }
-      let top = rect.top;
+      if (left < pad) left = pad;
       if (top + tipRect.height > window.innerHeight - pad) {
         top = Math.max(pad, window.innerHeight - tipRect.height - pad);
       }
+      if (top < pad) top = pad;
       tip.style.left = `${Math.round(left)}px`;
       tip.style.top = `${Math.round(top)}px`;
     }
@@ -5345,7 +5378,6 @@
       anchor.classList.add("is-active");
       const manName = String(rows[0]?.manName || rows[0]?.man || "Man").trim() || "Man";
       const manId = String(rows[0]?.manId || "").trim();
-      const totalUsd = rows.reduce((sum, row) => sum + (Number(row.amountUsd) || 0), 0);
       const byLady = new Map();
       for (const row of rows) {
         const ladyKey = String(row.girlId || row.girlName || "—").trim() || "—";
@@ -5353,12 +5385,16 @@
           byLady.set(ladyKey, {
             id: String(row.girlId || "").trim(),
             name: String(row.girlName || row.girl || "—").trim() || "—",
+            usd: 0,
             actions: [],
           });
         }
-        byLady.get(ladyKey).actions.push(row);
+        const lady = byLady.get(ladyKey);
+        lady.actions.push(row);
+        lady.usd += Number(row.amountUsd) || 0;
       }
       const ladyBlocks = [...byLady.values()]
+        .sort((a, b) => b.usd - a.usd)
         .map((lady) => {
           const ava = dreamAvatarHtml(lady.id, lady.name, "bonus-man-tip-ava");
           const actionsHtml = lady.actions
@@ -5374,21 +5410,24 @@
             )
             .join("");
           return `
-            <div class="bonus-man-tip-lady">
-              ${ava}
-              <span class="bonus-man-tip-lady-meta">
-                <span class="bonus-man-tip-lady-name">${escapeHtml(lady.name)}</span>
-                ${lady.id ? `<span class="bonus-man-tip-lady-id">${idLabelHtml(lady.id)}</span>` : ""}
-              </span>
-            </div>
-            ${actionsHtml}`;
+            <div class="bonus-man-tip-block">
+              <div class="bonus-man-tip-lady">
+                ${ava}
+                <span class="bonus-man-tip-lady-meta">
+                  <span class="bonus-man-tip-lady-name">${escapeHtml(lady.name)}</span>
+                  ${lady.id ? `<span class="bonus-man-tip-lady-id">${idLabelHtml(lady.id)}</span>` : ""}
+                </span>
+                <span class="bonus-man-tip-lady-sum">${formatBalanceUsd(lady.usd)}</span>
+              </div>
+              ${actionsHtml}
+              <p class="bonus-man-tip-total"><span>Total · ${escapeHtml(lady.name)}</span><span>${formatBalanceUsd(lady.usd)}</span></p>
+            </div>`;
         })
         .join("");
       tip.innerHTML = `
         <p class="bonus-man-tip-title">Paid actions on questionnaires</p>
-        <p class="bonus-man-tip-sub">${escapeHtml(manName)}${manId ? ` · ${idLabelHtml(manId)}` : ""} · ${rows.length} actions</p>
-        ${ladyBlocks}
-        <p class="bonus-man-tip-total"><span>Total</span><span>${formatBalanceUsd(totalUsd)}</span></p>`;
+        <p class="bonus-man-tip-sub">${escapeHtml(manName)}${manId ? ` · ${idLabelHtml(manId)}` : ""} · ${rows.length} actions · ${byLady.size} ladies</p>
+        ${ladyBlocks}`;
       tip.hidden = false;
       tip.classList.add("is-open");
       positionBonusManTip(anchor, tip);
