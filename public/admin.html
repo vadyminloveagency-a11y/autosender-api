@@ -1100,6 +1100,10 @@
         flex-direction: column;
         overflow: hidden;
       }
+      #section-gold-men .gold-men-table-shell {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
       #section-gold-men .gold-men-table-wrap {
         flex: 1 1 auto;
         min-height: 0;
@@ -1300,8 +1304,17 @@
       font-size: 12px;
     }
     .gold-men-summary strong { color: #fff; }
+    .gold-men-table-shell {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
     .gold-men-table-wrap {
       position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow: auto;
       border: 1px solid rgba(255, 43, 58, 0.22);
       border-radius: 8px;
@@ -1325,8 +1338,31 @@
       border-radius: 8px;
       background: rgba(6, 12, 16, 0.72);
       backdrop-filter: blur(2px);
+      pointer-events: all;
     }
     .gold-men-loading.is-active { display: flex; }
+    .gold-men-loading .bal-spinner {
+      width: 42px;
+      height: 42px;
+      border-width: 3px;
+    }
+    .gold-men-page-btn.is-loading {
+      position: relative;
+      color: transparent !important;
+      pointer-events: none;
+    }
+    .gold-men-page-btn.is-loading::after {
+      content: "";
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 43, 58, 0.25);
+      border-top-color: #ff2b3a;
+      animation: bal-spin 0.7s linear infinite;
+    }
     .gold-men-pager {
       display: flex;
       flex-wrap: wrap;
@@ -1444,6 +1480,11 @@
       border-radius: 3px;
     }
     #gold-q-popover.is-open { display: block; }
+    .gold-q-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     #gold-q-popover.is-pinned {
       pointer-events: auto;
       border-color: rgba(255, 43, 58, 0.75);
@@ -2460,20 +2501,22 @@
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
               <div id="gold-men-status" class="mail-day-empty" style="display:none;text-align:left;padding:8px 0"></div>
-              <div class="gold-men-table-wrap">
-                <table class="data-table" id="gold-men-table">
-                  <thead>
-                    <tr>
-                      <th>Man</th>
-                      <th>First paid action</th>
-                      <th>Last paid action</th>
-                      <th>Questionnaires</th>
-                      <th>Actions</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody id="gold-men-body"></tbody>
-                </table>
+              <div class="gold-men-table-shell">
+                <div class="gold-men-table-wrap">
+                  <table class="data-table" id="gold-men-table">
+                    <thead>
+                      <tr>
+                        <th>Man</th>
+                        <th>First paid action</th>
+                        <th>Last paid action</th>
+                        <th>Questionnaires</th>
+                        <th>Actions</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="gold-men-body"></tbody>
+                  </table>
+                </div>
                 <div id="gold-men-loading" class="gold-men-loading" aria-hidden="true">
                   <div class="bal-spinner" aria-label="Loading"></div>
                 </div>
@@ -3665,7 +3708,7 @@
       const cacheKey = maleProfileId ? `id:${maleProfileId}` : `name:${maleName.toLowerCase()}`;
       let rows = goldMenQuestionnaireCache.get(cacheKey);
       if (!rows) {
-        tip.innerHTML = `<p class="gold-q-title" style="margin:0">Loading questionnaires…</p>`;
+        tip.innerHTML = `<div class="gold-q-loading"><span class="bal-spinner" style="width:22px;height:22px;border-width:2px"></span><p class="gold-q-title" style="margin:0">Loading questionnaires…</p></div>`;
         tip.hidden = false;
         tip.classList.add("is-open");
         positionGoldMenQuestionnairesTip(anchor, tip);
@@ -3714,9 +3757,17 @@
 
     function setGoldMenLoading(active) {
       const overlay = document.getElementById("gold-men-loading");
-      if (!overlay) return;
-      overlay.classList.toggle("is-active", Boolean(active));
-      overlay.setAttribute("aria-hidden", active ? "false" : "true");
+      if (overlay) {
+        overlay.classList.toggle("is-active", Boolean(active));
+        overlay.setAttribute("aria-hidden", active ? "false" : "true");
+      }
+      document.querySelectorAll("#gold-men-pager .gold-men-page-btn").forEach((btn) => {
+        btn.disabled = Boolean(active) || btn.hasAttribute("data-keep-disabled");
+        btn.classList.toggle(
+          "is-loading",
+          Boolean(active) && btn.classList.contains("is-active"),
+        );
+      });
     }
 
     function goldMenPageWindow(page, totalPages) {
@@ -3752,7 +3803,7 @@
       meta.textContent = `Showing ${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")} of ${totalMen.toLocaleString("en-US")}`;
       const buttons = [];
       buttons.push(
-        `<button type="button" class="gold-men-page-btn" data-gold-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Prev</button>`,
+        `<button type="button" class="gold-men-page-btn" data-gold-page="${page - 1}" ${page <= 1 || goldMenLoading ? "disabled" : ""}${page <= 1 ? ' data-keep-disabled="1"' : ""}>Prev</button>`,
       );
       let previous = 0;
       for (const pageNumber of goldMenPageWindow(page, totalPages)) {
@@ -3760,12 +3811,12 @@
           buttons.push(`<span class="gold-men-pager-meta">…</span>`);
         }
         buttons.push(
-          `<button type="button" class="gold-men-page-btn${pageNumber === page ? " is-active" : ""}" data-gold-page="${pageNumber}">${pageNumber}</button>`,
+          `<button type="button" class="gold-men-page-btn${pageNumber === page ? " is-active" : ""}${goldMenLoading && pageNumber === page ? " is-loading" : ""}" data-gold-page="${pageNumber}" ${goldMenLoading ? "disabled" : ""}>${pageNumber}</button>`,
         );
         previous = pageNumber;
       }
       buttons.push(
-        `<button type="button" class="gold-men-page-btn" data-gold-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>Next</button>`,
+        `<button type="button" class="gold-men-page-btn" data-gold-page="${page + 1}" ${page >= totalPages || goldMenLoading ? "disabled" : ""}${page >= totalPages ? ' data-keep-disabled="1"' : ""}>Next</button>`,
       );
       pagesEl.innerHTML = buttons.join("");
     }
@@ -5463,6 +5514,11 @@
       if (!btn || btn.disabled) return;
       const page = Number(btn.getAttribute("data-gold-page"));
       if (!Number.isFinite(page) || page < 1) return;
+      document.querySelectorAll("#gold-men-pager .gold-men-page-btn").forEach((el) => {
+        el.classList.remove("is-active", "is-loading");
+        el.disabled = true;
+      });
+      btn.classList.add("is-active", "is-loading");
       void refreshGoldMen({ page, force: true });
     });
     document.getElementById("gold-men-body")?.addEventListener("mouseover", (event) => {
