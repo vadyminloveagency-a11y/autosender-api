@@ -1673,8 +1673,24 @@
       gap: 8px;
       min-width: 0;
       overflow: hidden;
+    }
+    .bonus-sum-person-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      line-height: 1.2;
+    }
+    .bonus-sum-person-name {
+      overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .bonus-sum-person-id {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      user-select: all;
     }
     .bonus-sum-ava {
       flex: 0 0 auto;
@@ -4835,9 +4851,16 @@
           .sort((a, b) => b.usd - a.usd)
           .map((entry) => {
             const ava = dreamAvatarHtml(entry.id, entry.name, "bonus-sum-ava");
+            const id = String(entry.id || "").trim();
             return `
               <div class="bonus-sum-row">
-                <span class="bonus-sum-label">${ava}${escapeHtml(entry.name || "—")}</span>
+                <span class="bonus-sum-label">
+                  ${ava}
+                  <span class="bonus-sum-person-meta">
+                    <span class="bonus-sum-person-name">${escapeHtml(entry.name || "—")}</span>
+                    ${id ? `<span class="bonus-sum-person-id">ID ${escapeHtml(id)}</span>` : ""}
+                  </span>
+                </span>
                 <span class="bonus-sum-value">${formatBalanceUsd(entry.usd)}</span>
               </div>`;
           })
