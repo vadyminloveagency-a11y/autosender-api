@@ -1421,9 +1421,9 @@
       min-width: 0;
     }
     .gold-man-avatar {
-      flex: 0 0 36px;
-      width: 36px;
-      height: 36px;
+      flex: 0 0 28px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       object-fit: cover;
       background: rgba(13, 19, 23, 0.8);
@@ -1432,19 +1432,19 @@
     .gold-man-meta {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 1px;
       min-width: 0;
     }
     .gold-man-name {
       color: #fff;
-      font-weight: 700;
+      font-weight: 600;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .gold-man-id {
       color: var(--muted);
-      font-size: 11px;
+      font-size: 10px;
       font-variant-numeric: tabular-nums;
       user-select: all;
     }
@@ -1460,13 +1460,15 @@
       cursor: pointer;
     }
     #gold-men-table tbody tr.is-selected {
-      background: rgba(255, 43, 58, 0.16);
+      background: rgba(255, 43, 58, 0.07);
     }
-    #gold-men-table tbody tr.is-selected:nth-child(even) {
-      background: rgba(255, 43, 58, 0.2);
+    #gold-men-table tbody tr.is-selected td:first-child {
+      box-shadow: inset 3px 0 0 rgba(255, 43, 58, 0.85);
     }
-    #gold-men-table tbody tr.is-selected td {
-      box-shadow: inset 3px 0 0 #ff2b3a;
+    #gold-men-table th,
+    #gold-men-table td {
+      padding: 5px 10px;
+      font-size: 12px;
     }
     #gold-q-popover {
       position: fixed;
@@ -1517,12 +1519,29 @@
     }
     #gold-q-popover .gold-q-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px 12px;
-      align-items: baseline;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px 10px;
+      align-items: center;
       padding: 5px 0;
       border-top: 1px solid rgba(255, 255, 255, 0.06);
       font-size: 12px;
+    }
+    #gold-q-popover .gold-q-ava {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
+    }
+    #gold-q-popover .gold-q-ava.placeholder {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #98a1aa;
+      font: 700 9px/1 var(--font);
+      text-transform: uppercase;
+      background: rgba(255, 43, 58, 0.12);
     }
     #gold-q-popover .gold-q-row:first-of-type { border-top: 0; }
     #gold-q-popover .gold-q-name {
@@ -3806,6 +3825,13 @@
       goldMenSelectedKey = row.getAttribute("data-gold-man-key") || "";
     }
 
+    function clearGoldMenRowSelection() {
+      goldMenSelectedKey = "";
+      document
+        .querySelectorAll("#gold-men-body tr.is-selected")
+        .forEach((tr) => tr.classList.remove("is-selected"));
+    }
+
     function syncGoldMenPeriodDefaults() {
       const today = kyivTodayLocal();
       const fromEl = document.getElementById("gold-men-sync-from");
@@ -3830,6 +3856,7 @@
       tip.classList.remove("is-open", "is-pinned");
       tip.hidden = true;
       tip.innerHTML = "";
+      clearGoldMenRowSelection();
     }
 
     function pinGoldMenQuestionnairesTip() {
@@ -3864,6 +3891,7 @@
       if (!tip || !anchor) return;
       if (goldMenQuestionnairePinned && goldMenQuestionnaireAnchor !== anchor) return;
       goldMenQuestionnaireAnchor = anchor;
+      selectGoldMenRow(anchor.closest("tr"));
       const maleProfileId = String(man?.maleProfileId || "").trim();
       const maleName = String(man?.maleName || "").trim();
       const cacheKey = maleProfileId ? `id:${maleProfileId}` : `name:${maleName.toLowerCase()}`;
@@ -3902,6 +3930,7 @@
             const id = String(item.femaleProfileId || "").trim();
             const name = String(item.femaleName || "").trim() || "Questionnaire";
             return `<div class="gold-q-row">
+              ${dreamAvatarHtml(id, name, "gold-q-ava")}
               <div>
                 <div class="gold-q-name">${escapeHtml(name)}</div>
                 <div class="gold-q-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</div>
@@ -5777,8 +5806,6 @@
       hideGoldMenQuestionnairesTip();
     });
     document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
-      const row = event.target.closest("tr[data-gold-man-index]");
-      if (row) selectGoldMenRow(row);
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
