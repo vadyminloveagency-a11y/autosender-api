@@ -30,6 +30,14 @@ import {
   listMailingDailyMonthTotals,
   setMailingDailyLettersAbsolute,
 } from "../mailingDailyStore.js";
+import {
+  listV2ActiveDirectorJobs,
+  listV2LetterbotDailyByProfile,
+  markV2LetterBotStopped,
+  requestV2OperatorShiftDisconnect,
+  stopV2LetterBotRemote,
+  dreamDailyTotalFromState,
+} from "../v2DirectorMerge.js";
 const router = express.Router();
 
 /** @type {Map<string, LetterBotWorker>} */
@@ -385,13 +393,10 @@ async function stopWorkerForProfile(userId, profileId, { complete = false } = {}
 function summarizeMailingJob(userId, profileId, state, user = {}) {
   const progress = state?.progress && typeof state.progress === "object" ? state.progress : {};
   const sent = Number.isFinite(Number(progress.sent)) ? Number(progress.sent) : null;
-  const total = Number.isFinite(Number(progress.total)) ? Number(progress.total) : null;
-  let pct = Number(progress.percent);
-  if ((!Number.isFinite(pct) || pct === 0) && sent != null && total > 0) {
-    pct = (sent / total) * 100;
-  }
+  // Dream WS field `total` is Daily Total — do not use it as campaign size for %.
+  const pct = Number(progress.percent);
   const daySent = Number.isFinite(Number(state?.daySent)) ? Number(state.daySent) : null;
-  const dailyTotal = Number.isFinite(Number(state?.dailyTotal)) ? Number(state.dailyTotal) : null;
+  const dailyTotal = dreamDailyTotalFromState(state);
   return {
     userId: Number(userId),
     profileId: String(profileId || "default"),
@@ -402,7 +407,7 @@ function summarizeMailingJob(userId, profileId, state, user = {}) {
     filter: String(progress.filter || state?.filter || ""),
     percent: nicePercent(pct),
     sent,
-    total,
+    total: dailyTotal,
     daySent,
     dailyTotal,
     statusMessage: String(state?.statusMessage || ""),
@@ -460,25 +465,63 @@ async function listActiveMailingJobs() {
     );
   }
 
+  // Merge AutoSender V2 cloud LetterBot jobs (same director cabinet).
+  const v2Jobs = await listV2ActiveDirectorJobs().catch(() => []);
+  for (const job of v2Jobs) {
+    const key = `${job.userId}:${job.profileId}`;
+    const existing = byKey.get(key);
+    const merged = attachProfileMeta(job, profileMap);
+    if (!existing) {
+      byKey.set(key, merged);
+      continue;
+    }
+    // Prefer V2 Dream Daily Total when it is higher / present.
+    const v2Total = Number(merged.dailyTotal) || 0;
+    const classicTotal = Number(existing.dailyTotal) || Number(existing.daySent) || 0;
+    byKey.set(key, {
+      ...existing,
+      ...merged,
+      dailyTotal: v2Total > 0 ? v2Total : existing.dailyTotal,
+      daySent: v2Total > 0 ? v2Total : existing.daySent,
+      percent: merged.percent ?? existing.percent,
+      sent: merged.sent ?? existing.sent,
+      filter: merged.filter || existing.filter,
+      statusMessage: merged.statusMessage || existing.statusMessage,
+      source: "v2",
+    });
+    void classicTotal;
+  }
+
+  const v2Daily = await listV2LetterbotDailyByProfile(kyivDayKey()).catch(() => []);
+  for (const row of v2Daily) {
+    if (!(row.letters > 0)) continue;
+    const prev = dailyLetterBotByProfile.get(String(row.profileId)) || 0;
+    if (row.letters > prev) dailyLetterBotByProfile.set(String(row.profileId), row.letters);
+  }
+
   return [...byKey.values()].map((job) => {
-    // Prefer Dream TOTAL DAY when known; otherwise show AutoSender day count / DB.
-    const lettersToday = Math.max(
-      Number(job.dailyTotal) || 0,
-      Number(job.daySent) || 0,
-      dailyLetterBotByProfile.get(String(job.profileId)) || 0,
-    );
-    if ((Number(job.dailyTotal) || 0) > 0) {
+    // Prefer Dream Daily Total; fall back to AutoSender day count / DB.
+    const dreamTotal = Number(job.dailyTotal) || 0;
+    const lettersToday =
+      dreamTotal > 0
+        ? dreamTotal
+        : Math.max(
+            Number(job.daySent) || 0,
+            dailyLetterBotByProfile.get(String(job.profileId)) || 0,
+          );
+    if (dreamTotal > 0) {
       void setMailingDailyLettersAbsolute({
         dayKey: kyivDayKey(),
         profileId: job.profileId,
         product: "letterbot",
         userId: job.userId,
-        letters: Number(job.dailyTotal),
+        letters: dreamTotal,
       }).catch(() => {});
     }
     return {
       ...job,
-      daySent: lettersToday,
+      daySent: lettersToday > 0 ? lettersToday : null,
+      dailyTotal: dreamTotal > 0 ? dreamTotal : job.dailyTotal,
     };
   }).sort((a, b) => {
     const au = Number(a.updatedAt) || 0;
@@ -667,6 +710,75 @@ router.get("/admin/letters-by-profile", adminMiddleware, async (req, res) => {
       }
     }
 
+    // Overlay V2 Dream Daily Totals into LETTERBOT column (same director cabinet).
+    const v2Daily = await listV2LetterbotDailyByProfile(date).catch(() => []);
+    for (const row of v2Daily) {
+      const key = String(row.profileId || "");
+      if (!key || !(row.letters > 0)) continue;
+      let entry = byProfile.get(key);
+      if (!entry) {
+        const idNum = Number(key) || 0;
+        const meta = idNum ? profileMap.get(idNum) : null;
+        entry = {
+          profileId: key,
+          displayName: meta?.displayName || "",
+          dreamUsername: meta?.dreamUsername || "",
+          photoUrl:
+            meta?.photoUrl ||
+            (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+          operatorName: meta?.operatorName || "",
+          operatorEmail: meta?.operatorEmail || "",
+          letterbot: 0,
+          read: 0,
+          online: 0,
+          total: 0,
+        };
+        byProfile.set(key, entry);
+      }
+      if (row.letters > (Number(entry.letterbot) || 0)) {
+        entry.letterbot = row.letters;
+        entry.total = entry.letterbot + entry.read + entry.online;
+      }
+    }
+
+    // Live V2 running jobs may be ahead of the daily table — prefer their WS total.
+    if (date === today) {
+      const v2Jobs = await listV2ActiveDirectorJobs().catch(() => []);
+      for (const job of v2Jobs) {
+        const liveTotal = Number(job.dailyTotal) || 0;
+        if (!(liveTotal > 0)) continue;
+        const key = String(job.profileId || "");
+        if (!key) continue;
+        let entry = byProfile.get(key);
+        if (!entry) {
+          const idNum = Number(key) || 0;
+          const meta = idNum ? profileMap.get(idNum) : null;
+          entry = {
+            profileId: key,
+            displayName: meta?.displayName || job.displayName || "",
+            dreamUsername: meta?.dreamUsername || "",
+            photoUrl:
+              meta?.photoUrl ||
+              job.photoUrl ||
+              (idNum ? `https://profile-photos-cdn.dream-singles.com/im${idNum}_small.jpg` : ""),
+            operatorName: job.operatorName || meta?.operatorName || "",
+            operatorEmail: job.operatorEmail || meta?.operatorEmail || "",
+            letterbot: 0,
+            read: 0,
+            online: 0,
+            total: 0,
+          };
+          byProfile.set(key, entry);
+        }
+        if (liveTotal > (Number(entry.letterbot) || 0)) {
+          entry.letterbot = liveTotal;
+          entry.total = entry.letterbot + entry.read + entry.online;
+        }
+        if (job.operatorName) entry.operatorName = job.operatorName;
+        if (job.operatorEmail) entry.operatorEmail = job.operatorEmail;
+      }
+    }
+
     const profiles = [...byProfile.values()].sort((a, b) => {
       if (b.total !== a.total) return b.total - a.total;
       return String(a.displayName || a.profileId).localeCompare(
@@ -822,9 +934,14 @@ router.post("/admin/stop", adminMiddleware, async (req, res) => {
     return res.status(400).json({ ok: false, error: "userId is required" });
   }
   try {
-    const state = await stopWorkerForProfile(userId, profileId, {
-      complete: Boolean(req.body?.complete),
-    });
+    let state = idleState(profileId);
+    try {
+      state = await stopWorkerForProfile(userId, profileId, {
+        complete: Boolean(req.body?.complete),
+      });
+    } catch (_) {}
+    await markV2LetterBotStopped(userId, profileId).catch(() => {});
+    await stopV2LetterBotRemote(userId, profileId, { disconnect: false }).catch(() => {});
     return res.json({ ok: true, state, stopped: true });
   } catch (error) {
     return res.status(400).json({
@@ -843,12 +960,18 @@ router.post("/admin/disconnect-shift", adminMiddleware, async (req, res) => {
     return res.status(400).json({ ok: false, error: "userId is required" });
   }
   try {
-    const state = await stopWorkerForProfile(userId, profileId);
+    let state = idleState(profileId);
+    try {
+      state = await stopWorkerForProfile(userId, profileId);
+    } catch (_) {}
     try {
       const { stopAllSenderChannelsForProfile } = await import("./senderReads.js");
       await stopAllSenderChannelsForProfile(userId, profileId);
     } catch (_) {}
-    await requestOperatorShiftDisconnect(userId, profileId);
+    await requestOperatorShiftDisconnect(userId, profileId).catch(() => {});
+    await markV2LetterBotStopped(userId, profileId).catch(() => {});
+    await requestV2OperatorShiftDisconnect(userId, profileId).catch(() => {});
+    await stopV2LetterBotRemote(userId, profileId, { disconnect: true }).catch(() => {});
     return res.json({ ok: true, state, stopped: true, disconnectRequested: true });
   } catch (error) {
     return res.status(400).json({
