@@ -1956,12 +1956,25 @@
       border-color: rgba(255, 43, 58, 0.85);
       box-shadow: 0 0 0 2px rgba(255, 43, 58, 0.25);
     }
+    #bonus-man-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: none;
+      background: rgba(4, 7, 10, 0.55);
+      backdrop-filter: blur(2.5px);
+      -webkit-backdrop-filter: blur(2.5px);
+    }
+    #bonus-man-backdrop.is-open { display: block; }
     .bonus-sum-row.is-man.is-active {
-      background: rgba(255, 43, 58, 0.1);
+      position: relative;
+      z-index: 81;
+      background: #241318;
       border-radius: 6px;
       margin: 0 -6px;
       padding-left: 6px;
       padding-right: 6px;
+      box-shadow: 0 0 0 1px rgba(255, 43, 58, 0.55);
     }
     .bonus-sum-row.is-man.is-active .bonus-sum-ava {
       border-color: rgba(255, 43, 58, 0.9);
@@ -2996,6 +3009,7 @@
                       <div id="bonus-profiles" class="bonus-profiles"></div>
                       <aside id="bonus-summary" class="bonus-summary" aria-label="Period summary"></aside>
                     </div>
+                    <div id="bonus-man-backdrop" hidden></div>
                     <div id="bonus-man-popover" hidden></div>
                   </div>
 
@@ -5312,6 +5326,11 @@
       }
       if (bonusManTipAnchor) bonusManTipAnchor.classList.remove("is-active");
       bonusManTipAnchor = null;
+      const backdrop = document.getElementById("bonus-man-backdrop");
+      if (backdrop) {
+        backdrop.classList.remove("is-open");
+        backdrop.hidden = true;
+      }
       const tip = document.getElementById("bonus-man-popover");
       if (!tip) return;
       tip.classList.remove("is-open");
@@ -5330,17 +5349,14 @@
       let left;
       let top;
       if (tableRect && tableRect.width > 40) {
-        // Open on the LEFT side of the bonuses table (over Type / Dollars / Operator).
+        // Anchor over the Type / Dollars / Operator columns of the bonuses table.
         const typeCol = table.querySelector(".bonus-actions-table th.bonus-col-type");
         const typeRect = typeCol?.getBoundingClientRect();
         if (typeRect && typeRect.width > 0) {
-          left = typeRect.left;
+          left = typeRect.left - 6;
         } else {
-          left = tableRect.left + 12;
+          left = tableRect.left + tableRect.width * 0.45;
         }
-        // Keep the whole tip inside the table panel, flush to its left half.
-        const maxLeft = tableRect.left + Math.max(12, tableRect.width * 0.42 - tipRect.width);
-        if (left > maxLeft) left = Math.max(tableRect.left + 12, maxLeft);
         if (left + tipRect.width > tableRect.right - 8) {
           left = Math.max(tableRect.left + 8, tableRect.right - tipRect.width - 8);
         }
@@ -5432,6 +5448,11 @@
         ${ladyBlocks}`;
       tip.hidden = false;
       tip.classList.add("is-open");
+      const backdrop = document.getElementById("bonus-man-backdrop");
+      if (backdrop) {
+        backdrop.hidden = false;
+        backdrop.classList.add("is-open");
+      }
       positionBonusManTip(anchor, tip);
     }
 
