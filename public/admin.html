@@ -74,6 +74,24 @@
     body.panel-page {
       background: transparent;
     }
+    /* Panel mode: kill the looping video + heavy blurs — they tank GPU after a while. */
+    body.panel-page #admin-shared-ambient video {
+      display: none !important;
+    }
+    body.panel-page #admin-shared-ambient {
+      background: #070b10;
+    }
+    body.panel-page #admin-shared-ambient::after {
+      background:
+        radial-gradient(circle at 50% 30%, rgba(255, 43, 58, 0.06), transparent 46%),
+        rgba(5, 8, 12, 0.55);
+    }
+    body.panel-page .admin-sidebar,
+    body.panel-page .panel-card,
+    body.panel-page .auth-card {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
     #admin-shared-ambient {
       position: fixed;
       inset: 0;
@@ -2949,7 +2967,7 @@
       loop
       playsinline
       autoplay
-      preload="auto"
+      preload="metadata"
     ></video>
   </div>
   <div id="auth-shell" class="app-auth-gate">
@@ -3476,12 +3494,18 @@
       const video = document.querySelector("#admin-shared-ambient video");
       if (!video) return;
       const play = () => {
+        if (document.body.classList.contains("panel-page")) return;
         const p = video.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
       };
+      const pause = () => {
+        try { video.pause(); } catch (_) {}
+      };
+      window.__adminAmbientVideo = { play, pause };
       play();
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") play();
+        else pause();
       });
     })();
 
@@ -3516,6 +3540,10 @@
       views.bootstrap.classList.toggle("hidden", name !== "bootstrap");
       views.login.classList.toggle("hidden", name !== "login");
       views.panel.classList.remove("hidden");
+      if (window.__adminAmbientVideo) {
+        if (isPanel) window.__adminAmbientVideo.pause();
+        else window.__adminAmbientVideo.play();
+      }
     }
 
     const SAVED_LOGIN_KEY = "autosenderAdminSavedLogin";
@@ -3655,16 +3683,17 @@
       showAdminSection(showHome ? "home" : "accounts");
       setupDragAndDrop();
       setStatus("");
+      // Don't scrape Dream on every open — that freezes the UI when Dream is slow.
       void (async () => {
-        await refreshAccountManager({ quiet: true, syncDream: true });
-        void refreshMailings({ quiet: true });
-        void refreshMailCalendar({ quiet: true });
+        await refreshAccountManager({ quiet: true, syncDream: false });
       })();
       if (mailingsTimer) clearInterval(mailingsTimer);
       mailingsTimer = setInterval(() => {
-        void refreshMailings({ quiet: true });
-        void refreshMailCalendar({ quiet: true });
-      }, 10000);
+        const mailingsActive = document.getElementById("section-mailings")?.classList.contains("is-active");
+        if (!mailingsActive) return;
+        if (mailCalState.activeTab === "active") void refreshMailings({ quiet: true });
+        else void refreshMailCalendar({ quiet: true });
+      }, 30000);
     }
 
     function showAdminSection(sectionId) {
