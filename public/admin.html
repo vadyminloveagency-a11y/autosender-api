@@ -976,23 +976,104 @@
     }
     .bal-cal-popover {
       position: absolute;
-      top: calc(100% + 6px);
+      top: calc(100% + 8px);
       left: 0;
       z-index: 60;
       display: none;
-      filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.5));
+      width: 295px;
+      padding: 13px;
+      border: 1px solid rgba(255, 43, 58, 0.35);
+      border-radius: 9px;
+      background: #11161b;
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.5);
     }
     .bal-cal-popover.is-open { display: block; }
     .bal-cal-popover .mail-cal {
-      width: 220px;
-      background: #0d1317;
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .bal-cal-head {
+      display: grid;
+      grid-template-columns: 31px minmax(0, 1fr) 31px;
+      align-items: center;
+      gap: 7px;
+    }
+    .bal-cal-head strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .bal-cal-head button,
+    .bal-cal-actions button {
+      min-height: 28px;
+      padding: 0 7px;
+      border: 1px solid rgba(78, 98, 108, 0.45);
+      border-radius: 6px;
+      background: #0c1116;
+      color: #dce2e7;
+      font: 600 12px/1 var(--font);
+      cursor: pointer;
+    }
+    .bal-cal-head button:hover,
+    .bal-cal-actions button:hover {
+      border-color: rgba(255, 43, 58, 0.4);
+      background: #171d23;
+    }
+    .bal-cal-actions {
+      display: flex;
+      justify-content: center;
+      margin: 8px 0;
+    }
+    .bal-cal-actions button {
+      padding: 0 13px;
+      color: #ff5b68;
+    }
+    .bal-cal-popover .mail-cal-weekdays,
+    .bal-cal-popover .mail-cal-grid {
+      gap: 4px;
+    }
+    .bal-cal-popover .mail-cal-weekdays span {
+      padding: 4px 0;
+      color: #727d86;
+      font-size: 9px;
+    }
+    .bal-cal-popover .mail-cal-day {
+      position: relative;
+      height: 31px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    .bal-cal-popover .mail-cal-day:hover,
+    .bal-cal-popover .mail-cal-day.in-range {
+      background: rgba(255, 43, 58, 0.12);
+    }
+    .bal-cal-popover .mail-cal-day.selected {
+      border-color: rgba(255, 43, 58, 0.75);
+      background: rgba(255, 43, 58, 0.22);
+      color: #fff;
+    }
+    .bal-cal-popover .mail-cal-day.today::after {
+      content: "";
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #ff2b3a;
+    }
+    .bal-cal-popover .mail-cal-day.outside {
+      opacity: 0.28;
     }
     #bal-cal-toggle.is-open {
       border-color: rgba(255, 43, 58, 0.55);
       color: #ff2b3a;
     }
     .bal-cal-hint {
-      margin: 8px 0 0;
+      margin: 9px 0 0;
       color: var(--muted);
       font-size: 10px;
       line-height: 1.3;
@@ -3111,13 +3192,13 @@
                   <button type="button" id="bal-filter-day" class="btn-ghost">This day</button>
                   <div id="bal-cal-popover" class="bal-cal-popover" hidden>
                     <div class="mail-cal">
-                      <div class="mail-cal-head">
-                        <h4 id="bal-cal-title">—</h4>
-                        <div class="mail-cal-nav">
-                          <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
-                          <button type="button" id="bal-cal-today" title="Today">●</button>
-                          <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
-                        </div>
+                      <div class="bal-cal-head">
+                        <button type="button" id="bal-cal-prev" aria-label="Previous month">‹</button>
+                        <strong id="bal-cal-title">—</strong>
+                        <button type="button" id="bal-cal-next" aria-label="Next month">›</button>
+                      </div>
+                      <div class="bal-cal-actions">
+                        <button type="button" id="bal-cal-today">Today</button>
                       </div>
                       <div class="mail-cal-weekdays">
                         <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
@@ -5287,18 +5368,7 @@
       }
       balCalState.year = y;
       balCalState.month = m;
-      const stillInMonth =
-        balCalState.selectedDate &&
-        balCalState.selectedDate.startsWith(`${y}-${String(m).padStart(2, "0")}-`);
-      if (!stillInMonth) {
-        balCalState.selectedDate = `${y}-${String(m).padStart(2, "0")}-01`;
-        balCalState.fromDate = balCalState.selectedDate;
-        balCalState.toDate = balCalState.selectedDate;
-      }
-      persistBalFilters();
-      syncBalFilterInputs();
-      balCalState.bonusesLoadedFor = "";
-      void refreshBalances({ quiet: true });
+      renderBalCalendarGrid();
     }
 
     function renderBalCalendarGrid() {
@@ -5314,24 +5384,26 @@
       });
       const first = new Date(Date.UTC(y, m - 1, 1));
       const startPad = (first.getUTCDay() + 6) % 7;
-      const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      const gridStart = new Date(Date.UTC(y, m - 1, 1 - startPad));
       const cells = [];
-      for (let i = 0; i < startPad; i += 1) {
-        cells.push(`<button type="button" class="mail-cal-day" disabled></button>`);
-      }
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        const date = `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      for (let index = 0; index < 42; index += 1) {
+        const cell = new Date(gridStart);
+        cell.setUTCDate(gridStart.getUTCDate() + index);
+        const date = cell.toISOString().slice(0, 10);
         const classes = ["mail-cal-day"];
+        if (cell.getUTCMonth() + 1 !== m) classes.push("outside");
         if (balCalPickStart) {
           if (date === balCalPickStart) classes.push("selected");
         } else {
           const from = balCalState.fromDate || balCalState.selectedDate;
           const to = balCalState.toDate || from;
-          if (from && to && date >= from && date <= to) classes.push("selected");
+          if (from && to && date === from) classes.push("selected");
+          if (from && to && date === to) classes.push("selected");
+          if (from && to && date > from && date < to) classes.push("in-range");
         }
         if (date === balCalState.today) classes.push("today");
         cells.push(
-          `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${day}</span></button>`,
+          `<button type="button" class="${classes.join(" ")}" data-date="${date}"><span>${cell.getUTCDate()}</span></button>`,
         );
       }
       grid.innerHTML = cells.join("");
