@@ -5337,17 +5337,27 @@
       let left;
       let top;
       if (tableRect && tableRect.width > 40) {
-        // Open over the bonuses table (Type / Dollars / Operator area), not over the sidebar.
-        left = tableRect.right - tipRect.width - 12;
-        if (left < tableRect.left + 8) left = tableRect.left + 8;
+        // Open on the LEFT side of the bonuses table (over Type / Dollars / Operator).
+        const typeCol = table.querySelector(".bonus-actions-table th.bonus-col-type");
+        const typeRect = typeCol?.getBoundingClientRect();
+        if (typeRect && typeRect.width > 0) {
+          left = typeRect.left;
+        } else {
+          left = tableRect.left + 12;
+        }
+        // Keep the whole tip inside the table panel, flush to its left half.
+        const maxLeft = tableRect.left + Math.max(12, tableRect.width * 0.42 - tipRect.width);
+        if (left > maxLeft) left = Math.max(tableRect.left + 12, maxLeft);
+        if (left + tipRect.width > tableRect.right - 8) {
+          left = Math.max(tableRect.left + 8, tableRect.right - tipRect.width - 8);
+        }
         top = tableRect.top + 10;
         if (top + tipRect.height > tableRect.bottom - 8) {
           top = Math.max(tableRect.top + 8, tableRect.bottom - tipRect.height - 8);
         }
       } else {
         const rect = anchor.getBoundingClientRect();
-        left = rect.left - tipRect.width - 12;
-        if (left < pad) left = Math.max(pad, rect.right + 12);
+        left = Math.max(pad, rect.left - tipRect.width - 12);
         top = rect.top;
       }
       if (left + tipRect.width > window.innerWidth - pad) {
