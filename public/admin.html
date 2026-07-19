@@ -1547,18 +1547,40 @@
       border: 1px solid rgba(78, 98, 108, 0.35);
       border-radius: 7px;
       background: #11151a;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 43, 58, 0.65) #0b0f14;
+    }
+    .bonus-profiles::-webkit-scrollbar {
+      width: 9px;
+      height: 9px;
+    }
+    .bonus-profiles::-webkit-scrollbar-track {
+      background: #0b0f14;
+      border-radius: 8px;
+    }
+    .bonus-profiles::-webkit-scrollbar-thumb {
+      background: rgba(255, 43, 58, 0.55);
+      border: 2px solid #0b0f14;
+      border-radius: 8px;
+    }
+    .bonus-profiles::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 43, 58, 0.82);
     }
     .bonus-actions-table {
       width: 100%;
+      min-width: 900px;
+      table-layout: fixed;
       border-collapse: collapse;
       font: 13px/1.35 var(--font);
     }
     .bonus-actions-table th,
     .bonus-actions-table td {
-      padding: 8px 12px;
+      padding: 6px 10px;
       border-bottom: 1px solid rgba(78, 98, 108, 0.22);
       text-align: left;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .bonus-actions-table th {
       color: #98a1aa;
@@ -1584,6 +1606,13 @@
     .bonus-actions-table td { text-align: center; }
     .bonus-actions-table th.bonus-col-name,
     .bonus-actions-table td.bonus-col-name { text-align: left; }
+    .bonus-actions-table .bonus-col-id { width: 11%; }
+    .bonus-actions-table .bonus-col-man { width: 17%; }
+    .bonus-actions-table .bonus-col-lady { width: 20%; }
+    .bonus-actions-table .bonus-col-date { width: 13%; }
+    .bonus-actions-table .bonus-col-type { width: 14%; }
+    .bonus-actions-table .bonus-col-dollars { width: 8%; }
+    .bonus-actions-table .bonus-col-operator { width: 9%; }
     .bonus-when {
       display: inline-flex;
       flex-direction: column;
@@ -1591,16 +1620,21 @@
       gap: 2px;
       line-height: 1.15;
     }
-    .bonus-lady {
+    .bonus-person {
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      max-width: 100%;
       min-width: 0;
     }
-    .bonus-lady-ava {
+    .bonus-person-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bonus-person-ava {
       flex: 0 0 auto;
-      width: 32px;
-      height: 32px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
       object-fit: cover;
       background: rgba(13, 19, 23, 0.8);
@@ -4605,23 +4639,23 @@
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
       const showOperator = actions.some((row) => String(row.operator || "").trim());
-      const ladyCell = (row) => {
-        const id = String(row.girlId || "").trim();
-        const name = escapeHtml(row.girlName || "—");
+      const personCell = (idValue, nameValue) => {
+        const id = String(idValue || "").trim();
+        const name = escapeHtml(nameValue || "—");
         if (!/^\d+$/.test(id)) return name;
-        return `<span class="bonus-lady"><img class="bonus-lady-ava" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">${name}</span>`;
+        return `<span class="bonus-person"><img class="bonus-person-ava" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'"><span class="bonus-person-name">${name}</span></span>`;
       };
       const bodyRows = actions
         .map(
           (row) => `
             <tr>
-              <td>${escapeHtml(row.manId || "—")}</td>
-              <td class="bonus-col-name">${escapeHtml(row.manName || "—")}</td>
-              <td>${escapeHtml(row.girlId || "—")}</td>
-              <td class="bonus-col-name">${ladyCell(row)}</td>
-              <td>${bonusWhenHtml(row)}</td>
-              <td>${bonusTypeBadge(row.type)}</td>
-              <td class="bonus-dollars">${formatBalanceUsd(row.amountUsd)}</td>
+              <td class="bonus-col-id">${escapeHtml(row.manId || "—")}</td>
+              <td class="bonus-col-name bonus-col-man">${personCell(row.manId, row.manName)}</td>
+              <td class="bonus-col-id">${escapeHtml(row.girlId || "—")}</td>
+              <td class="bonus-col-name bonus-col-lady">${personCell(row.girlId, row.girlName)}</td>
+              <td class="bonus-col-date">${bonusWhenHtml(row)}</td>
+              <td class="bonus-col-type">${bonusTypeBadge(row.type)}</td>
+              <td class="bonus-dollars bonus-col-dollars">${formatBalanceUsd(row.amountUsd)}</td>
               ${showOperator ? `<td class="bonus-col-operator">${row.operatorHtml}</td>` : ""}
             </tr>`,
         )
@@ -4632,13 +4666,13 @@
         <table class="bonus-actions-table">
           <thead>
             <tr>
-              ${th("Man ID")}
-              ${th("Man Name", "bonus-col-name")}
-              ${th("Lady ID")}
-              ${th("Lady Name", "bonus-col-name")}
-              ${th("Date")}
-              ${th("Type")}
-              ${th("Dollars")}
+              ${th("Man ID", "bonus-col-id")}
+              ${th("Man Name", "bonus-col-name bonus-col-man")}
+              ${th("Lady ID", "bonus-col-id")}
+              ${th("Lady Name", "bonus-col-name bonus-col-lady")}
+              ${th("Date", "bonus-col-date")}
+              ${th("Type", "bonus-col-type")}
+              ${th("Dollars", "bonus-col-dollars")}
               ${showOperator ? th("Operator", "bonus-col-operator") : ""}
             </tr>
           </thead>
