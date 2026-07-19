@@ -1734,31 +1734,19 @@
       white-space: nowrap;
     }
     #gold-men-table {
-      width: max-content;
-      max-width: 100%;
-      table-layout: auto;
+      width: 100%;
+      table-layout: fixed;
     }
     #gold-men-table th:first-child,
-    #gold-men-table td:first-child,
+    #gold-men-table td:first-child { width: 28%; }
     #gold-men-table th:nth-child(2),
-    #gold-men-table td:nth-child(2),
+    #gold-men-table td:nth-child(2) { width: 26%; text-align: center; }
     #gold-men-table th:nth-child(3),
-    #gold-men-table td:nth-child(3),
+    #gold-men-table td:nth-child(3) { width: 16%; text-align: center; }
     #gold-men-table th:nth-child(4),
-    #gold-men-table td:nth-child(4),
+    #gold-men-table td:nth-child(4) { width: 14%; text-align: center; }
     #gold-men-table th:nth-child(5),
-    #gold-men-table td:nth-child(5) {
-      width: 1%;
-      white-space: nowrap;
-    }
-    #gold-men-table td:nth-child(2),
-    #gold-men-table th:nth-child(2) { text-align: center; }
-    #gold-men-table td:nth-child(3),
-    #gold-men-table th:nth-child(3) { text-align: center; }
-    #gold-men-table td:nth-child(4),
-    #gold-men-table th:nth-child(4) { text-align: center; }
-    #gold-men-table td:nth-child(5),
-    #gold-men-table th:nth-child(5) { text-align: right; }
+    #gold-men-table td:nth-child(5) { width: 16%; text-align: right; }
     .gold-men-layout {
       display: flex;
       align-items: stretch;
