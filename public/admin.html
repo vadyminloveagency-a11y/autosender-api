@@ -1604,11 +1604,13 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
+    #gold-men-table td:nth-child(2),
+    #gold-men-table th:nth-child(2) { text-align: center; }
     #gold-men-table td:nth-child(3),
+    #gold-men-table th:nth-child(3) { text-align: center; }
     #gold-men-table td:nth-child(4),
-    #gold-men-table td:nth-child(5) { text-align: right; }
-    #gold-men-table th:nth-child(3),
-    #gold-men-table th:nth-child(4),
+    #gold-men-table th:nth-child(4) { text-align: center; }
+    #gold-men-table td:nth-child(5),
     #gold-men-table th:nth-child(5) { text-align: right; }
     #gold-men-table thead th {
       position: sticky;
@@ -1790,6 +1792,24 @@
       color: #ff2b3a;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
+    }
+    .bonus-sum-last {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      align-items: flex-end;
+      min-width: 70px;
+      margin-left: auto;
+      color: #dde3e9;
+      font-size: 10px;
+      line-height: 1.15;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .bonus-sum-last-date {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 9px;
     }
     .bonus-sum-muted { color: var(--muted); font-weight: 600; }
     .bonus-sum-hero {
@@ -4929,12 +4949,28 @@
       const byType = new Map();
       const ladies = new Map();
       const men = new Map();
-      const bump = (map, key, name, id, usd) => {
+      const bump = (map, key, name, id, usd, row) => {
         if (!key) return;
-        if (!map.has(key)) map.set(key, { id, name, usd: 0, count: 0 });
+        if (!map.has(key)) {
+          map.set(key, {
+            id,
+            name,
+            usd: 0,
+            count: 0,
+            lastWhenTs: 0,
+            lastWhenTime: "",
+            lastWhenDate: "",
+          });
+        }
         const entry = map.get(key);
         entry.usd += usd;
         entry.count += 1;
+        const whenTs = Number(row?.whenTs) || 0;
+        if (whenTs >= entry.lastWhenTs) {
+          entry.lastWhenTs = whenTs;
+          entry.lastWhenTime = String(row?.whenTime || "").trim();
+          entry.lastWhenDate = String(row?.whenDate || "").trim();
+        }
       };
       for (const row of actions) {
         const usd = Number(row.amountUsd) || 0;
@@ -4942,8 +4978,22 @@
         if (!byType.has(type)) byType.set(type, { usd: 0, count: 0 });
         byType.get(type).usd += usd;
         byType.get(type).count += 1;
-        bump(ladies, row.girlId || row.girlName, row.girlName || `ID ${row.girlId}`, row.girlId, usd);
-        bump(men, row.manId || row.manName, row.manName || (row.manId ? `ID ${row.manId}` : "Unknown"), row.manId, usd);
+        bump(
+          ladies,
+          row.girlId || row.girlName,
+          row.girlName || `ID ${row.girlId}`,
+          row.girlId,
+          usd,
+          row,
+        );
+        bump(
+          men,
+          row.manId || row.manName,
+          row.manName || (row.manId ? `ID ${row.manId}` : "Unknown"),
+          row.manId,
+          usd,
+          row,
+        );
       }
       const typeRows = [...byType.entries()]
         .sort((a, b) => b[1].usd - a[1].usd)
@@ -4955,7 +5005,7 @@
             </div>`,
         )
         .join("");
-      const personRows = (map) =>
+      const personRows = (map, showLastPaid = false) =>
         [...map.values()]
           .sort((a, b) => b.usd - a.usd)
           .map((entry) => {
@@ -4970,6 +5020,14 @@
                     ${id ? `<span class="bonus-sum-person-id">${idLabelHtml(id)}</span>` : ""}
                   </span>
                 </span>
+                ${
+                  showLastPaid
+                    ? `<span class="bonus-sum-last" title="Last paid action">
+                        <span>${escapeHtml(entry.lastWhenTime || "—")}</span>
+                        <span class="bonus-sum-last-date">${escapeHtml(entry.lastWhenDate || "")}</span>
+                      </span>`
+                    : ""
+                }
                 <span class="bonus-sum-value">${formatBalanceUsd(entry.usd)}</span>
               </div>`;
           })
@@ -4990,7 +5048,7 @@
         </div>
         <div class="bonus-sum-card">
           <p class="bonus-sum-title">All men · ${men.size.toLocaleString("en-US")}</p>
-          ${personRows(men)}
+          ${personRows(men, true)}
         </div>`;
     }
 
