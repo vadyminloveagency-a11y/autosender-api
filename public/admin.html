@@ -1368,12 +1368,31 @@
     }
     .gold-man {
       display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .gold-man-avatar {
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
+    }
+    .gold-man-meta {
+      display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
     }
     .gold-man-name {
       color: #fff;
       font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .gold-man-id {
       color: var(--muted);
@@ -1567,8 +1586,7 @@
     }
     .bonus-actions-table {
       width: 100%;
-      min-width: 900px;
-      table-layout: fixed;
+      min-width: 760px;
       border-collapse: collapse;
       font: 13px/1.35 var(--font);
     }
@@ -1606,13 +1624,13 @@
     .bonus-actions-table td { text-align: center; }
     .bonus-actions-table th.bonus-col-name,
     .bonus-actions-table td.bonus-col-name { text-align: left; }
-    .bonus-actions-table .bonus-col-id { width: 10%; }
-    .bonus-actions-table .bonus-col-man { width: 16%; }
-    .bonus-actions-table .bonus-col-lady { width: 20%; }
-    .bonus-actions-table .bonus-col-date { width: 12%; }
-    .bonus-actions-table .bonus-col-type { width: 14%; }
-    .bonus-actions-table .bonus-col-dollars { width: 8%; }
-    .bonus-actions-table .bonus-col-operator { width: 10%; }
+    .bonus-actions-table .bonus-col-id,
+    .bonus-actions-table .bonus-col-date,
+    .bonus-actions-table .bonus-col-type,
+    .bonus-actions-table .bonus-col-dollars,
+    .bonus-actions-table .bonus-col-operator { width: 1%; }
+    .bonus-actions-table .bonus-col-man { width: 24%; }
+    .bonus-actions-table .bonus-col-lady { width: 28%; }
     .bonus-when {
       display: inline-flex;
       flex-direction: column;
@@ -3796,11 +3814,17 @@
           const qCount = Number(man.questionnaireCount || 0);
           const rowKey = goldManRowKey(man);
           const selected = goldMenSelectedKey && goldMenSelectedKey === rowKey ? " is-selected" : "";
+          const avatar = /^\d+$/.test(id)
+            ? `<img class="gold-man-avatar" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">`
+            : "";
           return `<tr class="${selected.trim()}" data-gold-man-key="${escapeHtml(rowKey)}" data-gold-man-index="${index}">
             <td>
               <div class="gold-man">
-                <span class="gold-man-name">${escapeHtml(displayName)}</span>
-                <span class="gold-man-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</span>
+                ${avatar}
+                <span class="gold-man-meta">
+                  <span class="gold-man-name">${escapeHtml(displayName)}</span>
+                  <span class="gold-man-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</span>
+                </span>
               </div>
             </td>
             <td>${escapeHtml(man.firstDay ? fmtBalDate(man.firstDay) : "—")}</td>
