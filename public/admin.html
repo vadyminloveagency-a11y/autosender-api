@@ -1425,13 +1425,13 @@
     .gold-man {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       min-width: 0;
     }
     .gold-man-avatar {
-      flex: 0 0 28px;
-      width: 28px;
-      height: 28px;
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       object-fit: cover;
       background: rgba(13, 19, 23, 0.8);
@@ -1452,20 +1452,43 @@
     }
     .gold-man-id {
       color: var(--muted);
-      font-size: 10px;
+      font-size: 9px;
       font-variant-numeric: tabular-nums;
       user-select: none;
+      cursor: copy;
+    }
+    .gold-man-id:hover .id-num {
+      color: #fff;
+      text-decoration: underline;
+      text-decoration-color: rgba(255, 43, 58, 0.65);
+      text-underline-offset: 2px;
+    }
+    .gold-man-id.is-copied .id-num {
+      color: #23d18b;
     }
     .gold-q-count {
       display: inline-flex;
       align-items: center;
       justify-content: flex-end;
-      min-width: 1.5em;
+      min-width: 22px;
+      min-height: 20px;
+      padding: 0 5px;
+      border: 1px solid rgba(255, 43, 58, 0.22);
+      border-radius: 5px;
+      background: rgba(255, 43, 58, 0.06);
       color: #fff;
       cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .gold-q-count:hover,
+    .gold-q-count:focus-visible {
+      border-color: rgba(255, 43, 58, 0.65);
+      background: rgba(255, 43, 58, 0.14);
+      color: #ffb7bd;
+      outline: none;
     }
     #gold-men-table tbody tr {
-      cursor: pointer;
+      cursor: default;
     }
     #gold-men-table tbody tr.is-selected {
       background: rgba(255, 43, 58, 0.07);
@@ -1475,8 +1498,19 @@
     }
     #gold-men-table th,
     #gold-men-table td {
-      padding: 5px 10px;
-      font-size: 12px;
+      padding: 3px 8px;
+      font-size: 11.5px;
+    }
+    .gold-paid-range {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .gold-paid-range-arrow {
+      color: rgba(152, 161, 170, 0.55);
+      font-size: 10px;
     }
     #gold-q-popover {
       position: fixed;
@@ -1570,12 +1604,12 @@
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
+    #gold-men-table td:nth-child(3),
     #gold-men-table td:nth-child(4),
-    #gold-men-table td:nth-child(5),
-    #gold-men-table td:nth-child(6) { text-align: right; }
+    #gold-men-table td:nth-child(5) { text-align: right; }
+    #gold-men-table th:nth-child(3),
     #gold-men-table th:nth-child(4),
-    #gold-men-table th:nth-child(5),
-    #gold-men-table th:nth-child(6) { text-align: right; }
+    #gold-men-table th:nth-child(5) { text-align: right; }
     #gold-men-table thead th {
       position: sticky;
       top: 0;
@@ -1589,11 +1623,33 @@
     .gold-men-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
       justify-content: flex-end;
       flex: 1 1 auto;
       min-width: 0;
+    }
+    .gold-men-tool-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px;
+      border: 1px solid rgba(78, 98, 108, 0.28);
+      border-radius: 8px;
+      background: rgba(13, 19, 23, 0.55);
+    }
+    .gold-men-tool-label {
+      padding-left: 5px;
+      color: var(--muted);
+      font: 700 9px/1 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #gold-men-repair {
+      opacity: 0.72;
+    }
+    #gold-men-repair:hover {
+      opacity: 1;
     }
     .gold-men-actions input[type="search"] {
       width: 210px;
@@ -2646,13 +2702,18 @@
               <div class="bal-topbar">
                 <h2 class="admin-main-title" style="margin:0;align-self:center">Gold Men Agency</h2>
                 <div class="gold-men-actions">
-                  <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
-                  <button type="button" id="gold-men-copy-ids" class="btn-ghost">Copy all IDs</button>
-                  <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
-                  <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
-                  <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
-                  <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
-                  <button type="button" id="gold-men-repair" class="btn-ghost">Repair incomplete</button>
+                  <div class="gold-men-tool-group">
+                    <input id="gold-men-search" type="search" placeholder="Search man by ID or name">
+                    <button type="button" id="gold-men-copy-ids" class="btn-ghost">Copy all IDs</button>
+                    <button type="button" id="gold-men-refresh" class="btn-ghost">Refresh</button>
+                  </div>
+                  <div class="gold-men-tool-group">
+                    <span class="gold-men-tool-label">Period</span>
+                    <input id="gold-men-sync-from" type="date" aria-label="History from date" title="From (older)">
+                    <input id="gold-men-sync-to" type="date" aria-label="History to date" title="To (current or earlier)">
+                    <button type="button" id="gold-men-sync-period" class="btn-primary">Load period</button>
+                    <button type="button" id="gold-men-repair" class="btn-ghost">Repair incomplete</button>
+                  </div>
                 </div>
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
@@ -2663,8 +2724,7 @@
                     <thead>
                       <tr>
                         <th>Man</th>
-                        <th>First paid action</th>
-                        <th>Last paid action</th>
+                        <th>Paid period</th>
                         <th>Questionnaires</th>
                         <th>Actions</th>
                         <th>Total</th>
@@ -4064,14 +4124,19 @@
                 ${avatar}
                 <span class="gold-man-meta">
                   <span class="gold-man-name">${escapeHtml(displayName)}</span>
-                  <span class="gold-man-id">${idLabelHtml(id)}</span>
+                  <span class="gold-man-id" data-copy-id="${escapeHtml(id)}" title="Click to copy ID">${idLabelHtml(id)}</span>
                 </span>
               </div>
             </td>
-            <td>${escapeHtml(man.firstDay ? fmtBalDate(man.firstDay) : "—")}</td>
-            <td>${escapeHtml(man.lastDay ? fmtBalDate(man.lastDay) : "—")}</td>
             <td>
-              <span class="gold-q-count" data-gold-q-index="${index}" tabindex="0">${qCount.toLocaleString("en-US")}</span>
+              <span class="gold-paid-range">
+                <span>${escapeHtml(man.firstDay ? fmtBalDate(man.firstDay) : "—")}</span>
+                <span class="gold-paid-range-arrow">→</span>
+                <span>${escapeHtml(man.lastDay ? fmtBalDate(man.lastDay) : "—")}</span>
+              </span>
+            </td>
+            <td>
+              <span class="gold-q-count" data-gold-q-index="${index}" tabindex="0" title="Open questionnaires">${qCount.toLocaleString("en-US")}</span>
             </td>
             <td>${Number(man.actionCount || 0).toLocaleString("en-US")}</td>
             <td>${formatBalanceUsd(man.totalUsd)}</td>
@@ -5821,6 +5886,34 @@
       hideGoldMenQuestionnairesTip();
     });
     document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
+      const copyId = event.target.closest("[data-copy-id]");
+      if (copyId) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = String(copyId.getAttribute("data-copy-id") || "").trim();
+        if (!id) return;
+        void (async () => {
+          try {
+            await navigator.clipboard.writeText(id);
+          } catch (_) {
+            const textarea = document.createElement("textarea");
+            textarea.value = id;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            textarea.remove();
+          }
+          copyId.classList.add("is-copied");
+          copyId.title = "Copied";
+          window.setTimeout(() => {
+            copyId.classList.remove("is-copied");
+            copyId.title = "Click to copy ID";
+          }, 1000);
+        })();
+        return;
+      }
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
