@@ -5506,39 +5506,30 @@
 
     function positionBonusManTip(anchor, tip) {
       if (!anchor || !tip) return;
-      // body has zoom: 1.1 — getBoundingClientRect is visual px;
-      // assigned style.left/top are pre-zoom CSS px, so divide by zoom.
-      const zoom = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
+      const gap = 6;
+      const pad = 8;
+      tip.style.maxWidth = "";
       tip.style.left = "0px";
       tip.style.top = "0px";
-      tip.style.maxWidth = "";
-      const gap = 14;
-      const pad = 8;
       const capsule = anchor.getBoundingClientRect();
-      // Hard rule: tip must sit entirely LEFT of the man's capsule.
-      // Never use the summary panel edge — only this capsule's left border.
-      const boundary = capsule.left;
-      const maxWidth = Math.max(220, boundary - gap - pad);
-      tip.style.maxWidth = `${Math.floor(maxWidth / zoom)}px`;
-      // Force layout so width/height match the clamped max-width.
-      void tip.offsetWidth;
-      let tipRect = tip.getBoundingClientRect();
-      let left = boundary - gap - tipRect.width;
-      if (left < pad) left = pad;
-      let top = capsule.top;
-      tipRect = tip.getBoundingClientRect();
-      if (top + tipRect.height > window.innerHeight - pad) {
-        top = Math.max(pad, window.innerHeight - tipRect.height - pad);
+      // Calibrate how many visual px one CSS px of left/top actually moves
+      // (body zoom scales assigned coordinates). No guessing — measure it.
+      const at0 = tip.getBoundingClientRect();
+      tip.style.left = "100px";
+      tip.style.top = "100px";
+      const at100 = tip.getBoundingClientRect();
+      const scale = (at100.left - at0.left) / 100 || 1;
+      const maxVisualWidth = Math.max(220, capsule.left - gap - pad);
+      tip.style.maxWidth = `${Math.floor(maxVisualWidth / scale)}px`;
+      const rect = tip.getBoundingClientRect();
+      // Tip's RIGHT edge sits exactly at the capsule's LEFT edge (minus gap).
+      const targetLeft = Math.max(pad, capsule.left - gap - rect.width);
+      let targetTop = capsule.top;
+      if (targetTop + rect.height > window.innerHeight - pad) {
+        targetTop = Math.max(pad, window.innerHeight - rect.height - pad);
       }
-      if (top < pad) top = pad;
-      tip.style.left = `${Math.round(left / zoom)}px`;
-      tip.style.top = `${Math.round(top / zoom)}px`;
-      // Second pass: if zoom/layout still caused overlap, shove left until clear.
-      tipRect = tip.getBoundingClientRect();
-      if (tipRect.right > boundary - gap) {
-        const fixLeft = Math.max(pad, boundary - gap - tipRect.width);
-        tip.style.left = `${Math.round(fixLeft / zoom)}px`;
-      }
+      tip.style.left = `${Math.round(100 + (targetLeft - at100.left) / scale)}px`;
+      tip.style.top = `${Math.round(100 + (targetTop - at100.top) / scale)}px`;
     }
 
     function showBonusManTip(anchor, manKey) {
