@@ -1585,8 +1585,8 @@
       background: rgba(255, 43, 58, 0.82);
     }
     .bonus-actions-table {
-      width: 100%;
-      min-width: 760px;
+      width: max-content;
+      max-width: 100%;
       border-collapse: collapse;
       font: 13px/1.35 var(--font);
     }
@@ -1596,9 +1596,8 @@
       border-bottom: 1px solid rgba(78, 98, 108, 0.22);
       text-align: left;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       vertical-align: middle;
+      width: 1%;
     }
     .bonus-actions-table th {
       color: #98a1aa;
@@ -1620,17 +1619,8 @@
       color: #ff2b3a;
       font-weight: 700;
     }
-    .bonus-actions-table th,
-    .bonus-actions-table td { text-align: center; }
     .bonus-actions-table th.bonus-col-name,
     .bonus-actions-table td.bonus-col-name { text-align: left; }
-    .bonus-actions-table .bonus-col-id,
-    .bonus-actions-table .bonus-col-date,
-    .bonus-actions-table .bonus-col-type,
-    .bonus-actions-table .bonus-col-dollars,
-    .bonus-actions-table .bonus-col-operator { width: 1%; }
-    .bonus-actions-table .bonus-col-man { width: 24%; }
-    .bonus-actions-table .bonus-col-lady { width: 28%; }
     .bonus-when {
       display: inline-flex;
       flex-direction: column;
@@ -1642,12 +1632,9 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      max-width: 100%;
-      min-width: 0;
     }
     .bonus-person-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .bonus-person-ava {
       flex: 0 0 auto;
