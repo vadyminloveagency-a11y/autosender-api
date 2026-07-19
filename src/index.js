@@ -20,6 +20,7 @@ import { ensureAgencyFinanceTables } from "./agencyFinanceStore.js";
 import { ensureAgencyFinanceActionTables } from "./agencyFinanceActionsStore.js";
 import { refreshCurrentFinanceActionsCache } from "./agencyFinanceActionsCache.js";
 import { createWorkersProxy } from "./workersProxy.js";
+import letterbotDirectorRoutes from "./letterbotDirectorRoutes.js";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -57,6 +58,7 @@ app.get("/health", (req, res) => {
     workers: runWorkers,
     adminJobs: runAdminJobs,
     adminPublicUrl: resolveAdminPublicUrl(req) || null,
+    directorV2Merge: appRole === "admin",
   });
 });
 
@@ -107,8 +109,11 @@ if (runAdminJobs) {
   app.use("/agency-finance", agencyFinanceRoutes);
 }
 
-// LetterBot / Sender live only on the workers instance. Admin proxies there.
+// LetterBot / Sender live only on the workers instance. Admin proxies there,
+// except director Mailings endpoints which merge classic + V2 on the admin service
+// (workers autoDeploy is false — merge must live here to ship).
 if (appRole === "admin") {
+  app.use("/letterbot", letterbotDirectorRoutes);
   if (workersApiUrl) {
     const proxy = createWorkersProxy(workersApiUrl);
     app.use("/letterbot", proxy);

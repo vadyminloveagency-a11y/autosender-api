@@ -1,6 +1,6 @@
 /**
  * Merge AutoSender V2 LetterBot director data into the classic admin cabinet.
- * V2 jobs live in v2_* tables (same Postgres when DATABASE_URL is shared).
+ * Prefers live V2 HTTP API (in-memory WS totals); falls back to shared DB v2_* tables.
  */
 import { getPool } from "./db.js";
 
@@ -24,8 +24,75 @@ function parseState(raw) {
   return {};
 }
 
+function v2ApiBase() {
+  return String(
+    process.env.V2_LETTERBOT_API_URL || "https://autosender-v2-api.onrender.com",
+  )
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+function directorSyncSecret() {
+  return String(
+    process.env.DIRECTOR_SYNC_SECRET || "autosender-v2-director-sync-2026",
+  ).trim();
+}
+
+async function fetchV2Json(pathAndQuery) {
+  const base = v2ApiBase();
+  const secret = directorSyncSecret();
+  if (!base || !secret) return null;
+  try {
+    const response = await fetch(`${base}${pathAndQuery}`, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "x-director-sync": secret,
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch (_) {
+    return null;
+  }
+}
+
+function normalizeV2Job(job) {
+  const dailyTotal =
+    Number(job?.dailyTotal) > 0
+      ? Math.trunc(Number(job.dailyTotal))
+      : Number(job?.daySent) > 0
+        ? Math.trunc(Number(job.daySent))
+        : dreamDailyTotalFromState(job?.state || job) || null;
+  return {
+    userId: Number(job.userId),
+    profileId: String(job.profileId || "default"),
+    operatorEmail: String(job.operatorEmail || ""),
+    operatorName: String(job.operatorName || ""),
+    sessionActive: Boolean(job.sessionActive),
+    isPaused: Boolean(job.isPaused),
+    filter: String(job.filter || ""),
+    percent: job.percent ?? null,
+    sent: job.sent ?? null,
+    total: dailyTotal,
+    daySent: dailyTotal,
+    dailyTotal,
+    statusMessage: String(job.statusMessage || ""),
+    updatedAt: job.updatedAt || null,
+    displayName: job.displayName || "",
+    photoUrl: job.photoUrl || "",
+    source: "v2",
+  };
+}
+
 /** Active V2 cloud LetterBot jobs for director Active mailings. */
 export async function listV2ActiveDirectorJobs() {
+  const fromApi = await fetchV2Json("/letterbot/admin/running");
+  if (Array.isArray(fromApi?.jobs) && fromApi.jobs.length) {
+    return fromApi.jobs.map(normalizeV2Job);
+  }
+
   const db = getPool();
   try {
     const result = await db.query(
@@ -61,7 +128,6 @@ export async function listV2ActiveDirectorJobs() {
       };
     });
   } catch (error) {
-    // Table may not exist yet on a fresh DB.
     if (/v2_letterbot_jobs|does not exist/i.test(String(error?.message || error))) {
       return [];
     }
@@ -73,6 +139,20 @@ export async function listV2ActiveDirectorJobs() {
 export async function listV2LetterbotDailyByProfile(dayKey) {
   const day = String(dayKey || "").slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return [];
+
+  const fromApi = await fetchV2Json(
+    `/letterbot/admin/letters-by-profile?date=${encodeURIComponent(day)}`,
+  );
+  if (Array.isArray(fromApi?.profiles) && fromApi.profiles.length) {
+    return fromApi.profiles
+      .map((row) => ({
+        profileId: String(row.profileId || ""),
+        userId: null,
+        letters: Math.trunc(Number(row.letterbot) || 0),
+      }))
+      .filter((row) => row.profileId && row.letters > 0);
+  }
+
   const db = getPool();
   try {
     const result = await db.query(
@@ -122,8 +202,8 @@ export async function requestV2OperatorShiftDisconnect(userId, profileId) {
 
 /** Best-effort stop of the live V2 in-memory worker (needs DIRECTOR_SYNC_SECRET). */
 export async function stopV2LetterBotRemote(userId, profileId, { disconnect = false } = {}) {
-  const base = String(process.env.V2_LETTERBOT_API_URL || "").trim().replace(/\/+$/, "");
-  const secret = String(process.env.DIRECTOR_SYNC_SECRET || "").trim();
+  const base = v2ApiBase();
+  const secret = directorSyncSecret();
   if (!base || !secret) return { ok: false, skipped: true };
   const path = disconnect ? "/letterbot/admin/disconnect-shift" : "/letterbot/admin/stop";
   try {

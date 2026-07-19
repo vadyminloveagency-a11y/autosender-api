@@ -56,3 +56,7 @@ services:
         fromDatabase:
           name: autosender-db
           property: connectionString
+      - key: V2_LETTERBOT_API_URL
+        value: https://autosender-v2-api.onrender.com
+      - key: DIRECTOR_SYNC_SECRET
+        value: autosender-v2-director-sync-2026
