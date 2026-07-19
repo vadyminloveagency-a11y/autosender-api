@@ -1600,7 +1600,89 @@
       opacity: 0.85;
       cursor: pointer;
     }
+    .bonus-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    .bonus-layout.hidden { display: none; }
+    .bonus-summary {
+      flex: 1 1 260px;
+      min-width: 230px;
+      max-width: 340px;
+      position: sticky;
+      top: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: calc(100vh - 340px);
+      overflow: auto;
+    }
+    .bonus-sum-card {
+      border: 1px solid rgba(78, 98, 108, 0.35);
+      border-radius: 8px;
+      background: #11151a;
+      padding: 12px 14px;
+    }
+    .bonus-sum-title {
+      margin: 0 0 8px;
+      color: #98a1aa;
+      font: 700 11px/1.2 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .bonus-sum-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 0;
+      font: 500 12.5px/1.3 var(--font);
+      color: #dde3e9;
+      min-width: 0;
+    }
+    .bonus-sum-row + .bonus-sum-row {
+      border-top: 1px solid rgba(78, 98, 108, 0.16);
+    }
+    .bonus-sum-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bonus-sum-ava {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
+    }
+    .bonus-sum-value {
+      flex: 0 0 auto;
+      color: #ff2b3a;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .bonus-sum-muted { color: var(--muted); font-weight: 600; }
+    .bonus-sum-hero {
+      margin: 0;
+      color: #ff2b3a;
+      font: 800 24px/1.1 var(--font);
+      font-variant-numeric: tabular-nums;
+    }
+    .bonus-sum-sub {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font: 500 12px/1.3 var(--font);
+    }
     .bonus-profiles {
+      flex: 0 1 auto;
+      min-width: 0;
       overflow: auto;
       max-height: calc(100vh - 340px);
       border: 1px solid rgba(78, 98, 108, 0.35);
@@ -1629,7 +1711,7 @@
       width: max-content;
       max-width: 100%;
       border-collapse: collapse;
-      font: 13px/1.35 var(--font);
+      font: 12px/1.3 var(--font);
     }
     .bonus-actions-table th,
     .bonus-actions-table td {
@@ -2473,7 +2555,10 @@
                   <div id="bal-tab-bonuses" class="bal-tab-panel" role="tabpanel" hidden>
                     <div id="bonus-status" class="mail-day-empty" style="display:none;padding:0 0 12px;text-align:left"></div>
                     <div id="bonus-day-empty" class="mail-day-empty">No paid actions for this day.</div>
-                    <div id="bonus-profiles" class="bonus-profiles hidden"></div>
+                    <div id="bonus-layout" class="bonus-layout hidden">
+                      <div id="bonus-profiles" class="bonus-profiles"></div>
+                      <aside id="bonus-summary" class="bonus-summary" aria-label="Period summary"></aside>
+                    </div>
                   </div>
 
                   <div id="bal-loading" class="bal-loading-overlay" aria-hidden="true">
@@ -4657,6 +4742,73 @@
       return rows.sort((a, b) => (b.whenTs || 0) - (a.whenTs || 0));
     }
 
+    function renderBonusSummary(actions, totalUsd) {
+      const box = document.getElementById("bonus-summary");
+      if (!box) return;
+      const byType = new Map();
+      const ladies = new Map();
+      const men = new Map();
+      const bump = (map, key, name, id, usd) => {
+        if (!key) return;
+        if (!map.has(key)) map.set(key, { id, name, usd: 0, count: 0 });
+        const entry = map.get(key);
+        entry.usd += usd;
+        entry.count += 1;
+      };
+      for (const row of actions) {
+        const usd = Number(row.amountUsd) || 0;
+        const type = String(row.type || "Paid action").trim() || "Paid action";
+        if (!byType.has(type)) byType.set(type, { usd: 0, count: 0 });
+        byType.get(type).usd += usd;
+        byType.get(type).count += 1;
+        bump(ladies, row.girlId || row.girlName, row.girlName || `ID ${row.girlId}`, row.girlId, usd);
+        bump(men, row.manId || row.manName, row.manName || (row.manId ? `ID ${row.manId}` : "Unknown"), row.manId, usd);
+      }
+      const typeRows = [...byType.entries()]
+        .sort((a, b) => b[1].usd - a[1].usd)
+        .map(
+          ([type, agg]) => `
+            <div class="bonus-sum-row">
+              <span class="bonus-sum-label">${escapeHtml(type)} <span class="bonus-sum-muted">× ${agg.count}</span></span>
+              <span class="bonus-sum-value">${formatBalanceUsd(agg.usd)}</span>
+            </div>`,
+        )
+        .join("");
+      const personRows = (map, limit = 5) =>
+        [...map.values()]
+          .sort((a, b) => b.usd - a.usd)
+          .slice(0, limit)
+          .map((entry) => {
+            const ava = /^\d+$/.test(String(entry.id || ""))
+              ? `<img class="bonus-sum-ava" src="https://profile-photos-cdn.dream-singles.com/im${entry.id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">`
+              : "";
+            return `
+              <div class="bonus-sum-row">
+                <span class="bonus-sum-label">${ava}${escapeHtml(entry.name || "—")}</span>
+                <span class="bonus-sum-value">${formatBalanceUsd(entry.usd)}</span>
+              </div>`;
+          })
+          .join("");
+      box.innerHTML = `
+        <div class="bonus-sum-card">
+          <p class="bonus-sum-title">Period total</p>
+          <p class="bonus-sum-hero">${formatBalanceUsd(totalUsd)}</p>
+          <p class="bonus-sum-sub">${actions.length.toLocaleString("en-US")} actions · ${men.size.toLocaleString("en-US")} men · ${ladies.size.toLocaleString("en-US")} ladies</p>
+        </div>
+        <div class="bonus-sum-card">
+          <p class="bonus-sum-title">By type</p>
+          ${typeRows}
+        </div>
+        <div class="bonus-sum-card">
+          <p class="bonus-sum-title">Top ladies</p>
+          ${personRows(ladies)}
+        </div>
+        <div class="bonus-sum-card">
+          <p class="bonus-sum-title">Top men</p>
+          ${personRows(men)}
+        </div>`;
+    }
+
     function renderBonusActions(profiles, date, meta = {}) {
       const emptyEl = document.getElementById("bonus-day-empty");
       const listEl = document.getElementById("bonus-profiles");
@@ -4689,8 +4841,10 @@
         totalWrap.classList.toggle("hidden", balCalState.activeTab !== "bonuses");
       }
 
+      const layoutEl = document.getElementById("bonus-layout");
       if (!actions.length) {
         emptyEl.classList.remove("hidden");
+        layoutEl?.classList.add("hidden");
         listEl.classList.add("hidden");
         listEl.innerHTML = "";
         emptyEl.textContent = "No paid actions for this day.";
@@ -4698,7 +4852,9 @@
       }
 
       emptyEl.classList.add("hidden");
+      layoutEl?.classList.remove("hidden");
       listEl.classList.remove("hidden");
+      renderBonusSummary(actions, totalUsd);
       const showOperator = actions.some((row) => String(row.operator || "").trim());
       const personCell = (idValue, nameValue) => {
         const id = String(idValue || "").trim();
