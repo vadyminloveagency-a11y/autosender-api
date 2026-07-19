@@ -493,29 +493,6 @@ router.get("/status", authMiddleware, async (req, res) => {
   return res.json({ ok: true, state });
 });
 
-router.get("/daily-total", authMiddleware, async (req, res) => {
-  const profileId = profileIdFrom(req);
-  const worker = getWorker(req, profileId);
-  try {
-    const dailyTotal = await worker.refreshDailyTotalFromCloud({
-      force: req.query?.force === "1",
-    });
-    return res.json({
-      ok: Boolean(Number(dailyTotal) > 0),
-      dailyTotal: Number(dailyTotal) > 0 ? Number(dailyTotal) : null,
-      state: worker.getState(),
-    });
-  } catch (error) {
-    return res.json({
-      ok: false,
-      dailyTotal:
-        Number(worker.state?.dailyTotal) > 0 ? Number(worker.state.dailyTotal) : null,
-      state: worker.getState(),
-      error: error?.message || String(error),
-    });
-  }
-});
-
 router.post("/start", authMiddleware, async (req, res) => {
   const profileId = profileIdFrom(req);
   const header = cookiesToHeader(req.body?.cookies, req.body?.cookieHeader);

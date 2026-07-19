@@ -84,7 +84,6 @@ class LetterBotWorker {
     this.onPersist = onPersist || null;
     this.credentialsProvider = credentialsProvider || null;
     this.reloginInFlight = null;
-    this.dailyTotalRefreshInFlight = null;
     this.cookieHeader = "";
     this.socket = null;
     this.connectPromise = null;
@@ -223,34 +222,6 @@ class LetterBotWorker {
       } catch (_) {}
     }
     return best;
-  }
-
-  async refreshDailyTotalFromCloud({ force = false } = {}) {
-    const day = this.kyivDayKey();
-    const fresh =
-      this.state.dailyTotalDayKey === day &&
-      Number(this.state.dailyTotal) > 0 &&
-      Date.now() - Number(this.state.dailyTotalAt || 0) < 30_000;
-    if (!force && fresh) return this.state.dailyTotal;
-    if (this.dailyTotalRefreshInFlight) return this.dailyTotalRefreshInFlight;
-
-    this.dailyTotalRefreshInFlight = (async () => {
-      // The cloud worker owns Dream credentials/cookies; Chrome does not need
-      // an open /bot/send tab for TOTAL DAY.
-      await this.fetchLetterBotJwt(true, { allowRelogin: true });
-      if (this.state.dailyTotalDayKey === day && Number(this.state.dailyTotal) > 0) {
-        return this.state.dailyTotal;
-      }
-      const scraped = await this.scrapeDailyTotalFromDreamPages();
-      if (this.applyDailyTotal(scraped)) this.emitState();
-      return Number(this.state.dailyTotal) > 0 ? this.state.dailyTotal : null;
-    })();
-
-    try {
-      return await this.dailyTotalRefreshInFlight;
-    } finally {
-      this.dailyTotalRefreshInFlight = null;
-    }
   }
 
   applyDailyTotal(raw) {
