@@ -6304,6 +6304,25 @@
     }
 
     async function init() {
+      try {
+        const health = await fetch(`${API}/health`).then((r) => r.json()).catch(() => null);
+        if (health && health.adminJobs === false) {
+          const target = String(health.adminPublicUrl || "").trim();
+          if (target) {
+            window.location.replace(`${target.replace(/\/$/, "")}/admin`);
+            return;
+          }
+          showView("login");
+          setStatus(
+            "Wrong host: this is the workers API. Open the admin Render URL (autosender-admin.onrender.com/admin).",
+            "error",
+            "auth",
+          );
+          return;
+        }
+      } catch (_) {
+        /* ignore health probe failures */
+      }
       if (token) {
         try {
           const user = JSON.parse(localStorage.getItem("autosenderAdminUser") || "{}");

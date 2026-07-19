@@ -36,6 +36,7 @@ const appRole = (() => {
 const runWorkers = appRole === "all" || appRole === "workers";
 const runAdminJobs = appRole === "all" || appRole === "admin";
 const workersApiUrl = String(process.env.WORKERS_API_URL || "").trim();
+const adminPublicUrl = String(process.env.ADMIN_PUBLIC_URL || "").trim().replace(/\/$/, "");
 
 app.use(express.json({ limit: "2mb" }));
 app.use(
@@ -55,12 +56,34 @@ app.get("/health", (_req, res) => {
     role: appRole,
     workers: runWorkers,
     adminJobs: runAdminJobs,
+    adminPublicUrl: adminPublicUrl || null,
   });
 });
 
-app.get("/admin", (_req, res) => {
-  res.sendFile(path.join(__dirname, "../public/admin.html"));
-});
+function sendAdminCabinet(req, res) {
+  // Workers instance has no /agency-finance — redirect directors to the admin service.
+  if (!runAdminJobs) {
+    if (adminPublicUrl) {
+      return res.redirect(302, `${adminPublicUrl}/admin`);
+    }
+    return res
+      .status(503)
+      .type("html")
+      .send(
+        `<!doctype html><meta charset="utf-8"><title>Wrong service</title>
+         <body style="font:16px/1.4 system-ui;background:#0b0f14;color:#fff;padding:40px">
+         <h1>This is the workers API</h1>
+         <p>Open the director cabinet on the <b>admin</b> Render service
+         (set <code>ADMIN_PUBLIC_URL</code> on this service to auto-redirect).</p>
+         <p>Example: <code>https://autosender-admin.onrender.com/admin</code></p>
+         </body>`,
+      );
+  }
+  return res.sendFile(path.join(__dirname, "../public/admin.html"));
+}
+
+app.get("/admin", sendAdminCabinet);
+app.get("/admin.html", sendAdminCabinet);
 
 app.use(express.static(path.join(__dirname, "../public")));
 
