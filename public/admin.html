@@ -5340,43 +5340,42 @@
 
     function positionBonusManTip(anchor, tip) {
       if (!anchor || !tip) return;
-      const pad = 10;
       const table = document.getElementById("bonus-profiles");
       const tableRect = table?.getBoundingClientRect();
       tip.style.left = "0px";
       tip.style.top = "0px";
       const tipRect = tip.getBoundingClientRect();
+      const gap = 8;
       let left;
       let top;
       if (tableRect && tableRect.width > 40) {
-        // Anchor over the Type / Dollars / Operator columns of the bonuses table.
+        // Stay strictly inside the left table panel — right edge is the
+        // scrollbar/gutter boundary before the summary sidebar.
         const typeCol = table.querySelector(".bonus-actions-table th.bonus-col-type");
         const typeRect = typeCol?.getBoundingClientRect();
+        const maxWidth = Math.max(220, tableRect.width - gap * 2);
+        if (tipRect.width > maxWidth) {
+          tip.style.maxWidth = `${Math.floor(maxWidth)}px`;
+        }
+        const width = Math.min(tip.getBoundingClientRect().width, maxWidth);
         if (typeRect && typeRect.width > 0) {
-          left = typeRect.left - 6;
+          left = typeRect.left;
         } else {
-          left = tableRect.left + tableRect.width * 0.45;
+          left = tableRect.right - width - gap;
         }
-        if (left + tipRect.width > tableRect.right - 8) {
-          left = Math.max(tableRect.left + 8, tableRect.right - tipRect.width - 8);
-        }
-        top = tableRect.top + 10;
-        if (top + tipRect.height > tableRect.bottom - 8) {
-          top = Math.max(tableRect.top + 8, tableRect.bottom - tipRect.height - 8);
+        // Clamp to table panel bounds (never cross into the sidebar).
+        left = Math.min(left, tableRect.right - width - gap);
+        left = Math.max(tableRect.left + gap, left);
+        top = tableRect.top + gap;
+        const height = tip.getBoundingClientRect().height;
+        if (top + height > tableRect.bottom - gap) {
+          top = Math.max(tableRect.top + gap, tableRect.bottom - height - gap);
         }
       } else {
         const rect = anchor.getBoundingClientRect();
-        left = Math.max(pad, rect.left - tipRect.width - 12);
+        left = Math.max(10, rect.left - tipRect.width - 12);
         top = rect.top;
       }
-      if (left + tipRect.width > window.innerWidth - pad) {
-        left = Math.max(pad, window.innerWidth - tipRect.width - pad);
-      }
-      if (left < pad) left = pad;
-      if (top + tipRect.height > window.innerHeight - pad) {
-        top = Math.max(pad, window.innerHeight - tipRect.height - pad);
-      }
-      if (top < pad) top = pad;
       tip.style.left = `${Math.round(left)}px`;
       tip.style.top = `${Math.round(top)}px`;
     }
