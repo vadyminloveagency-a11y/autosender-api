@@ -40,8 +40,8 @@
       --sidebar: rgba(20, 24, 28, 0.88);
       --sidebar-text: #e9edf1;
       --sidebar-muted: #98a1aa;
-      --ui-zoom: 1.1;
-      --ui-vh: calc(100vh / var(--ui-zoom));
+      --ui-zoom: 1;
+      --ui-vh: 100vh;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
@@ -68,7 +68,6 @@
       color: var(--text);
       background: var(--bg-0);
       -webkit-font-smoothing: antialiased;
-      zoom: var(--ui-zoom);
     }
     body.auth-page,
     body.panel-page {
@@ -816,8 +815,7 @@
       justify-content: center;
       gap: 14px;
       border-radius: 10px;
-      background: rgba(6, 12, 16, 0.78);
-      backdrop-filter: blur(2px);
+      background: rgba(6, 12, 16, 0.88);
     }
     .bal-loading-overlay.is-active {
       display: flex;
@@ -1558,8 +1556,7 @@
       align-items: center;
       justify-content: center;
       border-radius: 8px;
-      background: rgba(6, 12, 16, 0.72);
-      backdrop-filter: blur(2px);
+      background: rgba(6, 12, 16, 0.88);
       pointer-events: all;
     }
     .gold-men-loading.is-active { display: flex; }
@@ -2140,9 +2137,7 @@
       inset: 0;
       z-index: 80;
       display: none;
-      background: rgba(4, 7, 10, 0.55);
-      backdrop-filter: blur(2.5px);
-      -webkit-backdrop-filter: blur(2.5px);
+      background: rgba(4, 7, 10, 0.72);
     }
     #bonus-man-backdrop.is-open { display: block; }
     .bonus-sum-row.is-man.is-active {
@@ -2484,9 +2479,7 @@
     .am-col {
       border: 1px solid rgba(255, 43, 58, 0.18);
       border-radius: 14px;
-      background: rgba(18, 23, 28, 0.62);
-      backdrop-filter: blur(10px) saturate(1.05);
-      -webkit-backdrop-filter: blur(10px) saturate(1.05);
+      background: rgba(14, 18, 22, 0.94);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -2622,8 +2615,7 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      background: rgba(5, 8, 12, 0.62);
-      backdrop-filter: blur(6px);
+      background: rgba(5, 8, 12, 0.78);
     }
     .modal-card {
       width: 100%;
@@ -2633,9 +2625,7 @@
       padding: 22px;
       border: 1px solid rgba(255, 43, 58, 0.22);
       border-radius: 16px;
-      background: rgba(8, 12, 20, 0.88);
-      backdrop-filter: blur(12px) saturate(1.08);
-      -webkit-backdrop-filter: blur(12px) saturate(1.08);
+      background: rgba(10, 14, 20, 0.97);
       box-shadow: var(--shadow);
     }
     .modal-head {
@@ -3626,11 +3616,19 @@
         await refreshAccountManager({ quiet: true, syncDream: false });
       })();
       if (mailingsTimer) clearInterval(mailingsTimer);
+      let mailingsPollBusy = false;
       mailingsTimer = setInterval(() => {
+        if (mailingsPollBusy) return;
+        if (document.visibilityState === "hidden") return;
         const mailingsActive = document.getElementById("section-mailings")?.classList.contains("is-active");
         if (!mailingsActive) return;
-        if (mailCalState.activeTab === "active") void refreshMailings({ quiet: true });
-        else void refreshMailCalendar({ quiet: true });
+        mailingsPollBusy = true;
+        const done = () => { mailingsPollBusy = false; };
+        const job =
+          mailCalState.activeTab === "active"
+            ? refreshMailings({ quiet: true })
+            : refreshMailCalendar({ quiet: true });
+        Promise.resolve(job).finally(done);
       }, 30000);
     }
 
@@ -3653,8 +3651,8 @@
       });
       if (next === "mailings") {
         syncMailTabUi(mailCalState.activeTab);
-        void refreshMailCalendar({ quiet: true });
-        void refreshMailings({ quiet: true });
+        if (mailCalState.activeTab === "active") void refreshMailings({ quiet: true });
+        else void refreshMailCalendar({ quiet: true });
       }
       if (next === "balances") {
         // Re-apply balances tab visibility after Mailings — shared classes used to hide the panel.
@@ -3662,9 +3660,9 @@
         hideBalSpinner();
         void refreshAgencyFinanceCredsHint();
         // Wait one frame so flex layout exists (section was display:none).
+        // refreshBalances already refreshes the month total — don't duplicate.
         requestAnimationFrame(() => {
           void refreshBalances({ quiet: true });
-          void refreshVisibleMonthTotal();
         });
       }
       if (next === "settings") {
@@ -5053,6 +5051,7 @@
     let balProfilesCache = { profiles: [], date: "", meta: {} };
     let bonusProfilesCache = { profiles: [], date: "", meta: {} };
     let balMonthTotalRequestKey = "";
+    let balancesRequestVersion = 0;
 
     function visibleBalMonthBounds() {
       const today = balCalState.today || kyivTodayLocal();
@@ -5323,7 +5322,7 @@
       localStorage.setItem(ADMIN_BAL_TAB_KEY, next);
       syncBalTabUi(next);
       if (next === "bonuses" && balCalState.bonusesLoadedFor !== balCacheKey()) {
-        void refreshBonusActions({ quiet: true });
+        void refreshBalances({ quiet: true });
       }
     }
 
@@ -5562,27 +5561,17 @@
       const gap = 6;
       const pad = 8;
       tip.style.maxWidth = "";
-      tip.style.left = "0px";
-      tip.style.top = "0px";
       const capsule = anchor.getBoundingClientRect();
-      // Calibrate how many visual px one CSS px of left/top actually moves
-      // (body zoom scales assigned coordinates). No guessing — measure it.
-      const at0 = tip.getBoundingClientRect();
-      tip.style.left = "100px";
-      tip.style.top = "100px";
-      const at100 = tip.getBoundingClientRect();
-      const scale = (at100.left - at0.left) / 100 || 1;
-      const maxVisualWidth = Math.max(220, capsule.left - gap - pad);
-      tip.style.maxWidth = `${Math.floor(maxVisualWidth / scale)}px`;
+      // Tip's RIGHT edge sits just left of the man's capsule.
+      tip.style.maxWidth = `${Math.max(220, Math.floor(capsule.left - gap - pad))}px`;
       const rect = tip.getBoundingClientRect();
-      // Tip's RIGHT edge sits exactly at the capsule's LEFT edge (minus gap).
-      const targetLeft = Math.max(pad, capsule.left - gap - rect.width);
-      let targetTop = capsule.top;
-      if (targetTop + rect.height > window.innerHeight - pad) {
-        targetTop = Math.max(pad, window.innerHeight - rect.height - pad);
+      let left = Math.max(pad, capsule.left - gap - rect.width);
+      let top = capsule.top;
+      if (top + rect.height > window.innerHeight - pad) {
+        top = Math.max(pad, window.innerHeight - rect.height - pad);
       }
-      tip.style.left = `${Math.round(100 + (targetLeft - at100.left) / scale)}px`;
-      tip.style.top = `${Math.round(100 + (targetTop - at100.top) / scale)}px`;
+      tip.style.left = `${Math.round(left)}px`;
+      tip.style.top = `${Math.round(top)}px`;
     }
 
     function showBonusManTip(anchor, manKey) {
@@ -5730,9 +5719,11 @@
             </div>`,
         )
         .join("");
-      const personRows = (map, { showLastPaid = false, isMan = false } = {}) =>
-        [...map.values()]
-          .sort((a, b) => b.usd - a.usd)
+      const SUMMARY_LIMIT = 80;
+      const personRows = (map, { showLastPaid = false, isMan = false } = {}) => {
+        const sorted = [...map.values()].sort((a, b) => b.usd - a.usd);
+        const visible = sorted.slice(0, SUMMARY_LIMIT);
+        const rows = visible
           .map((entry) => {
             const ava = dreamAvatarHtml(entry.id, entry.name, "bonus-sum-ava");
             const id = String(entry.id || "").trim();
@@ -5760,6 +5751,12 @@
               </div>`;
           })
           .join("");
+        const more =
+          sorted.length > SUMMARY_LIMIT
+            ? `<div class="bonus-sum-row"><span class="bonus-sum-muted">Showing top ${SUMMARY_LIMIT} of ${sorted.length}</span></div>`
+            : "";
+        return rows + more;
+      };
       box.innerHTML = `
         <div class="bonus-sum-card">
           <p class="bonus-sum-title">Period total</p>
@@ -5771,11 +5768,11 @@
           ${typeRows}
         </div>
         <div class="bonus-sum-card">
-          <p class="bonus-sum-title">All ladies · ${ladies.size.toLocaleString("en-US")}</p>
+          <p class="bonus-sum-title">Ladies · ${ladies.size.toLocaleString("en-US")}</p>
           ${personRows(ladies)}
         </div>
         <div class="bonus-sum-card">
-          <p class="bonus-sum-title">All men · ${men.size.toLocaleString("en-US")}</p>
+          <p class="bonus-sum-title">Men · ${men.size.toLocaleString("en-US")}</p>
           ${personRows(men, { showLastPaid: true, isMan: true })}
         </div>`;
     }
@@ -5832,7 +5829,10 @@
         const name = escapeHtml(nameValue || "—");
         return `<span class="bonus-person">${dreamAvatarHtml(id, nameValue, "bonus-person-ava")}<span class="bonus-person-name">${name}</span></span>`;
       };
-      const bodyRows = actions
+      // Cap rendered rows so a full month does not freeze the browser with thousands of DOM nodes.
+      const BONUS_ROW_LIMIT = 250;
+      const visibleActions = actions.slice(0, BONUS_ROW_LIMIT);
+      const bodyRows = visibleActions
         .map(
           (row) => `
             <tr>
@@ -5849,6 +5849,12 @@
         .join("");
       const th = (label, extraClass = "") =>
         `<th${extraClass ? ` class="${extraClass}"` : ""}>${label}</th>`;
+      const moreNote =
+        actions.length > BONUS_ROW_LIMIT
+          ? `<tfoot><tr><td colspan="${showOperator ? 8 : 7}" style="padding:8px 10px;color:var(--muted);font-size:11px">
+              Showing newest ${BONUS_ROW_LIMIT.toLocaleString("en-US")} of ${actions.length.toLocaleString("en-US")} actions. Use a shorter period or a profile filter for the full list.
+            </td></tr></tfoot>`
+          : "";
       listEl.innerHTML = `
         <table class="bonus-actions-table">
           <thead>
@@ -5864,6 +5870,7 @@
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
+          ${moreNote}
         </table>`;
     }
 
@@ -5929,7 +5936,8 @@
       }
     }
 
-    async function refreshBonusActions({ quiet = false } = {}) {
+    async function refreshBonusActions({ quiet = false, requestVersion = 0 } = {}) {
+      const version = requestVersion || ++balancesRequestVersion;
       if (!balCalState.fromDate) {
         balCalState.fromDate = balCalState.selectedDate || balCalState.today || kyivTodayLocal();
       }
@@ -5939,48 +5947,27 @@
       const label = balRangeLabel();
       try {
         const profileId = balCalState.profileId || "";
-        const totalParams = new URLSearchParams({ from, to });
-        if (profileId) totalParams.set("profileId", profileId);
-        const totalPromise = api(
-          `/agency-finance/balances-by-profile?${totalParams.toString()}`,
-        ).catch(() => ({ totalUsd: 0 }));
+        const params = new URLSearchParams({ from, to });
+        if (profileId) params.set("profileId", profileId);
+        const requestKey = `${from}|${to}|${profileId}`;
+        const data = await api(`/agency-finance/bonuses-actions?${params.toString()}`);
+        if (version !== balancesRequestVersion) return;
+        const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+        const actionsSumUsd = Number(data.actionsSumUsd) ||
+          Number(
+            profiles
+              .reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0)
+              .toFixed(2),
+          );
+        const totalUsd = Number(data.totalUsd) || actionsSumUsd;
+        const totalsMatch = !data.listIncomplete;
 
-        const days = eachLocalDayKey(from, to);
-        const merged = new Map();
-        const incompleteDays = [];
-        let configured = true;
-        for (let index = 0; index < days.length; index += 1) {
-          const day = days[index];
-          if (days.length > 1) {
-            showBalSpinner(`${index + 1} / ${days.length}`);
-          }
-          const params = new URLSearchParams({ from: day, to: day });
-          if (profileId) params.set("profileId", profileId);
-          const data = await api(`/agency-finance/bonuses-actions?${params.toString()}`);
-          if (data.configured === false) configured = false;
-          if (data.listIncomplete) incompleteDays.push(day);
-          mergeBonusProfiles(merged, data.profiles || []);
-        }
-
-        const profiles = [...merged.values()].map((entry) => ({
-          ...entry,
-          balanceUsd: Number(entry.balanceUsd.toFixed(2)),
-        }));
-        const actionsSumUsd = Number(
-          profiles.reduce((sum, row) => sum + (Number(row.balanceUsd) || 0), 0).toFixed(2),
-        );
-        const official = await totalPromise;
-        const officialTotalUsd = Number(official.totalUsd) || 0;
-        const totalsMatch =
-          incompleteDays.length === 0 &&
-          (officialTotalUsd <= 0 || Math.abs(actionsSumUsd - officialTotalUsd) < 0.05);
-
-        balCalState.bonusesLoadedFor = balCacheKey();
+        balCalState.bonusesLoadedFor = requestKey;
         renderBonusActions(profiles, label, {
-          configured,
-          error: null,
-          totalUsd: officialTotalUsd || actionsSumUsd,
-          listIncomplete: !totalsMatch,
+          configured: data.configured !== false,
+          error: data.error || null,
+          totalUsd,
+          listIncomplete: Boolean(data.listIncomplete),
           actionsSumUsd,
         });
         if (!quiet) {
@@ -5990,6 +5977,7 @@
           );
         }
       } catch (error) {
+        if (version !== balancesRequestVersion) return;
         balCalState.bonusesLoadedFor = "";
         renderBonusActions([], label, { error: error.message });
         if (!quiet) setStatus(error.message, "error");
@@ -5997,6 +5985,7 @@
     }
 
     async function refreshBalances({ quiet = false } = {}) {
+      const requestVersion = ++balancesRequestVersion;
       if (!balCalState.today) balCalState.today = kyivTodayLocal();
       if (!balCalState.selectedDate) balCalState.selectedDate = balCalState.today;
       if (!balCalState.fromDate) balCalState.fromDate = balCalState.selectedDate;
@@ -6004,6 +5993,7 @@
       persistBalFilters();
       syncBalFilterInputs();
       fillBalProfileOptions();
+      // Dream profile list is cached 5 min — do not block balances refresh on scrape.
       void ensureDreamActiveProfiles();
       if (!balCalState.year || !balCalState.month) {
         const [y, m] = balCalState.selectedDate.split("-").map(Number);
@@ -6016,11 +6006,12 @@
       showBalSpinner();
       try {
         if (balCalState.activeTab === "bonuses") {
-          await refreshBonusActions({ quiet });
+          await refreshBonusActions({ quiet, requestVersion });
         } else {
           const data = await api(
             `/agency-finance/balances-by-profile?${balQueryString({ force: false })}`,
           );
+          if (requestVersion !== balancesRequestVersion) return;
           if (data.today) balCalState.today = String(data.today).slice(0, 10);
           renderBalCalendarGrid();
           renderBalanceProfiles(data.profiles || [], label, {
@@ -6034,6 +6025,7 @@
         }
         if (!quiet) setStatus("");
       } catch (error) {
+        if (requestVersion !== balancesRequestVersion) return;
         if (balCalState.activeTab === "bonuses") {
           renderBonusActions([], label, { error: error.message });
         } else {
@@ -6041,7 +6033,7 @@
         }
         if (!quiet) setStatus(error.message, "error");
       } finally {
-        hideBalSpinner();
+        if (requestVersion === balancesRequestVersion) hideBalSpinner();
       }
     }
 
@@ -6704,34 +6696,52 @@
       btn.classList.add("is-active", "is-loading");
       void refreshGoldMen({ page, force: true });
     });
+    let goldQHoverTimer = null;
     document.getElementById("gold-men-body")?.addEventListener("mouseover", (event) => {
       const count = event.target.closest(".gold-q-count");
       if (!count || !document.getElementById("gold-men-body")?.contains(count)) return;
-      const index = Number(count.getAttribute("data-gold-q-index"));
-      const man = goldMenCache[index];
-      void showGoldMenQuestionnairesTip(count, man);
+      if (goldMenQuestionnairePinned) return;
+      if (goldQHoverTimer) clearTimeout(goldQHoverTimer);
+      goldQHoverTimer = setTimeout(() => {
+        goldQHoverTimer = null;
+        const index = Number(count.getAttribute("data-gold-q-index"));
+        const man = goldMenCache[index];
+        void showGoldMenQuestionnairesTip(count, man);
+      }, 180);
     });
     document.getElementById("gold-men-body")?.addEventListener("mouseout", (event) => {
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       const next = event.relatedTarget;
       if (next && (count === next || count.contains(next))) return;
-      hideGoldMenQuestionnairesTip();
+      if (goldQHoverTimer) {
+        clearTimeout(goldQHoverTimer);
+        goldQHoverTimer = null;
+      }
+      if (!goldMenQuestionnairePinned) hideGoldMenQuestionnairesTip();
     });
     document.getElementById("gold-men-body")?.addEventListener("focusin", (event) => {
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
+      if (goldQHoverTimer) {
+        clearTimeout(goldQHoverTimer);
+        goldQHoverTimer = null;
+      }
       const index = Number(count.getAttribute("data-gold-q-index"));
       const man = goldMenCache[index];
       void showGoldMenQuestionnairesTip(count, man);
     });
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
-      hideGoldMenQuestionnairesTip();
+      if (!goldMenQuestionnairePinned) hideGoldMenQuestionnairesTip();
     });
     document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
+      if (goldQHoverTimer) {
+        clearTimeout(goldQHoverTimer);
+        goldQHoverTimer = null;
+      }
       if (goldMenQuestionnairePinned && goldMenQuestionnaireAnchor === count) {
         hideGoldMenQuestionnairesTip(true);
         return;
