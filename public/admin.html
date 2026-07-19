@@ -1120,6 +1120,10 @@
         flex-direction: column;
         overflow: hidden;
       }
+      #section-gold-men .gold-men-layout {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
       #section-gold-men .gold-men-table-shell {
         flex: 1 1 auto;
         min-height: 0;
@@ -1612,6 +1616,124 @@
     #gold-men-table th:nth-child(4) { text-align: center; }
     #gold-men-table td:nth-child(5),
     #gold-men-table th:nth-child(5) { text-align: right; }
+    #gold-men-table th:nth-child(2),
+    #gold-men-table td:nth-child(2),
+    #gold-men-table th:nth-child(3),
+    #gold-men-table td:nth-child(3),
+    #gold-men-table th:nth-child(4),
+    #gold-men-table td:nth-child(4),
+    #gold-men-table th:nth-child(5),
+    #gold-men-table td:nth-child(5) {
+      width: 1%;
+      white-space: nowrap;
+    }
+    .gold-men-layout {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .gold-men-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .gold-top-men {
+      flex: 0 0 270px;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(78, 98, 108, 0.35);
+      border-radius: 8px;
+      background: #11151a;
+      overflow: hidden;
+    }
+    .gold-top-head {
+      flex: 0 0 auto;
+      padding: 10px 12px;
+      color: #98a1aa;
+      font: 700 10px/1.2 var(--font);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid rgba(78, 98, 108, 0.25);
+      background: #140f11;
+    }
+    .gold-top-men-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding: 4px 10px 8px;
+    }
+    .gold-top-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      border-top: 1px solid rgba(78, 98, 108, 0.14);
+      font: 500 12px/1.25 var(--font);
+      color: #dde3e9;
+      min-width: 0;
+    }
+    .gold-top-row:first-child { border-top: 0; }
+    .gold-top-rank {
+      flex: 0 0 22px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .gold-top-row:nth-child(-n+3) .gold-top-rank { color: #ff2b3a; }
+    .gold-top-ava {
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
+    }
+    .gold-top-ava.placeholder {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #98a1aa;
+      font: 700 9px/1 var(--font);
+      text-transform: uppercase;
+      background: rgba(255, 43, 58, 0.12);
+    }
+    .gold-top-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .gold-top-name {
+      color: #fff;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .gold-top-amt {
+      flex: 0 0 auto;
+      color: #ff2b3a;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .gold-top-empty {
+      padding: 12px 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 980px) {
+      .gold-men-layout { flex-direction: column; }
+      .gold-top-men { flex: 0 0 auto; max-height: 320px; }
+    }
     #gold-men-table thead th {
       position: sticky;
       top: 0;
@@ -2738,28 +2860,36 @@
               </div>
               <div id="gold-men-summary" class="gold-men-summary"></div>
               <div id="gold-men-status" class="mail-day-empty" style="display:none;text-align:left;padding:8px 0"></div>
-              <div class="gold-men-table-shell">
-                <div class="gold-men-table-wrap">
-                  <table class="data-table" id="gold-men-table">
-                    <thead>
-                      <tr>
-                        <th>Man</th>
-                        <th>Paid period</th>
-                        <th>Questionnaires</th>
-                        <th>Actions</th>
-                        <th>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody id="gold-men-body"></tbody>
-                  </table>
+              <div class="gold-men-layout">
+                <div class="gold-men-main">
+                  <div class="gold-men-table-shell">
+                    <div class="gold-men-table-wrap">
+                      <table class="data-table" id="gold-men-table">
+                        <thead>
+                          <tr>
+                            <th>Man</th>
+                            <th>Paid period</th>
+                            <th>Questionnaires</th>
+                            <th>Actions</th>
+                            <th>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody id="gold-men-body"></tbody>
+                      </table>
+                    </div>
+                    <div id="gold-men-loading" class="gold-men-loading" aria-hidden="true">
+                      <div class="bal-spinner" aria-label="Loading"></div>
+                    </div>
+                  </div>
+                  <div id="gold-men-pager" class="gold-men-pager" hidden>
+                    <div id="gold-men-pager-meta" class="gold-men-pager-meta"></div>
+                    <div id="gold-men-pager-pages" class="gold-men-pager-pages"></div>
+                  </div>
                 </div>
-                <div id="gold-men-loading" class="gold-men-loading" aria-hidden="true">
-                  <div class="bal-spinner" aria-label="Loading"></div>
-                </div>
-              </div>
-              <div id="gold-men-pager" class="gold-men-pager" hidden>
-                <div id="gold-men-pager-meta" class="gold-men-pager-meta"></div>
-                <div id="gold-men-pager-pages" class="gold-men-pager-pages"></div>
+                <aside class="gold-top-men" aria-label="Top 100 men">
+                  <div class="gold-top-head">Top 100 men · by total</div>
+                  <div id="gold-top-men-list" class="gold-top-men-list"></div>
+                </aside>
               </div>
               <div id="gold-q-popover" hidden></div>
             </div>
@@ -3187,6 +3317,7 @@
           !img.classList.contains("bonus-person-ava") &&
           !img.classList.contains("bonus-sum-ava") &&
           !img.classList.contains("gold-man-avatar") &&
+          !img.classList.contains("gold-top-ava") &&
           !img.classList.contains("bal-profile-option-ava")
         ) {
           return;
@@ -4248,6 +4379,61 @@
       } finally {
         if (!keepBusy) goldMenLoading = false;
         if (!options.quiet) setGoldMenLoading(false);
+      }
+      if (!options.page && !options.keepBusy) {
+        void refreshGoldTopMen({ force: Boolean(options.force) });
+      }
+    }
+
+    let goldTopMenLoadedAt = 0;
+    let goldTopMenLoading = false;
+    const GOLD_TOP_MEN_TTL_MS = 60_000;
+
+    async function refreshGoldTopMen(options = {}) {
+      const list = document.getElementById("gold-top-men-list");
+      if (!list) return;
+      if (goldTopMenLoading) return;
+      if (!options.force && Date.now() - goldTopMenLoadedAt < GOLD_TOP_MEN_TTL_MS && list.childElementCount) {
+        return;
+      }
+      goldTopMenLoading = true;
+      if (!list.childElementCount) {
+        list.innerHTML = `<div class="gold-top-empty">Loading…</div>`;
+      }
+      try {
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "100",
+          sort: "balance",
+          dir: "desc",
+        });
+        const data = await api(`/agency-finance/gold-men?${params.toString()}`);
+        const men = Array.isArray(data.men) ? data.men : [];
+        goldTopMenLoadedAt = Date.now();
+        if (!men.length) {
+          list.innerHTML = `<div class="gold-top-empty">No paid-action men yet.</div>`;
+          return;
+        }
+        list.innerHTML = men
+          .map((man, index) => {
+            const id = String(man.maleProfileId || "").trim();
+            const name = String(man.maleName || "").trim() || "Unknown man";
+            const avatar = dreamAvatarHtml(id, name, "gold-top-ava");
+            return `<div class="gold-top-row">
+              <span class="gold-top-rank">${index + 1}</span>
+              ${avatar}
+              <span class="gold-top-meta">
+                <span class="gold-top-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                <span class="gold-man-id" data-copy-id="${escapeHtml(id)}" title="Click to copy ID">${idLabelHtml(id)}</span>
+              </span>
+              <span class="gold-top-amt">${formatBalanceUsd(man.totalUsd)}</span>
+            </div>`;
+          })
+          .join("");
+      } catch (error) {
+        list.innerHTML = `<div class="gold-top-empty">${escapeHtml(error.message || String(error))}</div>`;
+      } finally {
+        goldTopMenLoading = false;
       }
     }
 
@@ -5943,35 +6129,40 @@
     document.getElementById("gold-men-body")?.addEventListener("focusout", () => {
       hideGoldMenQuestionnairesTip();
     });
-    document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
+    function handleCopyIdClick(event) {
       const copyId = event.target.closest("[data-copy-id]");
-      if (copyId) {
-        event.preventDefault();
-        event.stopPropagation();
-        const id = String(copyId.getAttribute("data-copy-id") || "").trim();
-        if (!id) return;
-        void (async () => {
-          try {
-            await navigator.clipboard.writeText(id);
-          } catch (_) {
-            const textarea = document.createElement("textarea");
-            textarea.value = id;
-            textarea.style.position = "fixed";
-            textarea.style.opacity = "0";
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand("copy");
-            textarea.remove();
-          }
-          copyId.classList.add("is-copied");
-          copyId.title = "Copied";
-          window.setTimeout(() => {
-            copyId.classList.remove("is-copied");
-            copyId.title = "Click to copy ID";
-          }, 1000);
-        })();
-        return;
-      }
+      if (!copyId) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      const id = String(copyId.getAttribute("data-copy-id") || "").trim();
+      if (!id) return true;
+      void (async () => {
+        try {
+          await navigator.clipboard.writeText(id);
+        } catch (_) {
+          const textarea = document.createElement("textarea");
+          textarea.value = id;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        copyId.classList.add("is-copied");
+        copyId.title = "Copied";
+        window.setTimeout(() => {
+          copyId.classList.remove("is-copied");
+          copyId.title = "Click to copy ID";
+        }, 1000);
+      })();
+      return true;
+    }
+    document.getElementById("gold-top-men-list")?.addEventListener("click", (event) => {
+      handleCopyIdClick(event);
+    });
+    document.getElementById("gold-men-body")?.addEventListener("click", (event) => {
+      if (handleCopyIdClick(event)) return;
       const count = event.target.closest(".gold-q-count");
       if (!count) return;
       event.preventDefault();
