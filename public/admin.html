@@ -74,18 +74,6 @@
     body.panel-page {
       background: transparent;
     }
-    /* Panel mode: kill the looping video + heavy blurs — they tank GPU after a while. */
-    body.panel-page #admin-shared-ambient video {
-      display: none !important;
-    }
-    body.panel-page #admin-shared-ambient {
-      background: #070b10;
-    }
-    body.panel-page #admin-shared-ambient::after {
-      background:
-        radial-gradient(circle at 50% 30%, rgba(255, 43, 58, 0.06), transparent 46%),
-        rgba(5, 8, 12, 0.55);
-    }
     body.panel-page .admin-sidebar,
     body.panel-page .panel-card,
     body.panel-page .auth-card {
@@ -98,22 +86,9 @@
       z-index: 0;
       overflow: hidden;
       pointer-events: none;
-      background: #060910;
-    }
-    #admin-shared-ambient video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      object-position: center top;
-      filter: saturate(1.05) brightness(0.92);
-    }
-    #admin-shared-ambient::after {
-      content: "";
-      position: absolute;
-      inset: 0;
       background:
-        radial-gradient(circle at 50% 42%, rgba(255, 43, 58, 0.1), transparent 42%),
-        rgba(5, 8, 12, 0.32);
+        radial-gradient(circle at 50% 36%, rgba(255, 43, 58, 0.1), transparent 44%),
+        #060910;
     }
     #auth-shell,
     #panel-shell {
@@ -129,11 +104,6 @@
       min-height: var(--ui-vh);
       padding: 28px 16px;
       background: transparent;
-    }
-    body.auth-page #admin-shared-ambient::after {
-      background:
-        radial-gradient(circle at 50% 42%, rgba(255, 40, 55, 0.1), transparent 42%),
-        rgba(5, 8, 12, 0.32);
     }
     .auth-card {
       width: 100%;
@@ -2960,16 +2930,7 @@
   </style>
 </head>
 <body class="auth-page">
-  <div id="admin-shared-ambient" aria-hidden="true">
-    <video
-      src="/media/loading-bg.mp4"
-      muted
-      loop
-      playsinline
-      autoplay
-      preload="metadata"
-    ></video>
-  </div>
+  <div id="admin-shared-ambient" aria-hidden="true"></div>
   <div id="auth-shell" class="app-auth-gate">
     <div id="login-view" class="auth-card">
       <div class="auth-logo" role="img" aria-label="Inlove Services"></div>
@@ -3490,25 +3451,6 @@
     let dreamProfilesLoadedAt = 0;
     let dragProfileId = null;
 
-    (function keepAmbientPlaying() {
-      const video = document.querySelector("#admin-shared-ambient video");
-      if (!video) return;
-      const play = () => {
-        if (document.body.classList.contains("panel-page")) return;
-        const p = video.play();
-        if (p && typeof p.catch === "function") p.catch(() => {});
-      };
-      const pause = () => {
-        try { video.pause(); } catch (_) {}
-      };
-      window.__adminAmbientVideo = { play, pause };
-      play();
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") play();
-        else pause();
-      });
-    })();
-
     const views = {
       bootstrap: document.getElementById("bootstrap-view"),
       login: document.getElementById("login-view"),
@@ -3540,10 +3482,6 @@
       views.bootstrap.classList.toggle("hidden", name !== "bootstrap");
       views.login.classList.toggle("hidden", name !== "login");
       views.panel.classList.remove("hidden");
-      if (window.__adminAmbientVideo) {
-        if (isPanel) window.__adminAmbientVideo.pause();
-        else window.__adminAmbientVideo.play();
-      }
     }
 
     const SAVED_LOGIN_KEY = "autosenderAdminSavedLogin";
