@@ -1004,6 +1004,14 @@
     .bal-profile-option-id {
       color: var(--muted);
       font-size: 11px;
+      user-select: none;
+    }
+    .bal-profile-option-id .id-num,
+    .gold-man-id .id-num,
+    .gold-q-id .id-num,
+    .bonus-sum-person-id .id-num {
+      user-select: all;
+      -webkit-user-select: all;
     }
     .bal-filters-row input[type="date"] {
       flex: 0 1 140px;
@@ -1446,7 +1454,7 @@
       color: var(--muted);
       font-size: 10px;
       font-variant-numeric: tabular-nums;
-      user-select: all;
+      user-select: none;
     }
     .gold-q-count {
       display: inline-flex;
@@ -1554,6 +1562,7 @@
     #gold-q-popover .gold-q-id {
       color: var(--muted);
       font-size: 11px;
+      user-select: none;
     }
     #gold-q-popover .gold-q-amt {
       color: #ff2b3a;
@@ -1709,7 +1718,7 @@
       color: var(--muted);
       font-size: 10px;
       font-variant-numeric: tabular-nums;
-      user-select: all;
+      user-select: none;
     }
     .bonus-sum-ava {
       flex: 0 0 auto;
@@ -3083,6 +3092,12 @@
       return `<img class="${cls}" src="${url}" loading="lazy" alt="" data-fallback="${fallback}">`;
     }
 
+    function idLabelHtml(id, emptyText = "unavailable") {
+      const value = String(id || "").trim();
+      if (!value) return `ID <span class="id-num">${escapeHtml(emptyText)}</span>`;
+      return `ID <span class="id-num">${escapeHtml(value)}</span>`;
+    }
+
     document.addEventListener(
       "error",
       (event) => {
@@ -3933,7 +3948,7 @@
               ${dreamAvatarHtml(id, name, "gold-q-ava")}
               <div>
                 <div class="gold-q-name">${escapeHtml(name)}</div>
-                <div class="gold-q-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</div>
+                <div class="gold-q-id">${idLabelHtml(id)}</div>
               </div>
               <div class="gold-q-amt">${formatBalanceUsd(item.totalUsd)}</div>
             </div>`;
@@ -4049,7 +4064,7 @@
                 ${avatar}
                 <span class="gold-man-meta">
                   <span class="gold-man-name">${escapeHtml(displayName)}</span>
-                  <span class="gold-man-id">${escapeHtml(id ? `ID ${id}` : "ID unavailable")}</span>
+                  <span class="gold-man-id">${idLabelHtml(id)}</span>
                 </span>
               </div>
             </td>
@@ -4534,7 +4549,7 @@
           ${ava}
           <span class="bal-profile-option-meta">
             <span class="bal-profile-option-name">${escapeHtml(row.name)}</span>
-            <span class="bal-profile-option-id">ID ${escapeHtml(row.id)}</span>
+            <span class="bal-profile-option-id">${idLabelHtml(row.id)}</span>
           </span>
         </button>`);
       }
@@ -4887,7 +4902,7 @@
                   ${ava}
                   <span class="bonus-sum-person-meta">
                     <span class="bonus-sum-person-name">${escapeHtml(entry.name || "—")}</span>
-                    ${id ? `<span class="bonus-sum-person-id">ID ${escapeHtml(id)}</span>` : ""}
+                    ${id ? `<span class="bonus-sum-person-id">${idLabelHtml(id)}</span>` : ""}
                   </span>
                 </span>
                 <span class="bonus-sum-value">${formatBalanceUsd(entry.usd)}</span>
