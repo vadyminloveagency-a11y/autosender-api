@@ -12,6 +12,7 @@ import inboxRoutes from "./routes/inbox.js";
 import letterbotRoutes, { restoreRunningLetterBotJobs } from "./routes/letterbot.js";
 import agencyFinanceRoutes from "./routes/agencyFinance.js";
 import senderReadsRoutes, { restoreRunningSenderReadsJobs } from "./routes/senderReads.js";
+import operatorDashboardRoutes from "./routes/operatorDashboard.js";
 import { ensureLetterBotTables } from "./letterbotStore.js";
 import { ensureSenderReadsTables } from "./senderReadsStore.js";
 import { ensureMailingDailyTables } from "./mailingDailyStore.js";
@@ -65,6 +66,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 app.use("/auth", authRoutes);
 app.use("/profiles", profilesRoutes);
+app.use("/operator-dashboard", operatorDashboardRoutes);
 app.use("/favorites", favoritesRoutes);
 app.use("/inbox", inboxRoutes);
 if (runAdminJobs) {
