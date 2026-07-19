@@ -8,7 +8,6 @@ import {
   getAgencyProfileById,
   getAgencyProfileSecrets,
   listAgencyProfiles,
-  listProfileAssignmentsForUserDay,
   listProfileAssignmentHistoryForUser,
   updateAgencyProfile,
   upsertAgencySyncedProfiles,
@@ -25,6 +24,7 @@ import {
   fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
 import { getAgencyFinanceCredentials } from "../agencyFinanceStore.js";
+import { listAgencyFinanceActions } from "../agencyFinanceActionsStore.js";
 import { dreamDayKey } from "../dreamDay.js";
 
 const router = express.Router();
@@ -393,48 +393,69 @@ async function loadOperatorMonthBalance(history, selectedDay, today) {
 router.get("/balances", authMiddleware, async (req, res) => {
   try {
     const today = dreamDayKey();
-    let date = String(req.query?.date || today).slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) date = today;
+    const validDay = (value, fallback) => {
+      const day = String(value || fallback).slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : fallback;
+    };
+    let from = validDay(req.query?.from || req.query?.date, today);
+    let to = validDay(req.query?.to || from, from);
+    if (from > to) [from, to] = [to, from];
+    const profileFilter = String(req.query?.profileId || "").trim();
 
-    const [assignments, history, agencyActions] = await Promise.all([
-      listProfileAssignmentsForUserDay(req.user.id, date),
+    const [history, cachedActions] = await Promise.all([
       listProfileAssignmentHistoryForUser(req.user.id),
-      fetchBonusActions(date),
+      listAgencyFinanceActions(from, to, profileFilter),
     ]);
-    const byProfile = new Map();
-    for (const assignment of assignments) {
-      const key = String(assignment.femaleProfileId);
-      if (!byProfile.has(key)) {
-        byProfile.set(key, {
-          profileId: key,
-          agencyProfileId: assignment.agencyProfileId,
-          displayName: assignment.displayName || `Profile ${key}`,
-          dreamUsername: assignment.dreamUsername || "",
-          photoUrl: assignment.photoUrl || "",
-          balanceUsd: 0,
-          actions: [],
-          assignments: [],
-        });
-      }
-      byProfile.get(key).assignments.push(assignment);
+    const historyByProfile = new Map();
+    for (const assignment of history) {
+      const key = String(assignment.femaleProfileId || "");
+      if (!key || (profileFilter && key !== profileFilter)) continue;
+      if (!historyByProfile.has(key)) historyByProfile.set(key, []);
+      historyByProfile.get(key).push(assignment);
     }
 
+    let agencyActions = cachedActions;
+    // Preserve the previous live single-day behavior while ranges use the
+    // director-synced Postgres cache.
+    if (from === to) {
+      try {
+        agencyActions = await fetchBonusActions(from);
+      } catch (_) {
+        agencyActions = cachedActions;
+      }
+    }
+
+    const byProfile = new Map();
     for (const action of agencyActions) {
-      const entry = byProfile.get(String(action.femaleProfileId));
-      if (
-        !entry ||
-        !entry.assignments.some((assignment) =>
-          actionFallsInAssignment(action, assignment),
-        )
-      ) {
+      const key = String(action.femaleProfileId || "");
+      if (profileFilter && key !== profileFilter) continue;
+      const assignments = historyByProfile.get(key) || [];
+      if (!assignments.some((assignment) => actionFallsInAssignment(action, assignment))) {
         continue;
       }
+      if (!byProfile.has(key)) {
+        const latest = assignments[0] || {};
+        byProfile.set(key, {
+          profileId: key,
+          agencyProfileId: latest.agencyProfileId || null,
+          displayName: latest.displayName || action.femaleName || `Profile ${key}`,
+          dreamUsername: latest.dreamUsername || "",
+          photoUrl:
+            latest.photoUrl ||
+            (Number(key)
+              ? `https://profile-photos-cdn.dream-singles.com/im${Number(key)}_small.jpg`
+              : ""),
+          balanceUsd: 0,
+          actions: [],
+        });
+      }
+      const entry = byProfile.get(key);
       entry.actions.push(action);
       entry.balanceUsd += Number(action.amountUsd) || 0;
     }
 
     const profiles = [...byProfile.values()]
-      .map(({ assignments: _assignments, ...entry }) => ({
+      .map((entry) => ({
         ...entry,
         balanceUsd: Number(entry.balanceUsd.toFixed(2)),
         actions: entry.actions.sort((a, b) =>
@@ -447,10 +468,10 @@ router.get("/balances", authMiddleware, async (req, res) => {
       });
     let monthBalance = null;
     try {
-      monthBalance = await loadOperatorMonthBalance(history, date, today);
+      monthBalance = await loadOperatorMonthBalance(history, from, today);
     } catch (monthError) {
       monthBalance = {
-        month: date.slice(0, 7),
+        month: from.slice(0, 7),
         totalUsd: 0,
         profiles: [],
         error: monthError?.message || String(monthError),
@@ -459,8 +480,11 @@ router.get("/balances", authMiddleware, async (req, res) => {
 
     return res.json({
       ok: true,
-      date,
+      date: from,
+      from,
+      to,
       today,
+      profileId: profileFilter || null,
       totalUsd: Number(
         profiles.reduce((sum, profile) => sum + profile.balanceUsd, 0).toFixed(2),
       ),
