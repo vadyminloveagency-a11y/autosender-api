@@ -21,7 +21,6 @@ import { getPool } from "../db.js";
 import {
   fetchAgencyProfiles,
   fetchBonusActions,
-  fetchBonusesByGirlRange,
 } from "../dreamAgencyFinance.js";
 import { getAgencyFinanceCredentials } from "../agencyFinanceStore.js";
 import { listAgencyFinanceActions } from "../agencyFinanceActionsStore.js";
@@ -307,10 +306,6 @@ function actionFallsInAssignment(action, assignment) {
   return at >= start && at <= end;
 }
 
-function dreamBusinessDay(value) {
-  return dreamDayKey(value);
-}
-
 function monthBounds(day, today) {
   const month = String(day || today).slice(0, 7);
   const start = `${month}-01`;
@@ -321,66 +316,49 @@ function monthBounds(day, today) {
   return { month, start, end: month === today.slice(0, 7) ? today : lastDay };
 }
 
-function mergeProfileMonthRanges(history, start, end) {
-  const byProfile = new Map();
-  for (const item of history) {
-    const profileId = String(item.femaleProfileId || "");
-    const assignedDay = dreamBusinessDay(item.assignedAt);
-    const unassignedDay = item.unassignedAt
-      ? dreamBusinessDay(item.unassignedAt)
-      : end;
-    const rangeStart = assignedDay > start ? assignedDay : start;
-    const rangeEnd = unassignedDay && unassignedDay < end ? unassignedDay : end;
-    if (!profileId || !rangeStart || rangeStart > rangeEnd) continue;
-    if (!byProfile.has(profileId)) {
-      byProfile.set(profileId, {
-        profileId,
-        displayName: item.displayName || `Profile ${profileId}`,
-        dreamUsername: item.dreamUsername || "",
-        photoUrl: item.photoUrl || "",
-        ranges: [],
-      });
-    }
-    byProfile.get(profileId).ranges.push({ start: rangeStart, end: rangeEnd });
-  }
-
-  for (const profile of byProfile.values()) {
-    profile.ranges.sort((a, b) => a.start.localeCompare(b.start));
-    profile.ranges = profile.ranges.reduce((merged, range) => {
-      const previous = merged[merged.length - 1];
-      if (!previous || range.start > previous.end) {
-        merged.push({ ...range });
-      } else if (range.end > previous.end) {
-        previous.end = range.end;
-      }
-      return merged;
-    }, []);
-  }
-  return [...byProfile.values()];
-}
-
+/** Month total uses the same action cache + assignment timestamps as period total. */
 async function loadOperatorMonthBalance(history, selectedDay, today) {
   const bounds = monthBounds(selectedDay, today);
-  const profiles = mergeProfileMonthRanges(history, bounds.start, bounds.end);
-  await Promise.all(
-    profiles.map(async (profile) => {
-      const amounts = await Promise.all(
-        profile.ranges.map(async (range) => {
-          const rows = await fetchBonusesByGirlRange(range.start, range.end, {
-            profileId: profile.profileId,
-          });
-          return rows
-            .filter((row) => String(row.profileId) === profile.profileId)
-            .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
-        }),
-      );
-      profile.balanceUsd = Number(
-        amounts.reduce((sum, amount) => sum + amount, 0).toFixed(2),
-      );
-      delete profile.ranges;
-    }),
-  );
-  profiles.sort((a, b) => b.balanceUsd - a.balanceUsd);
+  const historyByProfile = new Map();
+  for (const assignment of history) {
+    const key = String(assignment.femaleProfileId || "");
+    if (!key) continue;
+    if (!historyByProfile.has(key)) historyByProfile.set(key, []);
+    historyByProfile.get(key).push(assignment);
+  }
+
+  const actions = await listAgencyFinanceActions(bounds.start, bounds.end);
+  const byProfile = new Map();
+  for (const action of actions) {
+    const key = String(action.femaleProfileId || "");
+    const assignments = historyByProfile.get(key) || [];
+    if (!assignments.some((assignment) => actionFallsInAssignment(action, assignment))) {
+      continue;
+    }
+    if (!byProfile.has(key)) {
+      const latest = assignments[0] || {};
+      byProfile.set(key, {
+        profileId: key,
+        displayName: latest.displayName || action.femaleName || `Profile ${key}`,
+        dreamUsername: latest.dreamUsername || "",
+        photoUrl:
+          latest.photoUrl ||
+          (Number(key)
+            ? `https://profile-photos-cdn.dream-singles.com/im${Number(key)}_small.jpg`
+            : ""),
+        balanceUsd: 0,
+      });
+    }
+    byProfile.get(key).balanceUsd += Number(action.amountUsd) || 0;
+  }
+
+  const profiles = [...byProfile.values()]
+    .map((entry) => ({
+      ...entry,
+      balanceUsd: Number(entry.balanceUsd.toFixed(2)),
+    }))
+    .sort((a, b) => b.balanceUsd - a.balanceUsd);
+
   return {
     month: bounds.month,
     totalUsd: Number(
