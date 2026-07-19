@@ -346,6 +346,34 @@ class LetterBotWorker {
       categoryIndex: this.categoryIndex,
       onlineStage: this.onlineStage,
     };
+    // Never emit empty preview fields over a letter that was already loaded —
+    // progress ticks and reconnect init often omit attachments.
+    if (!String(this.state.previewPhoto || "").trim() && this._lastGoodPreviewPhoto) {
+      this.state.previewPhoto = this._lastGoodPreviewPhoto;
+    }
+    if (!String(this.state.previewVideo || "").trim() && this._lastGoodPreviewVideo) {
+      this.state.previewVideo = this._lastGoodPreviewVideo;
+    }
+    if (!String(this.state.previewVideoPoster || "").trim() && this._lastGoodPreviewPoster) {
+      this.state.previewVideoPoster = this._lastGoodPreviewPoster;
+    }
+    if (!String(this.state.previewHtml || "").trim() && this._lastGoodPreviewHtml) {
+      this.state.previewHtml = this._lastGoodPreviewHtml;
+      this.state.previewText = this._lastGoodPreviewText || this.state.previewText;
+    }
+    if (String(this.state.previewPhoto || "").trim()) {
+      this._lastGoodPreviewPhoto = this.state.previewPhoto;
+    }
+    if (String(this.state.previewVideo || "").trim()) {
+      this._lastGoodPreviewVideo = this.state.previewVideo;
+    }
+    if (String(this.state.previewVideoPoster || "").trim()) {
+      this._lastGoodPreviewPoster = this.state.previewVideoPoster;
+    }
+    if (String(this.state.previewHtml || "").trim()) {
+      this._lastGoodPreviewHtml = this.state.previewHtml;
+      this._lastGoodPreviewText = this.state.previewText;
+    }
     if (typeof this.onStateChange === "function") {
       this.onStateChange(this.getState());
     }
@@ -1111,6 +1139,7 @@ class LetterBotWorker {
     this.state.progress = null;
     this.state.statusMessage = complete ? "First Start complete" : "Stopped";
     this.state.buttonLabel = "Start";
+    // Keep last letter preview after Stop — operator should still see what was mailing.
     this.emitState();
     return this.getState();
   }
