@@ -393,17 +393,24 @@ router.get("/balances", authMiddleware, async (req, res) => {
     }
 
     let agencyActions = cachedActions;
+    const cacheOnly = String(req.query?.cacheOnly || "") === "1";
     // Preserve the previous live single-day behavior while ranges use the
-    // director-synced Postgres cache.
-    if (from === to) {
+    // director-synced Postgres cache. Never hang the operator cabinet on Dream.
+    if (from === to && !cacheOnly) {
       try {
-        agencyActions = await fetchBonusActions(from);
+        agencyActions = await Promise.race([
+          fetchBonusActions(from),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error("Dream bonuses scrape timed out")), 8000);
+          }),
+        ]);
       } catch (_) {
         agencyActions = cachedActions;
       }
     }
 
     const byProfile = new Map();
+    const liveAttempted = from === to && !cacheOnly;
     for (const action of agencyActions) {
       const key = String(action.femaleProfileId || "");
       if (profileFilter && key !== profileFilter) continue;
@@ -463,6 +470,7 @@ router.get("/balances", authMiddleware, async (req, res) => {
       to,
       today,
       profileId: profileFilter || null,
+      fromCache: Boolean(cacheOnly || (liveAttempted && agencyActions === cachedActions)),
       totalUsd: Number(
         profiles.reduce((sum, profile) => sum + profile.balanceUsd, 0).toFixed(2),
       ),
