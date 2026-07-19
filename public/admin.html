@@ -41,6 +41,24 @@
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(152, 161, 170, 0.35) #11151a;
+    }
+    *::-webkit-scrollbar { width: 9px; height: 9px; }
+    *::-webkit-scrollbar-track {
+      background: #11151a;
+      border-radius: 8px;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: rgba(152, 161, 170, 0.3);
+      border-radius: 8px;
+      border: 2px solid #11151a;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgba(152, 161, 170, 0.55);
+    }
+    *::-webkit-scrollbar-corner { background: transparent; }
     body {
       font-family: var(--font);
       color: var(--text);
@@ -942,11 +960,11 @@
     }
     .bal-profile-option {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
       width: 100%;
-      padding: 7px 8px;
+      padding: 6px 8px;
       border: 0;
       border-radius: 6px;
       background: transparent;
@@ -958,6 +976,21 @@
     .bal-profile-option:hover,
     .bal-profile-option.is-active {
       background: rgba(255, 43, 58, 0.14);
+    }
+    .bal-profile-option-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .bal-profile-option-ava {
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
     }
     .bal-profile-option-name {
       color: #fff;
@@ -1556,6 +1589,21 @@
       align-items: center;
       gap: 2px;
       line-height: 1.15;
+    }
+    .bonus-lady {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .bonus-lady-ava {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: rgba(13, 19, 23, 0.8);
+      border: 1px solid rgba(255, 43, 58, 0.25);
     }
     .bonus-when-time { color: #fff; font-weight: 600; }
     .bonus-when-date { color: var(--muted); font-size: 12px; margin-left: 0; }
@@ -4195,11 +4243,17 @@
         </button>`,
       ];
       for (const row of rows) {
+        const ava = /^\d+$/.test(row.id)
+          ? `<img class="bal-profile-option-ava" src="https://profile-photos-cdn.dream-singles.com/im${row.id}_small.jpg" loading="lazy" alt="" onerror="this.style.visibility='hidden'">`
+          : "";
         items.push(`<button type="button" class="bal-profile-option${
           current === row.id ? " is-active" : ""
         }" data-profile-id="${escapeHtml(row.id)}" role="option">
-          <span class="bal-profile-option-name">${escapeHtml(row.name)}</span>
-          <span class="bal-profile-option-id">ID ${escapeHtml(row.id)}</span>
+          ${ava}
+          <span class="bal-profile-option-meta">
+            <span class="bal-profile-option-name">${escapeHtml(row.name)}</span>
+            <span class="bal-profile-option-id">ID ${escapeHtml(row.id)}</span>
+          </span>
         </button>`);
       }
       if (!rows.length && query) {
@@ -4550,6 +4604,12 @@
       emptyEl.classList.add("hidden");
       listEl.classList.remove("hidden");
       const showOperator = actions.some((row) => String(row.operator || "").trim());
+      const ladyCell = (row) => {
+        const id = String(row.girlId || "").trim();
+        const name = escapeHtml(row.girlName || "—");
+        if (!/^\d+$/.test(id)) return name;
+        return `<span class="bonus-lady"><img class="bonus-lady-ava" src="https://profile-photos-cdn.dream-singles.com/im${id}_small.jpg" loading="lazy" alt="" onerror="this.style.display='none'">${name}</span>`;
+      };
       const bodyRows = actions
         .map(
           (row) => `
@@ -4557,7 +4617,7 @@
               <td>${escapeHtml(row.manId || "—")}</td>
               <td class="bonus-col-name">${escapeHtml(row.manName || "—")}</td>
               <td>${escapeHtml(row.girlId || "—")}</td>
-              <td class="bonus-col-name">${escapeHtml(row.girlName || "—")}</td>
+              <td class="bonus-col-name">${ladyCell(row)}</td>
               <td>${bonusWhenHtml(row)}</td>
               <td>${bonusTypeBadge(row.type)}</td>
               <td class="bonus-dollars">${formatBalanceUsd(row.amountUsd)}</td>
