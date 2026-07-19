@@ -64,7 +64,6 @@
       color: var(--text);
       background: var(--bg-0);
       -webkit-font-smoothing: antialiased;
-      zoom: 1.1;
     }
     body.auth-page,
     body.panel-page {
@@ -1575,12 +1574,13 @@
     }
     .bonus-actions-table th,
     .bonus-actions-table td {
-      padding: 6px 10px;
+      padding: 4px 8px;
       border-bottom: 1px solid rgba(78, 98, 108, 0.22);
       text-align: left;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      vertical-align: middle;
     }
     .bonus-actions-table th {
       color: #98a1aa;
@@ -1606,24 +1606,24 @@
     .bonus-actions-table td { text-align: center; }
     .bonus-actions-table th.bonus-col-name,
     .bonus-actions-table td.bonus-col-name { text-align: left; }
-    .bonus-actions-table .bonus-col-id { width: 11%; }
-    .bonus-actions-table .bonus-col-man { width: 17%; }
+    .bonus-actions-table .bonus-col-id { width: 10%; }
+    .bonus-actions-table .bonus-col-man { width: 16%; }
     .bonus-actions-table .bonus-col-lady { width: 20%; }
-    .bonus-actions-table .bonus-col-date { width: 13%; }
+    .bonus-actions-table .bonus-col-date { width: 12%; }
     .bonus-actions-table .bonus-col-type { width: 14%; }
     .bonus-actions-table .bonus-col-dollars { width: 8%; }
-    .bonus-actions-table .bonus-col-operator { width: 9%; }
+    .bonus-actions-table .bonus-col-operator { width: 10%; }
     .bonus-when {
       display: inline-flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
-      line-height: 1.15;
+      gap: 1px;
+      line-height: 1.1;
     }
     .bonus-person {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       max-width: 100%;
       min-width: 0;
     }
@@ -1633,16 +1633,15 @@
     }
     .bonus-person-ava {
       flex: 0 0 auto;
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       object-fit: cover;
       background: rgba(13, 19, 23, 0.8);
       border: 1px solid rgba(255, 43, 58, 0.25);
     }
-    .bonus-when-time { color: #fff; font-weight: 600; }
-    .bonus-when-date { color: var(--muted); font-size: 12px; margin-left: 0; }
-    .bonus-op-none { color: rgba(152, 161, 170, 0.35); }
+    .bonus-when-time { color: #fff; font-weight: 600; font-size: 12px; }
+    .bonus-when-date { color: var(--muted); font-size: 11px; margin-left: 0; }
     .bonus-type {
       color: #fff;
       font-weight: 600;
@@ -4523,7 +4522,7 @@
       const name = String(action?.operatorName || "").trim();
       const email = String(action?.operatorEmail || "").trim();
       if (name || email) return escapeHtml(name || email);
-      return `<span class="bonus-op-none">—</span>`;
+      return "";
     }
 
     function bonusWhenHtml(row) {
